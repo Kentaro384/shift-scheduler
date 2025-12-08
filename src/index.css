@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Colorful Pop Theme - Inspired by Florence */
+/* Rev.2: モダン・ポップ & クリーン - 白ベースデザイン */
 :root {
     /* Primary Colors */
     --coral-pink: #FF6B6B;
@@ -13,9 +13,20 @@
     --lavender: #A78BFA;
     --lavender-deep: #8B5CF6;
 
-    /* Shift Colors */
+    /* Text Colors */
+    --text-dark: #1F2937;
+    --text-muted: #6B7280;
+    --border-light: #E5E7EB;
+    --border-lighter: #F3F4F6;
+
+    /* Background Colors */
+    --bg-main: #F9FAFB;
+    --bg-card: #FFFFFF;
+    --bg-saturday: #F0F9FF;
+    --bg-sunday: #FEF2F2;
+
+    /* Shift Indicator Colors */
     --shift-a: #FFE66D;
-    --shift-a-text: #7C5800;
     --shift-b: #45B7D1;
     --shift-c: #38A3C0;
     --shift-d: #A78BFA;
@@ -23,71 +34,126 @@
     --shift-j: #FF6B6B;
     --shift-furikyu: #4ECDC4;
     --shift-yukyu: #F9A8D4;
-    --shift-kyujitsu: #E5E7EB;
+    --shift-kyujitsu: #9CA3AF;
 }
 
-/* Header Gradient */
-.header-gradient {
+/* Base text color */
+body {
+    color: var(--text-dark);
+    font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif;
+}
+
+/* Header - White with subtle shadow */
+.header-white {
+    background: white;
+    border-bottom: 1px solid var(--border-lighter);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Logo gradient text */
+.logo-gradient {
     background: linear-gradient(135deg, var(--coral-pink) 0%, var(--sunshine-yellow) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 /* Button Styles */
 .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full font-semibold text-white transition-all duration-300 transform;
+    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full font-semibold text-white transition-all duration-200 transform;
     background: linear-gradient(135deg, var(--coral-pink) 0%, var(--coral-pink-light) 100%);
-    box-shadow: 0 4px 14px rgba(255, 107, 107, 0.4);
+    box-shadow: 0 4px 10px rgba(255, 107, 107, 0.3);
 }
 
 .btn-primary:hover {
     @apply scale-105;
-    box-shadow: 0 6px 20px rgba(255, 107, 107, 0.5);
+    box-shadow: 0 6px 16px rgba(255, 107, 107, 0.4);
 }
 
 .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full font-semibold transition-all duration-300 transform;
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full font-semibold transition-all duration-200 transform;
     background: white;
-    color: var(--coral-pink);
-    border: 2px solid var(--coral-pink);
+    color: var(--text-dark);
+    border: 1px solid var(--border-light);
 }
 
 .btn-secondary:hover {
-    @apply scale-105;
-    background: #FFF5F5;
-}
-
-.btn-icon {
-    @apply inline-flex items-center justify-center p-3 rounded-xl bg-white shadow-md transition-all duration-300 transform;
-}
-
-.btn-icon:hover {
-    @apply scale-110 shadow-lg;
+    border-color: var(--coral-pink);
+    background: #FEFEFE;
 }
 
 /* Card Styles */
 .card-main {
-    @apply bg-white rounded-3xl shadow-lg p-6;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    @apply bg-white rounded-2xl p-6;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
 }
 
-/* Shift Cell Styles */
+/* Shift Cell - White with left border indicator */
 .shift-cell {
-    @apply rounded-lg transition-all duration-200 cursor-pointer;
+    @apply rounded-md transition-all duration-200 cursor-pointer bg-white;
+    border: 1px solid var(--border-light);
+    color: var(--text-dark);
 }
 
 .shift-cell:hover {
-    @apply scale-105 shadow-md;
+    background: #F9FAFB;
 }
 
-/* Navigation Pills */
-.nav-pill {
-    @apply px-4 py-2 rounded-full font-medium transition-all duration-300;
+.shift-cell-a {
+    border-left: 4px solid var(--shift-a);
 }
 
-/* Animations */
+.shift-cell-b {
+    border-left: 4px solid var(--shift-b);
+}
+
+.shift-cell-c {
+    border-left: 4px solid var(--shift-c);
+}
+
+.shift-cell-d {
+    border-left: 4px solid var(--shift-d);
+}
+
+.shift-cell-e {
+    border-left: 4px solid var(--shift-e);
+}
+
+.shift-cell-j {
+    border-left: 4px solid var(--shift-j);
+}
+
+.shift-cell-furikyu {
+    border-left: 4px solid var(--shift-furikyu);
+}
+
+.shift-cell-yukyu {
+    border-left: 4px solid var(--shift-yukyu);
+}
+
+.shift-cell-kyujitsu {
+    border-left: 4px solid var(--shift-kyujitsu);
+}
+
+/* Animations - キビキビした動き */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.2s ease-out;
+}
+
 @keyframes fadeInUp {
     from {
         opacity: 0;
-        transform: translateY(10px);
+        transform: translateY(8px);
     }
 
     to {
@@ -97,30 +163,39 @@
 }
 
 .animate-fade-in-up {
-    animation: fadeInUp 0.4s ease-out;
-}
-
-@keyframes pulse-soft {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.8;
-    }
-}
-
-.animate-pulse-soft {
-    animation: pulse-soft 2s ease-in-out infinite;
+    animation: fadeInUp 0.2s ease-out;
 }
 
 /* Table Enhancements */
 .table-header-cell {
-    @apply font-semibold text-center py-2 px-1;
+    @apply font-bold text-center py-2 px-1;
+    color: var(--text-dark);
 }
 
 .table-row-hover:hover {
-    @apply bg-gradient-to-r from-transparent via-pink-50 to-transparent;
+    background: #F9FAFB;
+}
+
+/* Saturday/Sunday column backgrounds */
+.bg-saturday {
+    background-color: var(--bg-saturday);
+}
+
+.bg-sunday {
+    background-color: var(--bg-sunday);
+}
+
+/* Modal - Clean white header */
+.modal-overlay {
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(2px);
+}
+
+.modal-header {
+    @apply bg-white border-b border-gray-100 px-6 py-4;
+}
+
+.modal-header-title {
+    @apply text-xl font-bold;
+    color: var(--text-dark);
 }

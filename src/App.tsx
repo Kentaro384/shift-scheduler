@@ -137,23 +137,25 @@ function App() {
   };
 
   const getShiftColor = (shiftId: string) => {
-    // Colorful Pop Theme
-    if (shiftId === '振') return 'bg-[#4ECDC4] text-[#0D6B66] border-[#4ECDC4] font-medium'; // Mint Green
-    if (shiftId === '有') return 'bg-[#F9A8D4] text-[#9D174D] border-[#F9A8D4] font-medium'; // Soft Pink
-    if (shiftId === '休') return 'bg-gray-100 text-gray-400 border-gray-200 font-medium'; // Light Gray
+    // Rev.2: White background with colored left border indicator
+    const baseStyle = 'bg-white border border-gray-200 text-gray-800 font-medium';
+
+    if (shiftId === '振') return `${baseStyle} border-l-4 border-l-[#4ECDC4]`; // Mint Green
+    if (shiftId === '有') return `${baseStyle} border-l-4 border-l-[#F9A8D4]`; // Soft Pink
+    if (shiftId === '休') return `${baseStyle} border-l-4 border-l-[#9CA3AF] text-gray-400`; // Cool Gray
 
     const pattern = patterns.find(p => p.id === shiftId);
     if (pattern) {
-      if (shiftId === 'A') return 'bg-[#FFE66D] text-[#7C5800] border-[#FFE66D] font-bold'; // Sunshine Yellow
-      if (shiftId === 'B') return 'bg-[#45B7D1] text-white border-[#45B7D1] font-bold'; // Sky Blue
-      if (shiftId === 'C') return 'bg-[#38A3C0] text-white border-[#38A3C0] font-bold'; // Deep Sky
-      if (shiftId === 'D') return 'bg-[#A78BFA] text-white border-[#A78BFA] font-bold'; // Lavender
-      if (shiftId === 'E') return 'bg-[#8B5CF6] text-white border-[#8B5CF6] font-bold'; // Deep Lavender
-      if (shiftId === 'J') return 'bg-[#FF6B6B] text-white border-[#FF6B6B] font-bold'; // Coral Pink
-      return 'bg-blue-50 text-blue-700 border-blue-100';
+      if (shiftId === 'A') return `${baseStyle} border-l-4 border-l-[#FFE66D]`; // Sunshine Yellow
+      if (shiftId === 'B') return `${baseStyle} border-l-4 border-l-[#45B7D1]`; // Sky Blue
+      if (shiftId === 'C') return `${baseStyle} border-l-4 border-l-[#38A3C0]`; // Deep Sky
+      if (shiftId === 'D') return `${baseStyle} border-l-4 border-l-[#A78BFA]`; // Lavender
+      if (shiftId === 'E') return `${baseStyle} border-l-4 border-l-[#8B5CF6]`; // Deep Lavender
+      if (shiftId === 'J') return `${baseStyle} border-l-4 border-l-[#FF6B6B]`; // Coral Pink
+      return baseStyle;
     }
 
-    return 'bg-gray-50 text-gray-300'; // Empty/Unknown
+    return 'bg-white border border-gray-100 text-gray-300'; // Empty/Unknown
   };
 
   // Calculate daily staff counts
@@ -200,26 +202,26 @@ function App() {
   const summaryColumns = ['A', 'B', 'C', 'D', 'E', 'J', '休', '振', '有'];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-yellow-50 flex flex-col font-sans text-gray-800">
-      <header className="header-gradient text-white shadow-lg p-2 landscape:p-1.5 md:p-4 sticky top-0 z-30">
+    <div className="min-h-screen bg-[#F9FAFB] flex flex-col font-sans text-gray-800">
+      <header className="bg-white border-b border-gray-100 shadow-sm p-2 landscape:p-1.5 md:p-4 sticky top-0 z-30">
         <div className="max-w-[1920px] mx-auto">
           {/* Mobile portrait: 2-row, Mobile landscape & Desktop: 1-row */}
           <div className="flex flex-col landscape:flex-row landscape:justify-between landscape:items-center md:flex-row md:justify-between md:items-center gap-2 landscape:gap-0 md:gap-0">
             {/* Row 1: Logo + Month Navigation */}
             <div className="flex items-center justify-between landscape:justify-start md:justify-start landscape:space-x-4 md:space-x-6">
-              <h1 className="text-lg landscape:text-base md:text-2xl font-bold tracking-tight flex items-center gap-1.5 landscape:gap-1 md:gap-2 drop-shadow-md">
-                <span className="text-xl landscape:text-lg md:text-4xl animate-pulse-soft">🌟</span>
-                <span className="bg-white/20 px-2 landscape:px-1.5 md:px-3 py-0.5 landscape:py-0.5 md:py-1 rounded-full text-xs landscape:text-xs md:text-base">保育園シフト</span>
+              <h1 className="text-lg landscape:text-base md:text-2xl font-bold tracking-tight flex items-center gap-1.5 landscape:gap-1 md:gap-2">
+                <span className="text-xl landscape:text-lg md:text-3xl">🏠</span>
+                <span className="logo-gradient text-sm landscape:text-xs md:text-xl font-bold">シフトスケジューラー</span>
               </h1>
-              <div className="flex items-center bg-white/25 backdrop-blur-sm rounded-full p-0.5 landscape:p-0.5 md:p-1.5 shadow-inner">
-                <button onClick={() => changeMonth(-1)} className="p-1 landscape:p-1 md:p-2 hover:bg-white/30 rounded-full transition-all duration-300 hover:scale-110">
-                  <ChevronLeft size={18} className="landscape:w-4 landscape:h-4 md:w-6 md:h-6" />
+              <div className="flex items-center bg-gray-100 rounded-full p-0.5 landscape:p-0.5 md:p-1">
+                <button onClick={() => changeMonth(-1)} className="p-1.5 landscape:p-1 md:p-2 hover:bg-gray-200 rounded-full transition-all duration-200 text-gray-600">
+                  <ChevronLeft size={18} className="landscape:w-4 landscape:h-4 md:w-5 md:h-5" />
                 </button>
-                <span className="text-sm landscape:text-xs md:text-xl font-bold mx-1.5 landscape:mx-1 md:mx-4 min-w-[80px] landscape:min-w-[70px] md:min-w-[140px] text-center">
+                <span className="text-sm landscape:text-xs md:text-lg font-bold mx-2 landscape:mx-1 md:mx-4 min-w-[80px] landscape:min-w-[70px] md:min-w-[120px] text-center text-gray-800">
                   {year}年 {month}月
                 </span>
-                <button onClick={() => changeMonth(1)} className="p-1 landscape:p-1 md:p-2 hover:bg-white/30 rounded-full transition-all duration-300 hover:scale-110">
-                  <ChevronRight size={18} className="landscape:w-4 landscape:h-4 md:w-6 md:h-6" />
+                <button onClick={() => changeMonth(1)} className="p-1.5 landscape:p-1 md:p-2 hover:bg-gray-200 rounded-full transition-all duration-200 text-gray-600">
+                  <ChevronRight size={18} className="landscape:w-4 landscape:h-4 md:w-5 md:h-5" />
                 </button>
               </div>
             </div>
@@ -230,11 +232,11 @@ function App() {
               <div className="relative">
                 <button
                   onClick={() => setShowSettingsMenu(!showSettingsMenu)}
-                  className="flex items-center space-x-1 md:space-x-2 px-2 landscape:px-2 md:px-5 py-1.5 landscape:py-1 md:py-2.5 bg-white/90 backdrop-blur-sm text-[#FF6B6B] rounded-full hover:bg-white hover:scale-105 transition-all duration-300 shadow-md font-semibold text-xs landscape:text-xs md:text-base"
+                  className="flex items-center space-x-1 md:space-x-2 px-2.5 landscape:px-2 md:px-4 py-1.5 landscape:py-1 md:py-2 bg-white text-gray-600 border border-gray-200 rounded-full hover:border-[#FF6B6B] hover:text-[#FF6B6B] transition-all duration-200 font-medium text-xs landscape:text-xs md:text-sm"
                 >
                   <Menu size={16} className="md:w-[18px] md:h-[18px]" />
                   <span className="hidden sm:inline">設定</span>
-                  <ChevronDown size={14} className={`hidden sm:block transition-transform duration-300 ${showSettingsMenu ? 'rotate-180' : ''}`} />
+                  <ChevronDown size={14} className={`hidden sm:block transition-transform duration-200 ${showSettingsMenu ? 'rotate-180' : ''}`} />
                 </button>
 
                 {/* Dropdown Menu */}
@@ -268,7 +270,7 @@ function App() {
               {/* Main Actions */}
               <button
                 onClick={handleReset}
-                className="flex items-center space-x-1 md:space-x-2 px-2 landscape:px-2 md:px-5 py-1.5 landscape:py-1 md:py-2.5 bg-white text-[#FF6B6B] border-2 border-[#FF6B6B] rounded-full hover:bg-[#FFF5F5] hover:scale-105 transition-all duration-300 font-bold active:scale-95 text-xs landscape:text-xs md:text-base"
+                className="flex items-center space-x-1 md:space-x-2 px-2.5 landscape:px-2 md:px-4 py-1.5 landscape:py-1 md:py-2 bg-white text-gray-600 border border-gray-200 rounded-full hover:border-gray-400 transition-all duration-200 font-medium active:scale-95 text-xs landscape:text-xs md:text-sm"
               >
                 <RotateCcw size={16} className="md:w-[18px] md:h-[18px]" />
                 <span className="hidden sm:inline">リセット</span>
@@ -276,7 +278,7 @@ function App() {
               <button
                 onClick={handleGenerate}
                 disabled={isGenerating}
-                className={`btn-primary text-xs landscape:text-xs md:text-base px-3 landscape:px-2 md:px-6 py-1.5 landscape:py-1 md:py-2.5 ${isGenerating ? 'opacity-80 cursor-wait' : 'active:scale-95'}`}
+                className={`btn-primary text-xs landscape:text-xs md:text-sm px-3 landscape:px-2 md:px-5 py-1.5 landscape:py-1 md:py-2 ${isGenerating ? 'opacity-80 cursor-wait' : 'active:scale-95'}`}
               >
                 <RefreshCw size={16} className={`md:w-[18px] md:h-[18px] ${isGenerating ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:inline">{isGenerating ? '生成中...' : '自動生成'}</span>
@@ -284,7 +286,7 @@ function App() {
               </button>
               <button
                 onClick={handleDownloadExcel}
-                className="flex items-center space-x-1 px-2 landscape:px-2 md:px-5 py-1.5 landscape:py-1 md:py-2.5 bg-white/90 backdrop-blur-sm text-[#45B7D1] rounded-full hover:bg-white hover:scale-105 transition-all duration-300 shadow-md font-semibold active:scale-95 text-xs landscape:text-xs md:text-base"
+                className="flex items-center space-x-1 px-2.5 landscape:px-2 md:px-4 py-1.5 landscape:py-1 md:py-2 bg-white text-gray-600 border border-gray-200 rounded-full hover:border-[#45B7D1] hover:text-[#45B7D1] transition-all duration-200 font-medium active:scale-95 text-xs landscape:text-xs md:text-sm"
               >
                 <Download size={16} className="md:w-[18px] md:h-[18px]" />
                 <span className="hidden sm:inline">Excel</span>
