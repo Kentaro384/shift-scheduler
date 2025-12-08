@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Colorful Pop Theme - Inspired by Florence */
+:root {
+    /* Primary Colors */
+    --coral-pink: #FF6B6B;
+    --coral-pink-light: #FF8787;
+    --sunshine-yellow: #FFE66D;
+    --mint-green: #4ECDC4;
+    --sky-blue: #45B7D1;
+    --lavender: #A78BFA;
+    --lavender-deep: #8B5CF6;
+
+    /* Shift Colors */
+    --shift-a: #FFE66D;
+    --shift-a-text: #7C5800;
+    --shift-b: #45B7D1;
+    --shift-c: #38A3C0;
+    --shift-d: #A78BFA;
+    --shift-e: #8B5CF6;
+    --shift-j: #FF6B6B;
+    --shift-furikyu: #4ECDC4;
+    --shift-yukyu: #F9A8D4;
+    --shift-kyujitsu: #E5E7EB;
+}
+
+/* Header Gradient */
+.header-gradient {
+    background: linear-gradient(135deg, var(--coral-pink) 0%, var(--sunshine-yellow) 100%);
+}
+
+/* Button Styles */
+.btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full font-semibold text-white transition-all duration-300 transform;
+    background: linear-gradient(135deg, var(--coral-pink) 0%, var(--coral-pink-light) 100%);
+    box-shadow: 0 4px 14px rgba(255, 107, 107, 0.4);
+}
+
+.btn-primary:hover {
+    @apply scale-105;
+    box-shadow: 0 6px 20px rgba(255, 107, 107, 0.5);
+}
+
+.btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full font-semibold transition-all duration-300 transform;
+    background: white;
+    color: var(--coral-pink);
+    border: 2px solid var(--coral-pink);
+}
+
+.btn-secondary:hover {
+    @apply scale-105;
+    background: #FFF5F5;
+}
+
+.btn-icon {
+    @apply inline-flex items-center justify-center p-3 rounded-xl bg-white shadow-md transition-all duration-300 transform;
+}
+
+.btn-icon:hover {
+    @apply scale-110 shadow-lg;
+}
+
+/* Card Styles */
+.card-main {
+    @apply bg-white rounded-3xl shadow-lg p-6;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* Shift Cell Styles */
+.shift-cell {
+    @apply rounded-lg transition-all duration-200 cursor-pointer;
+}
+
+.shift-cell:hover {
+    @apply scale-105 shadow-md;
+}
+
+/* Navigation Pills */
+.nav-pill {
+    @apply px-4 py-2 rounded-full font-medium transition-all duration-300;
+}
+
+/* Animations */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in-up {
+    animation: fadeInUp 0.4s ease-out;
+}
+
+@keyframes pulse-soft {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.8;
+    }
+}
+
+.animate-pulse-soft {
+    animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* Table Enhancements */
+.table-header-cell {
+    @apply font-semibold text-center py-2 px-1;
+}
+
+.table-row-hover:hover {
+    @apply bg-gradient-to-r from-transparent via-pink-50 to-transparent;
+}
