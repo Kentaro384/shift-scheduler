@@ -3,6 +3,7 @@ import { storage } from './lib/storage';
 import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId } from './types';
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
+import { exportToExcel } from './lib/excelExport';
 import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, RefreshCw, Download, RotateCcw, ChevronDown, Menu } from 'lucide-react';
 import { StaffList } from './components/StaffList';
 import { SettingsModal } from './components/SettingsModal';
@@ -184,9 +185,15 @@ function App() {
     return counts;
   });
 
-  const handleDownloadCSV = () => {
-    // Placeholder for CSV download logic
-    alert('CSVダウンロード機能はまだ実装されていません。');
+  const handleDownloadExcel = () => {
+    exportToExcel({
+      year,
+      month,
+      staff,
+      schedule,
+      patterns,
+      holidays,
+    });
   };
 
   // Summary columns to show
@@ -276,11 +283,11 @@ function App() {
                 <span className="sm:hidden">{isGenerating ? '...' : '生成'}</span>
               </button>
               <button
-                onClick={handleDownloadCSV}
+                onClick={handleDownloadExcel}
                 className="flex items-center space-x-1 px-2 landscape:px-2 md:px-5 py-1.5 landscape:py-1 md:py-2.5 bg-white/90 backdrop-blur-sm text-[#45B7D1] rounded-full hover:bg-white hover:scale-105 transition-all duration-300 shadow-md font-semibold active:scale-95 text-xs landscape:text-xs md:text-base"
               >
                 <Download size={16} className="md:w-[18px] md:h-[18px]" />
-                <span className="hidden sm:inline">CSV</span>
+                <span className="hidden sm:inline">Excel</span>
               </button>
             </div>
           </div>
