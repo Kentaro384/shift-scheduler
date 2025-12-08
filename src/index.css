@@ -2,57 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Rev.2: モダン・ポップ & クリーン - 白ベースデザイン */
+/* Rev.3: モダン・ポップ & クリーン - オフホワイト基調・眩しさ軽減 */
 :root {
-    /* Primary Colors */
-    --coral-pink: #FF6B6B;
-    --coral-pink-light: #FF8787;
-    --sunshine-yellow: #FFE66D;
-    --mint-green: #4ECDC4;
-    --sky-blue: #45B7D1;
-    --lavender: #A78BFA;
-    --lavender-deep: #8B5CF6;
+    /* ベースカラー */
+    --color-bg-page: #F7F8FA;
+    --color-bg-surface: #FDFDFD;
 
-    /* Text Colors */
-    --text-dark: #1F2937;
-    --text-muted: #6B7280;
-    --border-light: #E5E7EB;
-    --border-lighter: #F3F4F6;
+    /* ボーダー */
+    --color-border-strong: #D1D5DB;
+    --color-border-weak: #E5E7EB;
 
-    /* Background Colors */
-    --bg-main: #F9FAFB;
-    --bg-card: #FFFFFF;
-    --bg-saturday: #F0F9FF;
-    --bg-sunday: #FEF2F2;
+    /* テキスト */
+    --color-text-primary: #1F2937;
+    --color-text-secondary: #6B7280;
 
-    /* Shift Indicator Colors */
-    --shift-a: #FFE66D;
-    --shift-b: #45B7D1;
-    --shift-c: #38A3C0;
-    --shift-d: #A78BFA;
-    --shift-e: #8B5CF6;
-    --shift-j: #FF6B6B;
-    --shift-furikyu: #4ECDC4;
-    --shift-yukyu: #F9A8D4;
-    --shift-kyujitsu: #9CA3AF;
+    /* アクセント */
+    --color-accent: #FF6B6B;
+    --color-accent-light: #FEE2E2;
+
+    /* 曜日 */
+    --color-saturday: #E0F2FE;
+    --color-sunday: #FEE2E2;
+
+    /* シャドウ */
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.15);
+
+    /* シフトカラー（ライン + ティント） */
+    --shift-a-line: #FFE66D;
+    --shift-a-tint: rgba(255, 230, 109, 0.12);
+    --shift-b-line: #45B7D1;
+    --shift-b-tint: rgba(69, 183, 209, 0.10);
+    --shift-c-line: #38A3C0;
+    --shift-c-tint: rgba(56, 163, 192, 0.10);
+    --shift-d-line: #A78BFA;
+    --shift-d-tint: rgba(167, 139, 250, 0.10);
+    --shift-e-line: #8B5CF6;
+    --shift-e-tint: rgba(139, 92, 246, 0.10);
+    --shift-j-line: #FF6B6B;
+    --shift-j-tint: rgba(255, 107, 107, 0.10);
+    --shift-furikyu-line: #4ECDC4;
+    --shift-furikyu-tint: rgba(78, 205, 196, 0.10);
+    --shift-yukyu-line: #F9A8D4;
+    --shift-yukyu-tint: rgba(249, 168, 212, 0.12);
+    --shift-kyujitsu-line: #9CA3AF;
 }
 
-/* Base text color */
+/* Base styles */
 body {
-    color: var(--text-dark);
+    color: var(--color-text-primary);
+    background-color: var(--color-bg-page);
     font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif;
 }
 
-/* Header - White with subtle shadow */
-.header-white {
-    background: white;
-    border-bottom: 1px solid var(--border-lighter);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+/* Header */
+.header-rev3 {
+    background: var(--color-bg-surface);
+    border-bottom: 1px solid var(--color-border-weak);
+    box-shadow: var(--shadow-sm);
 }
 
 /* Logo gradient text */
 .logo-gradient {
-    background: linear-gradient(135deg, var(--coral-pink) 0%, var(--sunshine-yellow) 100%);
+    background: linear-gradient(135deg, var(--color-accent) 0%, #FFE66D 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -60,82 +73,104 @@ body {
 
 /* Button Styles */
 .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full font-semibold text-white transition-all duration-200 transform;
-    background: linear-gradient(135deg, var(--coral-pink) 0%, var(--coral-pink-light) 100%);
-    box-shadow: 0 4px 10px rgba(255, 107, 107, 0.3);
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2 rounded-full font-semibold text-white transition-all duration-200;
+    background: linear-gradient(135deg, var(--color-accent) 0%, #FF8787 100%);
+    box-shadow: 0 4px 12px rgba(255, 107, 107, 0.25);
 }
 
 .btn-primary:hover {
-    @apply scale-105;
-    box-shadow: 0 6px 16px rgba(255, 107, 107, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(255, 107, 107, 0.35);
 }
 
 .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full font-semibold transition-all duration-200 transform;
-    background: white;
-    color: var(--text-dark);
-    border: 1px solid var(--border-light);
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full font-semibold transition-all duration-200;
+    background: var(--color-bg-surface);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border-strong);
 }
 
 .btn-secondary:hover {
-    border-color: var(--coral-pink);
-    background: #FEFEFE;
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    background: var(--color-accent-light);
 }
 
-/* Card Styles */
-.card-main {
-    @apply bg-white rounded-2xl p-6;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+.btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full font-medium transition-all duration-200;
+    background: transparent;
+    color: var(--color-text-secondary);
 }
 
-/* Shift Cell - White with left border indicator */
-.shift-cell {
-    @apply rounded-md transition-all duration-200 cursor-pointer bg-white;
-    border: 1px solid var(--border-light);
-    color: var(--text-dark);
+.btn-ghost:hover {
+    color: var(--color-accent);
+    background: rgba(255, 107, 107, 0.08);
 }
 
-.shift-cell:hover {
-    background: #F9FAFB;
+/* Card */
+.card-rev3 {
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border-weak);
+    border-radius: 12px;
+    box-shadow: var(--shadow-md);
 }
 
-.shift-cell-a {
-    border-left: 4px solid var(--shift-a);
+.card-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    padding-left: 12px;
+    border-left: 3px solid var(--color-accent);
 }
 
-.shift-cell-b {
-    border-left: 4px solid var(--shift-b);
+/* Shift Cell - Rev.3: 5px left border + tint background */
+.shift-cell-rev3 {
+    @apply rounded-md transition-all duration-150 cursor-pointer;
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border-strong);
+    color: var(--color-text-primary);
 }
 
-.shift-cell-c {
-    border-left: 4px solid var(--shift-c);
+.shift-cell-rev3:hover {
+    background: #F3F4F6;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
 }
 
-.shift-cell-d {
-    border-left: 4px solid var(--shift-d);
+/* Table row hover */
+.table-row-hover:hover {
+    background: rgba(255, 107, 107, 0.04);
 }
 
-.shift-cell-e {
-    border-left: 4px solid var(--shift-e);
+/* Saturday/Sunday backgrounds - Rev.3 stronger colors */
+.bg-saturday-rev3 {
+    background-color: var(--color-saturday);
 }
 
-.shift-cell-j {
-    border-left: 4px solid var(--shift-j);
+.bg-sunday-rev3 {
+    background-color: var(--color-sunday);
 }
 
-.shift-cell-furikyu {
-    border-left: 4px solid var(--shift-furikyu);
+/* Modal */
+.modal-overlay-rev3 {
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
 }
 
-.shift-cell-yukyu {
-    border-left: 4px solid var(--shift-yukyu);
+.modal-box-rev3 {
+    background: var(--color-bg-surface);
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
 }
 
-.shift-cell-kyujitsu {
-    border-left: 4px solid var(--shift-kyujitsu);
+.modal-title-rev3 {
+    @apply text-xl font-bold;
+    color: var(--color-text-primary);
+    padding-left: 12px;
+    border-left: 3px solid var(--color-accent);
 }
 
-/* Animations - キビキビした動き */
+/* Animations */
 @keyframes fadeIn {
     from {
         opacity: 0;
@@ -166,36 +201,14 @@ body {
     animation: fadeInUp 0.2s ease-out;
 }
 
-/* Table Enhancements */
+/* Table header */
 .table-header-cell {
     @apply font-bold text-center py-2 px-1;
-    color: var(--text-dark);
+    color: var(--color-text-primary);
 }
 
-.table-row-hover:hover {
-    background: #F9FAFB;
-}
-
-/* Saturday/Sunday column backgrounds */
-.bg-saturday {
-    background-color: var(--bg-saturday);
-}
-
-.bg-sunday {
-    background-color: var(--bg-sunday);
-}
-
-/* Modal - Clean white header */
-.modal-overlay {
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(2px);
-}
-
-.modal-header {
-    @apply bg-white border-b border-gray-100 px-6 py-4;
-}
-
-.modal-header-title {
-    @apply text-xl font-bold;
-    color: var(--text-dark);
+/* Nav active state */
+.nav-active {
+    color: var(--color-accent);
+    border-bottom: 2px solid var(--color-accent);
 }

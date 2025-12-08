@@ -137,25 +137,34 @@ function App() {
   };
 
   const getShiftColor = (shiftId: string) => {
-    // Rev.2: White background with colored left border indicator
-    const baseStyle = 'bg-white border border-gray-200 text-gray-800 font-medium';
+    // Rev.3: Off-white + 5px left border + tint background for better identification
+    const baseStyle = 'border border-[#D1D5DB] text-[#1F2937] font-medium';
 
-    if (shiftId === '振') return `${baseStyle} border-l-4 border-l-[#4ECDC4]`; // Mint Green
-    if (shiftId === '有') return `${baseStyle} border-l-4 border-l-[#F9A8D4]`; // Soft Pink
-    if (shiftId === '休') return `${baseStyle} border-l-4 border-l-[#9CA3AF] text-gray-400`; // Cool Gray
+    // 振休 - Mint Green
+    if (shiftId === '振') return `${baseStyle} bg-[rgba(78,205,196,0.10)] border-l-[5px] border-l-[#4ECDC4]`;
+    // 有給 - Soft Pink
+    if (shiftId === '有') return `${baseStyle} bg-[rgba(249,168,212,0.12)] border-l-[5px] border-l-[#F9A8D4]`;
+    // 休日 - Cool Gray (目立たせない)
+    if (shiftId === '休') return `${baseStyle} bg-[#FDFDFD] border-l-[5px] border-l-[#9CA3AF] text-[#9CA3AF] opacity-70`;
 
     const pattern = patterns.find(p => p.id === shiftId);
     if (pattern) {
-      if (shiftId === 'A') return `${baseStyle} border-l-4 border-l-[#FFE66D]`; // Sunshine Yellow
-      if (shiftId === 'B') return `${baseStyle} border-l-4 border-l-[#45B7D1]`; // Sky Blue
-      if (shiftId === 'C') return `${baseStyle} border-l-4 border-l-[#38A3C0]`; // Deep Sky
-      if (shiftId === 'D') return `${baseStyle} border-l-4 border-l-[#A78BFA]`; // Lavender
-      if (shiftId === 'E') return `${baseStyle} border-l-4 border-l-[#8B5CF6]`; // Deep Lavender
-      if (shiftId === 'J') return `${baseStyle} border-l-4 border-l-[#FF6B6B]`; // Coral Pink
-      return baseStyle;
+      // A - Sunshine Yellow
+      if (shiftId === 'A') return `${baseStyle} bg-[rgba(255,230,109,0.12)] border-l-[5px] border-l-[#FFE66D]`;
+      // B - Sky Blue
+      if (shiftId === 'B') return `${baseStyle} bg-[rgba(69,183,209,0.10)] border-l-[5px] border-l-[#45B7D1]`;
+      // C - Deep Sky
+      if (shiftId === 'C') return `${baseStyle} bg-[rgba(56,163,192,0.10)] border-l-[5px] border-l-[#38A3C0]`;
+      // D - Lavender
+      if (shiftId === 'D') return `${baseStyle} bg-[rgba(167,139,250,0.10)] border-l-[5px] border-l-[#A78BFA]`;
+      // E - Deep Lavender
+      if (shiftId === 'E') return `${baseStyle} bg-[rgba(139,92,246,0.10)] border-l-[5px] border-l-[#8B5CF6]`;
+      // J - Coral Pink
+      if (shiftId === 'J') return `${baseStyle} bg-[rgba(255,107,107,0.10)] border-l-[5px] border-l-[#FF6B6B]`;
+      return `${baseStyle} bg-[#FDFDFD]`;
     }
 
-    return 'bg-white border border-gray-100 text-gray-300'; // Empty/Unknown
+    return 'bg-[#FDFDFD] border border-[#E5E7EB] text-[#D1D5DB]'; // Empty/Unknown
   };
 
   // Calculate daily staff counts
@@ -202,8 +211,8 @@ function App() {
   const summaryColumns = ['A', 'B', 'C', 'D', 'E', 'J', '休', '振', '有'];
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] flex flex-col font-sans text-gray-800">
-      <header className="bg-white border-b border-gray-100 shadow-sm p-2 landscape:p-1.5 md:p-4 sticky top-0 z-30">
+    <div className="min-h-screen bg-[#F7F8FA] flex flex-col font-sans text-[#1F2937]">
+      <header className="bg-[#FDFDFD] border-b border-[#E5E7EB] shadow-[0_2px_4px_rgba(0,0,0,0.06)] p-2 landscape:p-1.5 md:p-4 sticky top-0 z-30">
         <div className="max-w-[1920px] mx-auto">
           {/* Mobile portrait: 2-row, Mobile landscape & Desktop: 1-row */}
           <div className="flex flex-col landscape:flex-row landscape:justify-between landscape:items-center md:flex-row md:justify-between md:items-center gap-2 landscape:gap-0 md:gap-0">
@@ -241,7 +250,7 @@ function App() {
 
                 {/* Dropdown Menu */}
                 {showSettingsMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-fade-in-up z-50">
+                  <div className="absolute right-0 mt-2 w-48 bg-[#FDFDFD] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.15)] border border-[#E5E7EB] overflow-hidden animate-fade-in-up z-50">
                     <button
                       onClick={() => { setShowSettings(true); setShowSettingsMenu(false); }}
                       className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-pink-50 transition-colors text-gray-700"
@@ -297,12 +306,12 @@ function App() {
       </header>
 
       <main className="flex-1 overflow-auto p-1.5 landscape:p-1 md:p-4">
-        <div className="max-w-[1920px] mx-auto bg-white rounded-xl landscape:rounded-lg md:rounded-3xl shadow-xl overflow-hidden border border-pink-100">
+        <div className="max-w-[1920px] mx-auto bg-[#FDFDFD] rounded-xl landscape:rounded-lg md:rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.08)] overflow-hidden border border-[#E5E7EB]">
           <div className="overflow-x-auto max-h-[calc(100vh-160px)] landscape:max-h-[calc(100vh-60px)] md:max-h-[calc(100vh-140px)]">
             <table className="w-full border-collapse text-xs md:text-sm relative">
-              <thead className="bg-gradient-to-r from-pink-50 via-white to-yellow-50 text-gray-700 sticky top-0 z-20 shadow-sm">
+              <thead className="bg-[#FDFDFD] text-[#1F2937] sticky top-0 z-20 shadow-sm">
                 <tr>
-                  <th className="border-b border-r border-pink-100 p-2 md:p-3 min-w-[100px] md:min-w-[180px] sticky left-0 z-20 bg-gradient-to-r from-pink-50 to-white font-bold text-sm md:text-base">職員</th>
+                  <th className="border-b border-r border-[#D1D5DB] p-2 md:p-3 min-w-[100px] md:min-w-[180px] sticky left-0 z-20 bg-[#FDFDFD] font-bold text-sm md:text-base text-[#1F2937]">職員</th>
                   {days.map(day => {
                     const date = new Date(year, month - 1, day);
                     const dayOfWeek = date.getDay();
@@ -310,22 +319,28 @@ function App() {
                     const isSun = dayOfWeek === 0;
                     const isHol = isHoliday(day);
 
-                    let textColor = 'text-gray-700';
-                    if (isSun || isHol) textColor = 'text-[#FF6B6B] font-bold';
-                    else if (isSat) textColor = 'text-[#45B7D1] font-bold';
+                    let textColor = 'text-[#1F2937]';
+                    let bgColor = '';
+                    if (isSun || isHol) {
+                      textColor = 'text-[#FF6B6B] font-bold';
+                      bgColor = 'bg-[#FEE2E2]';
+                    } else if (isSat) {
+                      textColor = 'text-[#45B7D1] font-bold';
+                      bgColor = 'bg-[#E0F2FE]';
+                    }
 
                     return (
-                      <th key={day} className={`border-b border-r border-pink-100 p-1 md:p-2 min-w-[32px] md:min-w-[45px] text-center ${textColor}`}>
+                      <th key={day} className={`border-b border-r border-[#D1D5DB] p-1 md:p-2 min-w-[32px] md:min-w-[45px] text-center ${textColor} ${bgColor}`}>
                         <div className="font-bold text-sm md:text-lg">{day}</div>
                         <div className="text-[10px] md:text-xs opacity-80">({['日', '月', '火', '水', '木', '金', '土'][dayOfWeek]})</div>
                       </th>
                     );
                   })}
-                  <th className="border-b border-l border-pink-100 p-2 min-w-[60px] bg-gradient-to-r from-white to-yellow-50 font-bold">出勤</th>
+                  <th className="border-b border-l border-[#D1D5DB] p-2 min-w-[60px] bg-[#FDFDFD] font-bold text-[#1F2937]">出勤</th>
                   {summaryColumns.map(pid => (
-                    <th key={pid} className="border-b border-l border-pink-100 p-2 min-w-[40px] bg-gradient-to-r from-white to-yellow-50 font-bold text-gray-700">{pid}</th>
+                    <th key={pid} className="border-b border-l border-[#D1D5DB] p-2 min-w-[40px] bg-[#FDFDFD] font-bold text-[#1F2937]">{pid}</th>
                   ))}
-                  <th className="border-b border-l border-pink-100 p-2 min-w-[40px] bg-gradient-to-r from-white to-yellow-50 font-bold">残</th>
+                  <th className="border-b border-l border-[#D1D5DB] p-2 min-w-[40px] bg-[#FDFDFD] font-bold text-[#1F2937]">残</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
