@@ -194,99 +194,106 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-yellow-50 flex flex-col font-sans text-gray-800">
-      <header className="header-gradient text-white shadow-lg p-4 sticky top-0 z-30">
-        <div className="max-w-[1920px] mx-auto flex justify-between items-center">
-          <div className="flex items-center space-x-6">
-            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-3 drop-shadow-md">
-              <span className="text-4xl animate-pulse-soft">🌟</span>
-              <span className="bg-white/20 px-3 py-1 rounded-full">保育園シフト</span>
-            </h1>
-            <div className="flex items-center bg-white/25 backdrop-blur-sm rounded-full p-1.5 shadow-inner">
-              <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-white/30 rounded-full transition-all duration-300 hover:scale-110">
-                <ChevronLeft size={24} />
-              </button>
-              <span className="text-xl font-bold mx-4 min-w-[140px] text-center">
-                {year}年 {month}月
-              </span>
-              <button onClick={() => changeMonth(1)} className="p-2 hover:bg-white/30 rounded-full transition-all duration-300 hover:scale-110">
-                <ChevronRight size={24} />
-              </button>
+      <header className="header-gradient text-white shadow-lg p-3 md:p-4 sticky top-0 z-30">
+        <div className="max-w-[1920px] mx-auto">
+          {/* Mobile: 2-row layout, Desktop: 1-row */}
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3">
+            {/* Row 1: Logo + Month Navigation */}
+            <div className="flex items-center justify-between md:justify-start md:space-x-6">
+              <h1 className="text-lg md:text-2xl font-bold tracking-tight flex items-center gap-2 drop-shadow-md">
+                <span className="text-2xl md:text-4xl animate-pulse-soft">🌟</span>
+                <span className="bg-white/20 px-2 md:px-3 py-1 rounded-full text-sm md:text-base">保育園シフト</span>
+              </h1>
+              <div className="flex items-center bg-white/25 backdrop-blur-sm rounded-full p-1 md:p-1.5 shadow-inner">
+                <button onClick={() => changeMonth(-1)} className="p-1.5 md:p-2 hover:bg-white/30 rounded-full transition-all duration-300 hover:scale-110">
+                  <ChevronLeft size={20} className="md:w-6 md:h-6" />
+                </button>
+                <span className="text-base md:text-xl font-bold mx-2 md:mx-4 min-w-[100px] md:min-w-[140px] text-center">
+                  {year}年 {month}月
+                </span>
+                <button onClick={() => changeMonth(1)} className="p-1.5 md:p-2 hover:bg-white/30 rounded-full transition-all duration-300 hover:scale-110">
+                  <ChevronRight size={20} className="md:w-6 md:h-6" />
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center space-x-3">
-            {/* Settings Dropdown */}
-            <div className="relative">
+
+            {/* Row 2: Action Buttons */}
+            <div className="flex items-center justify-end space-x-2 md:space-x-3">
+              {/* Settings Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+                  className="flex items-center space-x-1 md:space-x-2 px-3 md:px-5 py-2 md:py-2.5 bg-white/90 backdrop-blur-sm text-[#FF6B6B] rounded-full hover:bg-white hover:scale-105 transition-all duration-300 shadow-md font-semibold text-sm md:text-base"
+                >
+                  <Menu size={16} className="md:w-[18px] md:h-[18px]" />
+                  <span className="hidden sm:inline">設定</span>
+                  <ChevronDown size={14} className={`hidden sm:block transition-transform duration-300 ${showSettingsMenu ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Dropdown Menu */}
+                {showSettingsMenu && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-fade-in-up z-50">
+                    <button
+                      onClick={() => { setShowSettings(true); setShowSettingsMenu(false); }}
+                      className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-pink-50 transition-colors text-gray-700"
+                    >
+                      <SettingsIcon size={18} className="text-[#FF6B6B]" />
+                      <span className="font-medium">シフト設定</span>
+                    </button>
+                    <button
+                      onClick={() => { setShowStaffList(true); setShowSettingsMenu(false); }}
+                      className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-pink-50 transition-colors text-gray-700 border-t border-gray-50"
+                    >
+                      <Users size={18} className="text-[#FF6B6B]" />
+                      <span className="font-medium">職員設定</span>
+                    </button>
+                    <button
+                      onClick={() => { setShowHolidayModal(true); setShowSettingsMenu(false); }}
+                      className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-pink-50 transition-colors text-gray-700 border-t border-gray-50"
+                    >
+                      <Calendar size={18} className="text-[#FF6B6B]" />
+                      <span className="font-medium">祝日設定</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Main Actions */}
               <button
-                onClick={() => setShowSettingsMenu(!showSettingsMenu)}
-                className="flex items-center space-x-2 px-5 py-2.5 bg-white/90 backdrop-blur-sm text-[#FF6B6B] rounded-full hover:bg-white hover:scale-105 transition-all duration-300 shadow-md font-semibold"
+                onClick={handleReset}
+                className="flex items-center space-x-1 md:space-x-2 px-3 md:px-5 py-2 md:py-2.5 bg-white text-[#FF6B6B] border-2 border-[#FF6B6B] rounded-full hover:bg-[#FFF5F5] hover:scale-105 transition-all duration-300 font-bold active:scale-95 text-sm md:text-base"
               >
-                <Menu size={18} />
-                <span>設定</span>
-                <ChevronDown size={16} className={`transition-transform duration-300 ${showSettingsMenu ? 'rotate-180' : ''}`} />
+                <RotateCcw size={16} className="md:w-[18px] md:h-[18px]" />
+                <span className="hidden sm:inline">リセット</span>
               </button>
-
-              {/* Dropdown Menu */}
-              {showSettingsMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-fade-in-up z-50">
-                  <button
-                    onClick={() => { setShowSettings(true); setShowSettingsMenu(false); }}
-                    className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-pink-50 transition-colors text-gray-700"
-                  >
-                    <SettingsIcon size={18} className="text-[#FF6B6B]" />
-                    <span className="font-medium">シフト設定</span>
-                  </button>
-                  <button
-                    onClick={() => { setShowStaffList(true); setShowSettingsMenu(false); }}
-                    className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-pink-50 transition-colors text-gray-700 border-t border-gray-50"
-                  >
-                    <Users size={18} className="text-[#FF6B6B]" />
-                    <span className="font-medium">職員設定</span>
-                  </button>
-                  <button
-                    onClick={() => { setShowHolidayModal(true); setShowSettingsMenu(false); }}
-                    className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-pink-50 transition-colors text-gray-700 border-t border-gray-50"
-                  >
-                    <Calendar size={18} className="text-[#FF6B6B]" />
-                    <span className="font-medium">祝日設定</span>
-                  </button>
-                </div>
-              )}
+              <button
+                onClick={handleGenerate}
+                disabled={isGenerating}
+                className={`btn-primary text-sm md:text-base px-4 md:px-6 py-2 md:py-2.5 ${isGenerating ? 'opacity-80 cursor-wait' : 'active:scale-95'}`}
+              >
+                <RefreshCw size={16} className={`md:w-[18px] md:h-[18px] ${isGenerating ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">{isGenerating ? '生成中...' : '自動生成'}</span>
+                <span className="sm:hidden">{isGenerating ? '...' : '生成'}</span>
+              </button>
+              <button
+                onClick={handleDownloadCSV}
+                className="flex items-center space-x-1 px-3 md:px-5 py-2 md:py-2.5 bg-white/90 backdrop-blur-sm text-[#45B7D1] rounded-full hover:bg-white hover:scale-105 transition-all duration-300 shadow-md font-semibold active:scale-95 text-sm md:text-base"
+              >
+                <Download size={16} className="md:w-[18px] md:h-[18px]" />
+                <span className="hidden sm:inline">CSV</span>
+              </button>
             </div>
-
-            {/* Main Actions */}
-            <button
-              onClick={handleReset}
-              className="flex items-center space-x-2 px-5 py-2.5 bg-white text-[#FF6B6B] border-2 border-[#FF6B6B] rounded-full hover:bg-[#FFF5F5] hover:scale-105 transition-all duration-300 font-bold active:scale-95"
-            >
-              <RotateCcw size={18} />
-              <span>リセット</span>
-            </button>
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerating}
-              className={`btn-primary ${isGenerating ? 'opacity-80 cursor-wait' : 'active:scale-95'}`}
-            >
-              <RefreshCw size={18} className={isGenerating ? 'animate-spin' : ''} />
-              <span>{isGenerating ? '生成中...' : '自動生成'}</span>
-            </button>
-            <button
-              onClick={handleDownloadCSV}
-              className="flex items-center space-x-2 px-5 py-2.5 bg-white/90 backdrop-blur-sm text-[#45B7D1] rounded-full hover:bg-white hover:scale-105 transition-all duration-300 shadow-md font-semibold active:scale-95"
-            >
-              <Download size={18} />
-              <span>CSV</span>
-            </button>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 overflow-auto p-4">
-        <div className="max-w-[1920px] mx-auto bg-white rounded-3xl shadow-xl overflow-hidden border border-pink-100">
-          <div className="overflow-x-auto max-h-[calc(100vh-140px)]">
-            <table className="w-full border-collapse text-sm relative">
+      <main className="flex-1 overflow-auto p-2 md:p-4">
+        <div className="max-w-[1920px] mx-auto bg-white rounded-2xl md:rounded-3xl shadow-xl overflow-hidden border border-pink-100">
+          <div className="overflow-x-auto max-h-[calc(100vh-160px)] md:max-h-[calc(100vh-140px)]">
+            <table className="w-full border-collapse text-xs md:text-sm relative">
               <thead className="bg-gradient-to-r from-pink-50 via-white to-yellow-50 text-gray-700 sticky top-0 z-20 shadow-sm">
                 <tr>
-                  <th className="border-b border-r border-pink-100 p-3 min-w-[180px] sticky left-0 z-20 bg-gradient-to-r from-pink-50 to-white font-bold text-base">職員 / 日付</th>
+                  <th className="border-b border-r border-pink-100 p-2 md:p-3 min-w-[100px] md:min-w-[180px] sticky left-0 z-20 bg-gradient-to-r from-pink-50 to-white font-bold text-sm md:text-base">職員</th>
                   {days.map(day => {
                     const date = new Date(year, month - 1, day);
                     const dayOfWeek = date.getDay();
@@ -299,9 +306,9 @@ function App() {
                     else if (isSat) textColor = 'text-[#45B7D1] font-bold';
 
                     return (
-                      <th key={day} className={`border-b border-r border-pink-100 p-2 min-w-[45px] text-center ${textColor}`}>
-                        <div className="font-bold text-lg">{day}</div>
-                        <div className="text-xs opacity-80">({['日', '月', '火', '水', '木', '金', '土'][dayOfWeek]})</div>
+                      <th key={day} className={`border-b border-r border-pink-100 p-1 md:p-2 min-w-[32px] md:min-w-[45px] text-center ${textColor}`}>
+                        <div className="font-bold text-sm md:text-lg">{day}</div>
+                        <div className="text-[10px] md:text-xs opacity-80">({['日', '月', '火', '水', '木', '金', '土'][dayOfWeek]})</div>
                       </th>
                     );
                   })}
@@ -328,13 +335,13 @@ function App() {
 
                   return (
                     <tr key={s.id} className="hover:bg-gradient-to-r hover:from-pink-50 hover:via-white hover:to-yellow-50 transition-all duration-200">
-                      <td className="border-r border-pink-100 p-2 sticky left-0 z-10 bg-white font-medium text-gray-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
+                      <td className="border-r border-pink-100 p-1.5 md:p-2 sticky left-0 z-10 bg-white font-medium text-gray-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
                         <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-base font-semibold">{s.name}</div>
-                            <div className="text-xs text-gray-400">{s.position}</div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm md:text-base font-semibold truncate">{s.name}</div>
+                            <div className="text-[10px] md:text-xs text-gray-400 hidden sm:block">{s.position}</div>
                           </div>
-                          {s.shiftType === 'cooking' && <span className="text-xs bg-[#FFE66D] text-[#7C5800] px-2 py-0.5 rounded-full font-medium">調</span>}
+                          {s.shiftType === 'cooking' && <span className="text-[10px] md:text-xs bg-[#FFE66D] text-[#7C5800] px-1.5 md:px-2 py-0.5 rounded-full font-medium ml-1">調</span>}
                         </div>
                       </td>
                       {days.map(day => {
@@ -343,22 +350,22 @@ function App() {
                         return (
                           <td
                             key={day}
-                            className="px-1 py-1 text-center border-r border-pink-50 relative group cursor-pointer hover:bg-pink-50/50 transition-all duration-200"
+                            className="px-0.5 md:px-1 py-0.5 md:py-1 text-center border-r border-pink-50 relative group cursor-pointer hover:bg-pink-50/50 transition-all duration-200"
                             onClick={() => handleCellClick(s.id, day)}
                           >
                             {shiftId === '休' ? (
-                              <div className="w-8 h-8 mx-auto flex items-center justify-center text-gray-300 font-bold text-lg">
+                              <div className="w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center text-gray-300 font-bold text-base md:text-lg">
                                 -
                               </div>
                             ) : shiftId ? (
                               <div className={`
-                                  w-8 h-8 mx-auto flex items-center justify-center rounded-xl text-sm border shadow-sm transition-all duration-200 hover:scale-125 hover:shadow-lg active:scale-95
+                                  w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center rounded-lg md:rounded-xl text-xs md:text-sm border shadow-sm transition-all duration-200 hover:scale-125 hover:shadow-lg active:scale-95
                                   ${getShiftColor(shiftId)}
                                 `}>
                                 {shiftId}
                               </div>
                             ) : (
-                              <div className="w-8 h-8 mx-auto rounded-xl hover:bg-pink-100/50 transition-colors"></div>
+                              <div className="w-6 h-6 md:w-8 md:h-8 mx-auto rounded-lg md:rounded-xl hover:bg-pink-100/50 transition-colors"></div>
                             )}
                           </td>
                         );
