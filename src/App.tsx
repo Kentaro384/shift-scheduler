@@ -167,6 +167,22 @@ function App() {
     return 'bg-[#FDFDFD] border border-[#E5E7EB] text-[#D1D5DB]'; // Empty/Unknown
   };
 
+  // Rev.5: Shape markers for colorblind accessibility
+  const getShiftMarker = (shiftId: string): string => {
+    const markers: Record<string, string> = {
+      'A': '●', // 塘り丸
+      'B': '■', // 塘り四角
+      'C': '◆', // 塘り菱形
+      'D': '▲', // 三角上
+      'E': '▼', // 三角下
+      'J': '★', // 星
+      '振': '○', // 白丸
+      '有': '◇', // 白菱形
+      '休': '－', // 横線
+    };
+    return markers[shiftId] || '';
+  };
+
   // Calculate daily staff counts
   const dailyCounts = days.map(day => {
     const dateStr = getFormattedDate(year, month, day);
@@ -374,22 +390,23 @@ function App() {
                         return (
                           <td
                             key={day}
-                            className="px-0.5 md:px-1 py-0.5 md:py-1 text-center border-r border-pink-50 relative group cursor-pointer hover:bg-pink-50/50 transition-all duration-200"
+                            className="px-0.5 md:px-1 py-0.5 md:py-1 text-center border-r border-[#E5E7EB] relative group cursor-pointer hover:bg-[#F3F4F6] transition-all duration-150"
                             onClick={() => handleCellClick(s.id, day)}
                           >
                             {shiftId === '休' ? (
-                              <div className="w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center text-gray-300 font-bold text-base md:text-lg">
-                                -
+                              <div className="w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center text-[#9CA3AF] font-medium text-sm opacity-60">
+                                －
                               </div>
                             ) : shiftId ? (
                               <div className={`
-                                  w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center rounded-lg md:rounded-xl text-xs md:text-sm border shadow-sm transition-all duration-200 hover:scale-125 hover:shadow-lg active:scale-95
+                                  w-7 h-6 md:w-9 md:h-8 mx-auto flex items-center justify-center gap-0.5 rounded-md text-xs md:text-sm shadow-sm transition-all duration-150 hover:scale-110 hover:shadow-md active:scale-95
                                   ${getShiftColor(shiftId)}
                                 `}>
-                                {shiftId}
+                                <span className="text-[8px] md:text-[10px] opacity-80">{getShiftMarker(shiftId)}</span>
+                                <span className="font-medium">{shiftId}</span>
                               </div>
                             ) : (
-                              <div className="w-6 h-6 md:w-8 md:h-8 mx-auto rounded-lg md:rounded-xl hover:bg-pink-100/50 transition-colors"></div>
+                              <div className="w-7 h-6 md:w-9 md:h-8 mx-auto rounded-md hover:bg-[#F3F4F6] transition-colors border border-dashed border-transparent hover:border-[#D1D5DB]"></div>
                             )}
                           </td>
                         );
