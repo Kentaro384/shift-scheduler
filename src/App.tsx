@@ -194,36 +194,36 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-yellow-50 flex flex-col font-sans text-gray-800">
-      <header className="header-gradient text-white shadow-lg p-3 md:p-4 sticky top-0 z-30">
+      <header className="header-gradient text-white shadow-lg p-2 landscape:p-1.5 md:p-4 sticky top-0 z-30">
         <div className="max-w-[1920px] mx-auto">
-          {/* Mobile: 2-row layout, Desktop: 1-row */}
-          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3">
+          {/* Mobile portrait: 2-row, Mobile landscape & Desktop: 1-row */}
+          <div className="flex flex-col landscape:flex-row landscape:justify-between landscape:items-center md:flex-row md:justify-between md:items-center gap-2 landscape:gap-0 md:gap-0">
             {/* Row 1: Logo + Month Navigation */}
-            <div className="flex items-center justify-between md:justify-start md:space-x-6">
-              <h1 className="text-lg md:text-2xl font-bold tracking-tight flex items-center gap-2 drop-shadow-md">
-                <span className="text-2xl md:text-4xl animate-pulse-soft">🌟</span>
-                <span className="bg-white/20 px-2 md:px-3 py-1 rounded-full text-sm md:text-base">保育園シフト</span>
+            <div className="flex items-center justify-between landscape:justify-start md:justify-start landscape:space-x-4 md:space-x-6">
+              <h1 className="text-lg landscape:text-base md:text-2xl font-bold tracking-tight flex items-center gap-1.5 landscape:gap-1 md:gap-2 drop-shadow-md">
+                <span className="text-xl landscape:text-lg md:text-4xl animate-pulse-soft">🌟</span>
+                <span className="bg-white/20 px-2 landscape:px-1.5 md:px-3 py-0.5 landscape:py-0.5 md:py-1 rounded-full text-xs landscape:text-xs md:text-base">保育園シフト</span>
               </h1>
-              <div className="flex items-center bg-white/25 backdrop-blur-sm rounded-full p-1 md:p-1.5 shadow-inner">
-                <button onClick={() => changeMonth(-1)} className="p-1.5 md:p-2 hover:bg-white/30 rounded-full transition-all duration-300 hover:scale-110">
-                  <ChevronLeft size={20} className="md:w-6 md:h-6" />
+              <div className="flex items-center bg-white/25 backdrop-blur-sm rounded-full p-0.5 landscape:p-0.5 md:p-1.5 shadow-inner">
+                <button onClick={() => changeMonth(-1)} className="p-1 landscape:p-1 md:p-2 hover:bg-white/30 rounded-full transition-all duration-300 hover:scale-110">
+                  <ChevronLeft size={18} className="landscape:w-4 landscape:h-4 md:w-6 md:h-6" />
                 </button>
-                <span className="text-base md:text-xl font-bold mx-2 md:mx-4 min-w-[100px] md:min-w-[140px] text-center">
+                <span className="text-sm landscape:text-xs md:text-xl font-bold mx-1.5 landscape:mx-1 md:mx-4 min-w-[80px] landscape:min-w-[70px] md:min-w-[140px] text-center">
                   {year}年 {month}月
                 </span>
-                <button onClick={() => changeMonth(1)} className="p-1.5 md:p-2 hover:bg-white/30 rounded-full transition-all duration-300 hover:scale-110">
-                  <ChevronRight size={20} className="md:w-6 md:h-6" />
+                <button onClick={() => changeMonth(1)} className="p-1 landscape:p-1 md:p-2 hover:bg-white/30 rounded-full transition-all duration-300 hover:scale-110">
+                  <ChevronRight size={18} className="landscape:w-4 landscape:h-4 md:w-6 md:h-6" />
                 </button>
               </div>
             </div>
 
             {/* Row 2: Action Buttons */}
-            <div className="flex items-center justify-end space-x-2 md:space-x-3">
+            <div className="flex items-center justify-end space-x-1.5 landscape:space-x-1 md:space-x-3">
               {/* Settings Dropdown */}
               <div className="relative">
                 <button
                   onClick={() => setShowSettingsMenu(!showSettingsMenu)}
-                  className="flex items-center space-x-1 md:space-x-2 px-3 md:px-5 py-2 md:py-2.5 bg-white/90 backdrop-blur-sm text-[#FF6B6B] rounded-full hover:bg-white hover:scale-105 transition-all duration-300 shadow-md font-semibold text-sm md:text-base"
+                  className="flex items-center space-x-1 md:space-x-2 px-2 landscape:px-2 md:px-5 py-1.5 landscape:py-1 md:py-2.5 bg-white/90 backdrop-blur-sm text-[#FF6B6B] rounded-full hover:bg-white hover:scale-105 transition-all duration-300 shadow-md font-semibold text-xs landscape:text-xs md:text-base"
                 >
                   <Menu size={16} className="md:w-[18px] md:h-[18px]" />
                   <span className="hidden sm:inline">設定</span>
@@ -261,7 +261,7 @@ function App() {
               {/* Main Actions */}
               <button
                 onClick={handleReset}
-                className="flex items-center space-x-1 md:space-x-2 px-3 md:px-5 py-2 md:py-2.5 bg-white text-[#FF6B6B] border-2 border-[#FF6B6B] rounded-full hover:bg-[#FFF5F5] hover:scale-105 transition-all duration-300 font-bold active:scale-95 text-sm md:text-base"
+                className="flex items-center space-x-1 md:space-x-2 px-2 landscape:px-2 md:px-5 py-1.5 landscape:py-1 md:py-2.5 bg-white text-[#FF6B6B] border-2 border-[#FF6B6B] rounded-full hover:bg-[#FFF5F5] hover:scale-105 transition-all duration-300 font-bold active:scale-95 text-xs landscape:text-xs md:text-base"
               >
                 <RotateCcw size={16} className="md:w-[18px] md:h-[18px]" />
                 <span className="hidden sm:inline">リセット</span>
@@ -269,7 +269,7 @@ function App() {
               <button
                 onClick={handleGenerate}
                 disabled={isGenerating}
-                className={`btn-primary text-sm md:text-base px-4 md:px-6 py-2 md:py-2.5 ${isGenerating ? 'opacity-80 cursor-wait' : 'active:scale-95'}`}
+                className={`btn-primary text-xs landscape:text-xs md:text-base px-3 landscape:px-2 md:px-6 py-1.5 landscape:py-1 md:py-2.5 ${isGenerating ? 'opacity-80 cursor-wait' : 'active:scale-95'}`}
               >
                 <RefreshCw size={16} className={`md:w-[18px] md:h-[18px] ${isGenerating ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:inline">{isGenerating ? '生成中...' : '自動生成'}</span>
@@ -277,7 +277,7 @@ function App() {
               </button>
               <button
                 onClick={handleDownloadCSV}
-                className="flex items-center space-x-1 px-3 md:px-5 py-2 md:py-2.5 bg-white/90 backdrop-blur-sm text-[#45B7D1] rounded-full hover:bg-white hover:scale-105 transition-all duration-300 shadow-md font-semibold active:scale-95 text-sm md:text-base"
+                className="flex items-center space-x-1 px-2 landscape:px-2 md:px-5 py-1.5 landscape:py-1 md:py-2.5 bg-white/90 backdrop-blur-sm text-[#45B7D1] rounded-full hover:bg-white hover:scale-105 transition-all duration-300 shadow-md font-semibold active:scale-95 text-xs landscape:text-xs md:text-base"
               >
                 <Download size={16} className="md:w-[18px] md:h-[18px]" />
                 <span className="hidden sm:inline">CSV</span>
@@ -287,9 +287,9 @@ function App() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-auto p-2 md:p-4">
-        <div className="max-w-[1920px] mx-auto bg-white rounded-2xl md:rounded-3xl shadow-xl overflow-hidden border border-pink-100">
-          <div className="overflow-x-auto max-h-[calc(100vh-160px)] md:max-h-[calc(100vh-140px)]">
+      <main className="flex-1 overflow-auto p-1.5 landscape:p-1 md:p-4">
+        <div className="max-w-[1920px] mx-auto bg-white rounded-xl landscape:rounded-lg md:rounded-3xl shadow-xl overflow-hidden border border-pink-100">
+          <div className="overflow-x-auto max-h-[calc(100vh-160px)] landscape:max-h-[calc(100vh-60px)] md:max-h-[calc(100vh-140px)]">
             <table className="w-full border-collapse text-xs md:text-sm relative">
               <thead className="bg-gradient-to-r from-pink-50 via-white to-yellow-50 text-gray-700 sticky top-0 z-20 shadow-sm">
                 <tr>
