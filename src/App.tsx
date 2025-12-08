@@ -137,30 +137,30 @@ function App() {
   };
 
   const getShiftColor = (shiftId: string) => {
-    // Rev.3: Off-white + 5px left border + tint background for better identification
+    // Rev.4: New color palette with 30°+ hue separation for better differentiation
     const baseStyle = 'border border-[#D1D5DB] text-[#1F2937] font-medium';
 
-    // 振休 - Mint Green
-    if (shiftId === '振') return `${baseStyle} bg-[rgba(78,205,196,0.10)] border-l-[5px] border-l-[#4ECDC4]`;
-    // 有給 - Soft Pink
-    if (shiftId === '有') return `${baseStyle} bg-[rgba(249,168,212,0.12)] border-l-[5px] border-l-[#F9A8D4]`;
+    // 振休 - Emerald Green (160°)
+    if (shiftId === '振') return `${baseStyle} bg-[rgba(16,185,129,0.10)] border-l-[5px] border-l-[#10B981]`;
+    // 有給 - Rose Pink (340°)
+    if (shiftId === '有') return `${baseStyle} bg-[rgba(244,114,182,0.12)] border-l-[5px] border-l-[#F472B6]`;
     // 休日 - Cool Gray (目立たせない)
-    if (shiftId === '休') return `${baseStyle} bg-[#FDFDFD] border-l-[5px] border-l-[#9CA3AF] text-[#9CA3AF] opacity-70`;
+    if (shiftId === '休') return `${baseStyle} bg-[#FDFDFD] border-l-[5px] border-l-[#9CA3AF] text-[#9CA3AF] opacity-60`;
 
     const pattern = patterns.find(p => p.id === shiftId);
     if (pattern) {
-      // A - Sunshine Yellow
-      if (shiftId === 'A') return `${baseStyle} bg-[rgba(255,230,109,0.12)] border-l-[5px] border-l-[#FFE66D]`;
-      // B - Sky Blue
-      if (shiftId === 'B') return `${baseStyle} bg-[rgba(69,183,209,0.10)] border-l-[5px] border-l-[#45B7D1]`;
-      // C - Deep Sky
-      if (shiftId === 'C') return `${baseStyle} bg-[rgba(56,163,192,0.10)] border-l-[5px] border-l-[#38A3C0]`;
-      // D - Lavender
-      if (shiftId === 'D') return `${baseStyle} bg-[rgba(167,139,250,0.10)] border-l-[5px] border-l-[#A78BFA]`;
-      // E - Deep Lavender
-      if (shiftId === 'E') return `${baseStyle} bg-[rgba(139,92,246,0.10)] border-l-[5px] border-l-[#8B5CF6]`;
-      // J - Coral Pink
-      if (shiftId === 'J') return `${baseStyle} bg-[rgba(255,107,107,0.10)] border-l-[5px] border-l-[#FF6B6B]`;
+      // A - Sunrise Yellow (45°)
+      if (shiftId === 'A') return `${baseStyle} bg-[rgba(245,158,11,0.12)] border-l-[5px] border-l-[#F59E0B]`;
+      // B - Sky Blue (220°)
+      if (shiftId === 'B') return `${baseStyle} bg-[rgba(59,130,246,0.10)] border-l-[5px] border-l-[#3B82F6]`;
+      // C - Indigo (245°)
+      if (shiftId === 'C') return `${baseStyle} bg-[rgba(99,102,241,0.10)] border-l-[5px] border-l-[#6366F1]`;
+      // D - Sunset Orange (25°)
+      if (shiftId === 'D') return `${baseStyle} bg-[rgba(249,115,22,0.10)] border-l-[5px] border-l-[#F97316]`;
+      // E - Magenta (330°)
+      if (shiftId === 'E') return `${baseStyle} bg-[rgba(236,72,153,0.10)] border-l-[5px] border-l-[#EC4899]`;
+      // J - Crimson Red (0°)
+      if (shiftId === 'J') return `${baseStyle} bg-[rgba(239,68,68,0.10)] border-l-[5px] border-l-[#EF4444]`;
       return `${baseStyle} bg-[#FDFDFD]`;
     }
 
