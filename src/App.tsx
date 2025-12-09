@@ -250,6 +250,43 @@ function App() {
     }
   };
 
+  // Handler for swapping two staff members' shifts
+  const handleSwap = (staffAId: number, staffBId: number) => {
+    if (!editingCell) return;
+    const { day } = editingCell;
+    const dateStr = getFormattedDate(year, month, day);
+
+    // Save previous state for undo
+    const prevSchedule = JSON.parse(JSON.stringify(schedule));
+
+    // Get current shifts
+    const shiftA = schedule[dateStr]?.[staffAId] || '';
+    const shiftB = schedule[dateStr]?.[staffBId] || '';
+
+    // Create new schedule with swapped shifts
+    const newSchedule = { ...schedule };
+    if (!newSchedule[dateStr]) newSchedule[dateStr] = {};
+    newSchedule[dateStr][staffAId] = shiftB;
+    newSchedule[dateStr][staffBId] = shiftA;
+
+    // Apply changes
+    setSchedule(newSchedule);
+    firestoreStorage.saveSchedule(newSchedule);
+    setEditingCell(null);
+
+    // Show toast with undo option
+    const staffMemberA = staff.find(s => s.id === staffAId);
+    const staffMemberB = staff.find(s => s.id === staffBId);
+    toast.warning(
+      `シフト入替完了`,
+      `${staffMemberA?.name}(${shiftA}→${shiftB}) ⇄ ${staffMemberB?.name}(${shiftB}→${shiftA})`,
+      () => {
+        setSchedule(prevSchedule);
+        firestoreStorage.saveSchedule(prevSchedule);
+      }
+    );
+  };
+
   const isHoliday = (day: number) => {
     const dateStr = getFormattedDate(year, month, day);
     return holidays.some(h => h.date === dateStr);
@@ -706,6 +743,7 @@ function App() {
           settings={settings}
           onSelect={handleShiftUpdate}
           onSelectStaff={handleSelectStaff}
+          onSwap={handleSwap}
           onClose={() => setEditingCell(null)}
         />
       )}

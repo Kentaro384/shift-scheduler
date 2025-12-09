@@ -466,3 +466,119 @@ export function createConstraintContext(
 ): ConstraintContext {
     return { schedule, staff, holidays, settings, year, month };
 }
+
+// ============================================
+// Swap Suggestions
+// ============================================
+
+export interface SwapSuggestion {
+    staffA: { id: number; name: string; currentShift: ShiftPatternId };
+    staffB: { id: number; name: string; currentShift: ShiftPatternId };
+    description: string;
+    benefit: string;
+}
+
+/**
+ * Find swap suggestions that could resolve a shortage
+ * Looks for pairs where swapping their shifts would fill a needed position
+ */
+export function findSwapSuggestions(
+    ctx: ConstraintContext,
+    day: number,
+    shortagePattern: ShiftPatternId
+): SwapSuggestion[] {
+    const suggestions: SwapSuggestion[] = [];
+    const dateStr = getFormattedDate(ctx.year, ctx.month, day);
+
+    // Get all regular staff
+    const regularStaff = ctx.staff.filter(s =>
+        s.shiftType === 'regular' || s.shiftType === 'backup'
+    );
+
+    // Find staff who could take the shortage pattern
+    for (const candidateA of regularStaff) {
+        const currentShiftA = ctx.schedule[dateStr]?.[candidateA.id] || '';
+
+        // Skip if already on the needed shift, on leave, or not working
+        if (currentShiftA === shortagePattern ||
+            currentShiftA === '有' ||
+            currentShiftA === '振' ||
+            currentShiftA === '休' ||
+            currentShiftA === '') continue;
+
+        // Check if this staff can take the shortage pattern
+        const violationsA = checkConstraints(ctx, day, candidateA.id, shortagePattern);
+        const canTakeShortage = !violationsA.some(v => v.type === 'hard');
+
+        if (!canTakeShortage) continue;
+
+        // Find someone who can take candidateA's current shift
+        for (const candidateB of regularStaff) {
+            if (candidateA.id === candidateB.id) continue;
+
+            const currentShiftB = ctx.schedule[dateStr]?.[candidateB.id] || '';
+
+            // Skip if on leave or already has A's current shift
+            if (currentShiftB === '有' ||
+                currentShiftB === '振' ||
+                currentShiftB === currentShiftA) continue;
+
+            // Check if B can take A's current shift
+            const violationsB = checkConstraints(ctx, day, candidateB.id, currentShiftA);
+            const canTakeAShift = !violationsB.some(v => v.type === 'hard');
+
+            if (!canTakeAShift) continue;
+
+            // Valid swap found!
+            suggestions.push({
+                staffA: {
+                    id: candidateA.id,
+                    name: candidateA.name,
+                    currentShift: currentShiftA
+                },
+                staffB: {
+                    id: candidateB.id,
+                    name: candidateB.name,
+                    currentShift: currentShiftB
+                },
+                description: `${candidateA.name}(${currentShiftA}) ⇄ ${candidateB.name}(${currentShiftB || '休'})`,
+                benefit: `${shortagePattern}枠が確保されます`
+            });
+
+            // Limit suggestions to prevent overwhelming the user
+            if (suggestions.length >= 3) return suggestions;
+        }
+    }
+
+    return suggestions;
+}
+
+/**
+ * Find shortages on a specific day
+ */
+export function findShortages(
+    ctx: ConstraintContext,
+    day: number
+): { pattern: ShiftPatternId; current: number; required: number }[] {
+    const shortages: { pattern: ShiftPatternId; current: number; required: number }[] = [];
+    const dateStr = getFormattedDate(ctx.year, ctx.month, day);
+
+    // Define minimum counts
+    const minCounts: { pattern: ShiftPatternId; min: number }[] = [
+        { pattern: 'A', min: 2 },
+        { pattern: 'J', min: 2 },
+    ];
+
+    for (const { pattern, min } of minCounts) {
+        let count = 0;
+        for (const staffId in ctx.schedule[dateStr] || {}) {
+            if (ctx.schedule[dateStr][Number(staffId)] === pattern) count++;
+        }
+
+        if (count < min) {
+            shortages.push({ pattern, current: count, required: min });
+        }
+    }
+
+    return shortages;
+}

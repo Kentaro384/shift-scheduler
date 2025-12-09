@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { X, Palette, AlertTriangle, CheckCircle, Users } from 'lucide-react';
+import { X, Palette, AlertTriangle, CheckCircle, Users, ArrowLeftRight } from 'lucide-react';
 import type { ShiftPatternId, Staff, ShiftSchedule, Holiday, Settings } from '../types';
 import {
     checkConstraints,
     evaluateCandidates,
     createConstraintContext,
+    findSwapSuggestions,
+    findShortages,
     type ConstraintViolation
 } from '../lib/constraintChecker';
 
@@ -21,6 +23,7 @@ interface ShiftEditModalProps {
     settings: Settings;
     onSelect: (shift: ShiftPatternId) => void;
     onSelectStaff: (staffId: number, shift: ShiftPatternId) => void;
+    onSwap: (staffAId: number, staffBId: number) => void;
     onClose: () => void;
 }
 
@@ -48,9 +51,10 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
     settings,
     onSelect,
     onSelectStaff,
+    onSwap,
     onClose
 }) => {
-    const [activeTab, setActiveTab] = useState<'select' | 'candidates'>('select');
+    const [activeTab, setActiveTab] = useState<'select' | 'candidates' | 'swap'>('select');
     const [selectedShiftForCandidates, setSelectedShiftForCandidates] = useState<ShiftPatternId>('A');
 
     // Create constraint context
@@ -138,6 +142,16 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
                         <Users size={16} className="inline mr-1" />
                         候補者検索
                     </button>
+                    <button
+                        onClick={() => setActiveTab('swap')}
+                        className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'swap'
+                            ? 'text-[#FF6B6B] border-b-2 border-[#FF6B6B]'
+                            : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                    >
+                        <ArrowLeftRight size={16} className="inline mr-1" />
+                        入替提案
+                    </button>
                 </div>
 
                 {/* Content */}
@@ -205,7 +219,7 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
                                 </div>
                             )}
                         </div>
-                    ) : (
+                    ) : activeTab === 'candidates' ? (
                         /* Candidate Search Tab */
                         <div className="p-4">
                             <p className="text-xs text-gray-500 mb-3">
@@ -294,6 +308,90 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
                                 <span>✅ 配置可能: {candidates.filter(c => c.isAssignable).length}名</span>
                                 <span>❌ 制約違反: {candidates.filter(c => !c.isAssignable).length}名</span>
                             </div>
+                        </div>
+                    ) : (
+                        /* Swap Suggestions Tab */
+                        <div className="p-4">
+                            <p className="text-xs text-gray-500 mb-3">
+                                人員不足を解消するための入れ替え提案です。
+                            </p>
+
+                            {/* Shortages */}
+                            {(() => {
+                                const shortages = findShortages(ctx, day);
+                                if (shortages.length === 0) {
+                                    return (
+                                        <div className="p-4 bg-green-50 rounded-xl border border-green-200">
+                                            <div className="flex items-center gap-2 text-green-700">
+                                                <CheckCircle className="w-5 h-5" />
+                                                <span className="font-medium">人員不足はありません</span>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div className="space-y-4">
+                                        {/* Shortage badges */}
+                                        <div className="flex gap-2 flex-wrap">
+                                            {shortages.map((shortage, i) => (
+                                                <div
+                                                    key={i}
+                                                    className="px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg text-sm"
+                                                >
+                                                    <span className="text-red-600 font-medium">{shortage.pattern}シフト</span>
+                                                    <span className="text-red-500 ml-1">
+                                                        {shortage.current}/{shortage.required}名
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Suggestions for each shortage */}
+                                        {shortages.map((shortage) => {
+                                            const suggestions = findSwapSuggestions(ctx, day, shortage.pattern);
+                                            if (suggestions.length === 0) {
+                                                return (
+                                                    <div key={shortage.pattern} className="text-center py-4 text-gray-400">
+                                                        <ArrowLeftRight className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                                                        <p className="text-sm">{shortage.pattern}シフトの入れ替え候補が見つかりません</p>
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <div key={shortage.pattern} className="space-y-2">
+                                                    <p className="text-xs text-gray-600 font-medium">
+                                                        💡 {shortage.pattern}枠を確保するには:
+                                                    </p>
+                                                    {suggestions.map((suggestion, i) => (
+                                                        <button
+                                                            key={i}
+                                                            onClick={() => onSwap(suggestion.staffA.id, suggestion.staffB.id)}
+                                                            className="w-full p-3 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:shadow-md transition-all text-left group"
+                                                        >
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-2">
+                                                                    <ArrowLeftRight className="w-4 h-4 text-blue-500" />
+                                                                    <span className="font-medium text-gray-800">
+                                                                        {suggestion.description}
+                                                                    </span>
+                                                                </div>
+                                                                <span className="text-xs text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    実行 →
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-green-600 mt-1 ml-6">
+                                                                ✓ {suggestion.benefit}
+                                                            </p>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
                         </div>
                     )}
                 </div>
