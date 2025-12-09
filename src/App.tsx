@@ -230,8 +230,6 @@ function App() {
     });
   };
 
-  // Summary columns to show
-  const summaryColumns = ['A', 'B', 'C', 'D', 'E', 'J', '休', '振', '有'];
 
   return (
     <div className="min-h-screen bg-[#F7F8FA] flex flex-col font-sans text-[#1F2937]">
@@ -369,27 +367,10 @@ function App() {
                       </th>
                     );
                   })}
-                  <th className="border-b border-l border-[#D1D5DB] p-2 min-w-[60px] bg-[#FDFDFD] font-bold text-[#1F2937]">出勤</th>
-                  {summaryColumns.map(pid => (
-                    <th key={pid} className="border-b border-l border-[#D1D5DB] p-2 min-w-[40px] bg-[#FDFDFD] font-bold text-[#1F2937]">{pid}</th>
-                  ))}
-                  <th className="border-b border-l border-[#D1D5DB] p-2 min-w-[40px] bg-[#FDFDFD] font-bold text-[#1F2937]">残</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {staff.map(s => {
-                  // Calculate summaries for this staff
-                  const counts: Record<string, number> = {};
-                  summaryColumns.forEach(pid => counts[pid] = 0);
-
-                  days.forEach(day => {
-                    const dateStr = getFormattedDate(year, month, day);
-                    const shift = schedule[dateStr]?.[s.id];
-                    if (shift && summaryColumns.includes(shift)) {
-                      counts[shift]++;
-                    }
-                  });
-
                   return (
                     <tr key={s.id} className="hover:bg-gradient-to-r hover:from-pink-50 hover:via-white hover:to-yellow-50 transition-all duration-200">
                       <td className="border-r border-pink-100 p-1.5 md:p-2 sticky left-0 z-10 bg-white font-medium text-gray-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
@@ -428,23 +409,6 @@ function App() {
                           </td>
                         );
                       })}
-                      {/* Summary Cells */}
-                      <td className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-r border-gray-100">
-                        {/* Total Attendance (excluding holidays) */}
-                        {days.filter(d => {
-                          const shift = schedule[getFormattedDate(year, month, d)]?.[s.id];
-                          return shift && !['休', '振', '有'].includes(shift);
-                        }).length}
-                      </td>
-                      {summaryColumns.map(pid => (
-                        <td key={pid} className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-r border-gray-100">
-                          {counts[pid] > 0 ? counts[pid] : '-'}
-                        </td>
-                      ))}
-                      <td className="px-2 py-2 text-center text-sm font-medium text-gray-700 border-r border-gray-100">
-                        {/* Remaining (Placeholder) */}
-                        -
-                      </td>
                     </tr>
                   );
                 })}
@@ -469,7 +433,7 @@ function App() {
                       </td>
                     );
                   })}
-                  <td colSpan={summaryColumns.length + 2} className="bg-gray-50 border-r"></td>
+
                 </tr>
                 {/* Qualified Staff Counts */}
                 {['A', 'B', 'C', 'D', 'E', 'J'].map(patternId => {
@@ -505,7 +469,7 @@ function App() {
                           </td>
                         );
                       })}
-                      <td colSpan={summaryColumns.length + 2} className="bg-white border-r"></td>
+
                     </tr>
                   );
                 })}
