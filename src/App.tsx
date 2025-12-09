@@ -10,6 +10,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { HolidayModal } from './components/HolidayModal';
 import { ShiftEditModal } from './components/ShiftEditModal';
 import { ShiftPaletteIcon } from './components/ShiftPaletteIcon';
+import { ShiftBalanceDashboard } from './components/ShiftBalanceDashboard';
 
 function App() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -501,6 +502,15 @@ function App() {
             </table>
           </div>
         </div>
+
+        {/* Shift Balance Dashboard */}
+        <ShiftBalanceDashboard
+          staff={staff}
+          schedule={schedule}
+          days={days}
+          year={year}
+          month={month}
+        />
       </main>
 
       {showStaffList && (
