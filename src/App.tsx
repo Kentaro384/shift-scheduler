@@ -17,6 +17,8 @@ import type { AuthUser } from './lib/auth';
 import { firestoreStorage } from './lib/firestoreStorage';
 import type { OrganizationData } from './lib/firestoreStorage';
 import { storage } from './lib/storage';
+import { useToast } from './components/Toast';
+import { checkConstraints, createConstraintContext } from './lib/constraintChecker';
 
 function App() {
   // Auth state
@@ -40,6 +42,9 @@ function App() {
   // UX States
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Toast notifications
+  const toast = useToast();
 
   // Listen for auth state changes
   useEffect(() => {
@@ -164,13 +169,42 @@ function App() {
     const { staffId, day } = editingCell;
     const dateStr = getFormattedDate(year, month, day);
 
+    // Save previous state for undo
+    const prevSchedule = JSON.parse(JSON.stringify(schedule));
+    const prevShift = schedule[dateStr]?.[staffId] || '休';
+
+    // Create new schedule
     const newSchedule = { ...schedule };
     if (!newSchedule[dateStr]) newSchedule[dateStr] = {};
     newSchedule[dateStr][staffId] = shiftId;
 
+    // Check for constraint violations
+    const ctx = createConstraintContext(newSchedule, staff, holidays, settings, year, month);
+    const violations = checkConstraints(ctx, day, staffId, shiftId);
+    const hardViolations = violations.filter(v => v.type === 'hard');
+
+    // Apply changes
     setSchedule(newSchedule);
     firestoreStorage.saveSchedule(newSchedule);
     setEditingCell(null);
+
+    // Show toast with undo option if there are violations
+    const staffMember = staff.find(s => s.id === staffId);
+    if (hardViolations.length > 0) {
+      toast.warning(
+        `制約違反があります`,
+        hardViolations.map(v => v.message).join('、'),
+        () => {
+          setSchedule(prevSchedule);
+          firestoreStorage.saveSchedule(prevSchedule);
+        }
+      );
+    } else if (violations.length > 0) {
+      toast.info(
+        `${staffMember?.name}: ${prevShift} → ${shiftId}`,
+        `推奨外: ${violations.map(v => v.message).join('、')}`
+      );
+    }
   };
 
   // Handler for assigning a shift to a different staff member (from candidate search)
@@ -179,13 +213,41 @@ function App() {
     const { day } = editingCell;
     const dateStr = getFormattedDate(year, month, day);
 
+    // Save previous state for undo
+    const prevSchedule = JSON.parse(JSON.stringify(schedule));
+
+    // Create new schedule
     const newSchedule = { ...schedule };
     if (!newSchedule[dateStr]) newSchedule[dateStr] = {};
     newSchedule[dateStr][targetStaffId] = shiftId;
 
+    // Check for constraint violations
+    const ctx = createConstraintContext(newSchedule, staff, holidays, settings, year, month);
+    const violations = checkConstraints(ctx, day, targetStaffId, shiftId);
+    const hardViolations = violations.filter(v => v.type === 'hard');
+
+    // Apply changes
     setSchedule(newSchedule);
     firestoreStorage.saveSchedule(newSchedule);
     setEditingCell(null);
+
+    // Show toast
+    const staffMember = staff.find(s => s.id === targetStaffId);
+    if (hardViolations.length > 0) {
+      toast.warning(
+        `制約違反があります`,
+        `${staffMember?.name}: ${hardViolations.map(v => v.message).join('、')}`,
+        () => {
+          setSchedule(prevSchedule);
+          firestoreStorage.saveSchedule(prevSchedule);
+        }
+      );
+    } else {
+      toast.success(
+        `${staffMember?.name} → ${shiftId}`,
+        `${month}/${day} に配置しました`
+      );
+    }
   };
 
   const isHoliday = (day: number) => {

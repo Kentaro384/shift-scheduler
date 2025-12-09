@@ -217,3 +217,20 @@ body {
     color: var(--color-accent);
     border-bottom: 2px solid var(--color-accent);
 }
+
+/* Toast slide animation */
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.animate-slide-in-right {
+    animation: slideInRight 0.3s ease-out;
+}
