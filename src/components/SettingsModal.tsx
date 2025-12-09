@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Settings, ShiftPatternDefinition } from '../types';
-import { X, Save } from 'lucide-react';
+import { X, Save, Settings2 } from 'lucide-react';
 
 interface SettingsModalProps {
     settings: Settings;
@@ -30,7 +30,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, patterns
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in-up">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
                 <div className="header-gradient p-5 flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-white drop-shadow-md">⚙️ 設定</h2>
+                    <h2 className="text-xl font-bold text-white drop-shadow-md flex items-center gap-2"><Settings2 size={22} /> 設定</h2>
                     <button onClick={onClose} className="p-2 bg-white/20 hover:bg-white/40 rounded-full transition-all duration-300 hover:scale-110">
                         <X size={20} className="text-white" />
                     </button>
