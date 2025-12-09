@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
-import { storage } from './lib/storage';
 import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId } from './types';
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { exportToExcel } from './lib/excelExport';
-import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, RefreshCw, Download, RotateCcw, ChevronDown, Menu } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut } from 'lucide-react';
 import { StaffList } from './components/StaffList';
 import { SettingsModal } from './components/SettingsModal';
 import { HolidayModal } from './components/HolidayModal';
@@ -12,12 +11,22 @@ import { ShiftEditModal } from './components/ShiftEditModal';
 import { ShiftPaletteIcon } from './components/ShiftPaletteIcon';
 import { ShiftBalanceDashboard } from './components/ShiftBalanceDashboard';
 import { AlertBadge } from './components/ShiftAlerts';
+import { LoginScreen } from './components/LoginScreen';
+import { onAuthStateChange, signOut } from './lib/auth';
+import type { AuthUser } from './lib/auth';
+import { firestoreStorage } from './lib/firestoreStorage';
+import type { OrganizationData } from './lib/firestoreStorage';
 
 function App() {
+  // Auth state
+  const [user, setUser] = useState<AuthUser>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const [staff, setStaff] = useState<Staff[]>([]);
   const [schedule, setSchedule] = useState<ShiftSchedule>({});
-  const [settings, setSettings] = useState<Settings>(storage.getSettings());
+  const [settings, setSettings] = useState<Settings>(firestoreStorage.getDefaultSettings());
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [patterns, setPatterns] = useState<ShiftPatternDefinition[]>([]);
 
@@ -31,13 +40,42 @@ function App() {
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // Listen for auth state changes
   useEffect(() => {
-    setStaff(storage.getStaff());
-    setSchedule(storage.getSchedule());
-    setSettings(storage.getSettings());
-    setHolidays(storage.getHolidays());
-    setPatterns(storage.getPatterns());
+    const unsubscribe = onAuthStateChange((authUser) => {
+      setUser(authUser);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
+
+  // Load data from Firestore when user is authenticated
+  useEffect(() => {
+    if (!user) {
+      setDataLoading(false);
+      return;
+    }
+
+    setDataLoading(true);
+
+    // Subscribe to real-time updates
+    const unsubscribe = firestoreStorage.subscribe((data: OrganizationData | null) => {
+      if (data) {
+        setStaff(data.staff || []);
+        setSchedule(data.schedule || {});
+        setSettings(data.settings || firestoreStorage.getDefaultSettings());
+        setHolidays(data.holidays || []);
+        setPatterns(data.patterns || firestoreStorage.getDefaultPatterns());
+      } else {
+        // Initialize with defaults if no data exists
+        setPatterns(firestoreStorage.getDefaultPatterns());
+        setSettings(firestoreStorage.getDefaultSettings());
+      }
+      setDataLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth() + 1;
@@ -56,7 +94,7 @@ function App() {
     const generator = new ShiftGenerator(staff, holidays, year, month, settings, schedule);
     const newSchedule = generator.generate();
     setSchedule(newSchedule);
-    storage.saveSchedule(newSchedule);
+    firestoreStorage.saveSchedule(newSchedule);
     setIsGenerating(false);
   };
 
@@ -93,27 +131,27 @@ function App() {
     }
 
     setSchedule(newSchedule);
-    storage.saveSchedule(newSchedule);
+    firestoreStorage.saveSchedule(newSchedule);
   };
 
   const handleUpdateStaff = (newStaff: Staff[]) => {
     setStaff(newStaff);
-    storage.saveStaff(newStaff);
+    firestoreStorage.saveStaff(newStaff);
   };
 
   const handleUpdateSettings = (newSettings: Settings) => {
     setSettings(newSettings);
-    storage.saveSettings(newSettings);
+    firestoreStorage.saveSettings(newSettings);
   };
 
   const handleUpdateHolidays = (newHolidays: Holiday[]) => {
     setHolidays(newHolidays);
-    storage.saveHolidays(newHolidays);
+    firestoreStorage.saveHolidays(newHolidays);
   };
 
   const handleUpdatePatterns = (newPatterns: ShiftPatternDefinition[]) => {
     setPatterns(newPatterns);
-    storage.savePatterns(newPatterns);
+    firestoreStorage.savePatterns(newPatterns);
   };
 
   const handleCellClick = (staffId: number, day: number) => {
@@ -130,7 +168,7 @@ function App() {
     newSchedule[dateStr][staffId] = shiftId;
 
     setSchedule(newSchedule);
-    storage.saveSchedule(newSchedule);
+    firestoreStorage.saveSchedule(newSchedule);
     setEditingCell(null);
   };
 
@@ -231,6 +269,35 @@ function App() {
   };
 
 
+  // Show loading screen while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-amber-50 flex items-center justify-center">
+        <div className="text-center">
+          <ShiftPaletteIcon className="w-16 h-16 mx-auto mb-4 animate-pulse" />
+          <p className="text-gray-500">読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login screen if not authenticated
+  if (!user) {
+    return <LoginScreen onLogin={() => { }} isLoading={false} />;
+  }
+
+  // Show loading while fetching data
+  if (dataLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-amber-50 flex items-center justify-center">
+        <div className="text-center">
+          <ShiftPaletteIcon className="w-16 h-16 mx-auto mb-4 animate-pulse" />
+          <p className="text-gray-500">データを同期中...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F7F8FA] flex flex-col font-sans text-[#1F2937]">
       <header className="bg-[#FDFDFD] border-b border-[#E5E7EB] shadow-[0_2px_4px_rgba(0,0,0,0.06)] p-2 landscape:p-1.5 md:p-4 sticky top-0 z-30">
@@ -302,6 +369,17 @@ function App() {
                     >
                       <Calendar size={18} className="text-[#FF6B6B]" />
                       <span className="font-medium">祝日設定</span>
+                    </button>
+                    <div className="border-t border-gray-100 my-1" />
+                    <button
+                      onClick={async () => {
+                        await signOut();
+                        setShowSettingsMenu(false);
+                      }}
+                      className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-red-50 transition-colors text-red-600"
+                    >
+                      <LogOut size={18} />
+                      <span className="font-medium">ログアウト</span>
                     </button>
                   </div>
                 )}
