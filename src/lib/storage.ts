@@ -95,4 +95,26 @@ export const storage = {
     savePatterns: (patterns: ShiftPatternDefinition[]) => {
         localStorage.setItem(KEYS.PATTERNS, JSON.stringify(patterns));
     },
+
+    // Get all data for migration to Firestore
+    getAllForMigration: () => {
+        return {
+            staff: storage.getStaff(),
+            schedule: storage.getSchedule(),
+            settings: storage.getSettings(),
+            holidays: storage.getHolidays(),
+            patterns: storage.getPatterns(),
+        };
+    },
+
+    // Check if localStorage has any data
+    hasData: (): boolean => {
+        return !!(
+            localStorage.getItem(KEYS.STAFF) ||
+            localStorage.getItem(KEYS.SCHEDULE) ||
+            localStorage.getItem(KEYS.SETTINGS) ||
+            localStorage.getItem(KEYS.HOLIDAYS) ||
+            localStorage.getItem(KEYS.PATTERNS)
+        );
+    },
 };
