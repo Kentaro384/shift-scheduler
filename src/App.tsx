@@ -173,6 +173,21 @@ function App() {
     setEditingCell(null);
   };
 
+  // Handler for assigning a shift to a different staff member (from candidate search)
+  const handleSelectStaff = (targetStaffId: number, shiftId: ShiftPatternId) => {
+    if (!editingCell) return;
+    const { day } = editingCell;
+    const dateStr = getFormattedDate(year, month, day);
+
+    const newSchedule = { ...schedule };
+    if (!newSchedule[dateStr]) newSchedule[dateStr] = {};
+    newSchedule[dateStr][targetStaffId] = shiftId;
+
+    setSchedule(newSchedule);
+    firestoreStorage.saveSchedule(newSchedule);
+    setEditingCell(null);
+  };
+
   const isHoliday = (day: number) => {
     const dateStr = getFormattedDate(year, month, day);
     return holidays.some(h => h.date === dateStr);
@@ -617,10 +632,18 @@ function App() {
 
       {editingCell && (
         <ShiftEditModal
+          staffId={editingCell.staffId}
           staffName={staff.find(s => s.id === editingCell.staffId)?.name || ''}
-          date={`${month}月${editingCell.day}日`}
+          day={editingCell.day}
+          year={year}
+          month={month}
           currentShift={schedule[getFormattedDate(year, month, editingCell.day)]?.[editingCell.staffId] || ''}
+          schedule={schedule}
+          staff={staff}
+          holidays={holidays}
+          settings={settings}
           onSelect={handleShiftUpdate}
+          onSelectStaff={handleSelectStaff}
           onClose={() => setEditingCell(null)}
         />
       )}
