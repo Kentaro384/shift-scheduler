@@ -152,18 +152,19 @@ function App() {
 
     const pattern = patterns.find(p => p.id === shiftId);
     if (pattern) {
-      // A - Sunrise Yellow (45°)
+      // 時間帯カラー：サンライズ → モーニング → ミッドデイ → サンセット → トワイライト → ナイト
+      // A - 🌅 Sunrise Amber (早朝・暖色)
       if (shiftId === 'A') return `${baseStyle} bg-[rgba(245,158,11,0.12)] border-l-[5px] border-l-[#F59E0B]`;
-      // B - Sky Blue (220°)
-      if (shiftId === 'B') return `${baseStyle} bg-[rgba(59,130,246,0.10)] border-l-[5px] border-l-[#3B82F6]`;
-      // C - Indigo (245°)
-      if (shiftId === 'C') return `${baseStyle} bg-[rgba(99,102,241,0.10)] border-l-[5px] border-l-[#6366F1]`;
-      // D - Sunset Orange (25°)
-      if (shiftId === 'D') return `${baseStyle} bg-[rgba(249,115,22,0.10)] border-l-[5px] border-l-[#F97316]`;
-      // E - Magenta (330°)
-      if (shiftId === 'E') return `${baseStyle} bg-[rgba(236,72,153,0.10)] border-l-[5px] border-l-[#EC4899]`;
-      // J - Crimson Red (0°)
-      if (shiftId === 'J') return `${baseStyle} bg-[rgba(239,68,68,0.10)] border-l-[5px] border-l-[#EF4444]`;
+      // B - ☀️ Morning Sky Blue (午前・明るい青)
+      if (shiftId === 'B') return `${baseStyle} bg-[rgba(56,189,248,0.10)] border-l-[5px] border-l-[#38BDF8]`;
+      // C - 🌤️ Midday Blue (日中・深い青)
+      if (shiftId === 'C') return `${baseStyle} bg-[rgba(59,130,246,0.10)] border-l-[5px] border-l-[#3B82F6]`;
+      // D - 🌇 Sunset Orange (午後・オレンジ)
+      if (shiftId === 'D') return `${baseStyle} bg-[rgba(249,115,22,0.12)] border-l-[5px] border-l-[#F97316]`;
+      // E - 🌆 Twilight Purple (夕方・紫)
+      if (shiftId === 'E') return `${baseStyle} bg-[rgba(168,85,247,0.10)] border-l-[5px] border-l-[#A855F7]`;
+      // J - 🌙 Night Crimson (夜・深い赤)
+      if (shiftId === 'J') return `${baseStyle} bg-[rgba(220,38,38,0.10)] border-l-[5px] border-l-[#DC2626]`;
       return `${baseStyle} bg-[#FDFDFD]`;
     }
 
