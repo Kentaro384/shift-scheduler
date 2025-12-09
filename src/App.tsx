@@ -11,7 +11,7 @@ import { HolidayModal } from './components/HolidayModal';
 import { ShiftEditModal } from './components/ShiftEditModal';
 import { ShiftPaletteIcon } from './components/ShiftPaletteIcon';
 import { ShiftBalanceDashboard } from './components/ShiftBalanceDashboard';
-import { ShiftAlerts } from './components/ShiftAlerts';
+import { AlertBadge } from './components/ShiftAlerts';
 
 function App() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -256,6 +256,16 @@ function App() {
                   <ChevronRight size={18} className="landscape:w-4 landscape:h-4 md:w-5 md:h-5" />
                 </button>
               </div>
+              {/* Alert Badge */}
+              <AlertBadge
+                staff={staff}
+                schedule={schedule}
+                days={days}
+                year={year}
+                month={month}
+                holidays={holidays}
+                minCount={8}
+              />
             </div>
 
             {/* Row 2: Action Buttons */}
@@ -503,17 +513,6 @@ function App() {
             </table>
           </div>
         </div>
-
-        {/* Shift Alerts */}
-        <ShiftAlerts
-          staff={staff}
-          schedule={schedule}
-          days={days}
-          year={year}
-          month={month}
-          holidays={holidays}
-          minCount={8}
-        />
 
         {/* Shift Balance Dashboard */}
         <ShiftBalanceDashboard
