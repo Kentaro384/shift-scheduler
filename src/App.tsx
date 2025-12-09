@@ -140,12 +140,15 @@ function App() {
     // Rev.4: New color palette with 30°+ hue separation for better differentiation
     const baseStyle = 'border border-[#D1D5DB] text-[#1F2937] font-medium';
 
-    // 振休 - Emerald Green (160°)
-    if (shiftId === '振') return `${baseStyle} bg-[rgba(16,185,129,0.10)] border-l-[5px] border-l-[#10B981]`;
-    // 有給 - Rose Pink (340°)
-    if (shiftId === '有') return `${baseStyle} bg-[rgba(244,114,182,0.12)] border-l-[5px] border-l-[#F472B6]`;
-    // 休日 - Cool Gray (目立たせない)
-    if (shiftId === '休') return `${baseStyle} bg-[#FDFDFD] border-l-[5px] border-l-[#9CA3AF] text-[#9CA3AF] opacity-60`;
+    // 休暇系スタイル（出勤シフトより控えめに）
+    const restBaseStyle = 'border-dashed text-[#6B7280]';
+
+    // 振休 - グレー背景 + 緑のアクセント（休み感を強調）
+    if (shiftId === '振') return `${restBaseStyle} bg-[#F3F4F6] border border-[#10B981] border-l-[5px] border-l-[#10B981] opacity-75`;
+    // 有給 - グレー背景 + ピンクのアクセント（休み感を強調）
+    if (shiftId === '有') return `${restBaseStyle} bg-[#F3F4F6] border border-[#F472B6] border-l-[5px] border-l-[#F472B6] opacity-75`;
+    // 休日 - Cool Gray (最も目立たせない)
+    if (shiftId === '休') return `${restBaseStyle} bg-[#F9FAFB] border border-[#D1D5DB] border-l-[5px] border-l-[#9CA3AF] text-[#9CA3AF] opacity-50`;
 
     const pattern = patterns.find(p => p.id === shiftId);
     if (pattern) {
