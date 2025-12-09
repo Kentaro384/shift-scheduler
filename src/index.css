@@ -170,9 +170,9 @@ body {
     border-left: 3px solid var(--color-accent);
 }
 
-/* Modal Header Gradient - 視認性向上 */
+/* Modal Header Gradient - アプリのアクセントカラーに統一 */
 .header-gradient {
-    background: linear-gradient(135deg, #374151 0%, #1F2937 100%);
+    background: linear-gradient(135deg, #FF6B6B 0%, #FF8787 100%);
 }
 
 /* Animations */
