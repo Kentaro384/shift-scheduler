@@ -3,7 +3,7 @@ import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, S
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { exportToExcel } from './lib/excelExport';
-import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, DatabaseBackup } from 'lucide-react';
 import { StaffList } from './components/StaffList';
 import { SettingsModal } from './components/SettingsModal';
 import { HolidayModal } from './components/HolidayModal';
@@ -16,6 +16,7 @@ import { onAuthStateChange, signOut } from './lib/auth';
 import type { AuthUser } from './lib/auth';
 import { firestoreStorage } from './lib/firestoreStorage';
 import type { OrganizationData } from './lib/firestoreStorage';
+import { storage } from './lib/storage';
 
 function App() {
   // Auth state
@@ -370,6 +371,26 @@ function App() {
                       <Calendar size={18} className="text-[#FF6B6B]" />
                       <span className="font-medium">祝日設定</span>
                     </button>
+                    {storage.hasData() && (
+                      <button
+                        onClick={async () => {
+                          if (!window.confirm('LocalStorageのデータをクラウドに移行しますか？\n\n現在のクラウドデータは上書きされます。')) return;
+                          const data = storage.getAllForMigration();
+                          await firestoreStorage.saveAll(data);
+                          setStaff(data.staff);
+                          setSchedule(data.schedule);
+                          setSettings(data.settings);
+                          setHolidays(data.holidays);
+                          setPatterns(data.patterns);
+                          setShowSettingsMenu(false);
+                          alert('データを移行しました！');
+                        }}
+                        className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-blue-50 transition-colors text-blue-600 border-t border-gray-50"
+                      >
+                        <DatabaseBackup size={18} />
+                        <span className="font-medium">LocalStorageから復元</span>
+                      </button>
+                    )}
                     <div className="border-t border-gray-100 my-1" />
                     <button
                       onClick={async () => {
