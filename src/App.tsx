@@ -9,6 +9,7 @@ import { StaffList } from './components/StaffList';
 import { SettingsModal } from './components/SettingsModal';
 import { HolidayModal } from './components/HolidayModal';
 import { ShiftEditModal } from './components/ShiftEditModal';
+import { ShiftPaletteIcon } from './components/ShiftPaletteIcon';
 
 function App() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -239,8 +240,8 @@ function App() {
             {/* Row 1: Logo + Month Navigation */}
             <div className="flex items-center justify-between landscape:justify-start md:justify-start landscape:space-x-4 md:space-x-6">
               <h1 className="text-lg landscape:text-base md:text-2xl font-bold tracking-tight flex items-center gap-1.5 landscape:gap-1 md:gap-2">
-                <span className="text-xl landscape:text-lg md:text-3xl">🏠</span>
-                <span className="logo-gradient text-sm landscape:text-xs md:text-xl font-bold">シフトスケジューラー</span>
+                <ShiftPaletteIcon className="w-6 h-6 landscape:w-5 landscape:h-5 md:w-9 md:h-9" />
+                <span className="logo-gradient text-sm landscape:text-xs md:text-xl font-bold">ShiftPalette</span>
               </h1>
               <div className="flex items-center bg-gray-100 rounded-full p-0.5 landscape:p-0.5 md:p-1">
                 <button onClick={() => changeMonth(-1)} className="p-1.5 landscape:p-1 md:p-2 hover:bg-gray-200 rounded-full transition-all duration-200 text-gray-600">
