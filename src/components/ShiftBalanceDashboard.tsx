@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BarChart3, ChevronDown, ChevronUp, AlertTriangle, CheckCircle } from 'lucide-react';
+import { BarChart3, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, RefreshCcw, Heart } from 'lucide-react';
 import type { Staff, ShiftSchedule, ShiftPatternId } from '../types';
 
 interface ShiftBalanceDashboardProps {
@@ -36,16 +36,24 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
         s.shiftType === 'regular' || s.shiftType === 'backup' || s.shiftType === 'part_time'
     );
 
-    // Calculate shift counts for each staff member
+    // Calculate shift counts for each staff member (including leave types)
     const getStaffShiftCounts = (staffMember: Staff): Record<string, number> => {
         const counts: Record<string, number> = {};
         SHIFT_ORDER.forEach(shift => counts[shift] = 0);
+        counts['振'] = 0;
+        counts['有'] = 0;
 
         days.forEach(day => {
             const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const shift = schedule[dateStr]?.[staffMember.id];
-            if (shift && SHIFT_ORDER.includes(shift as ShiftPatternId)) {
-                counts[shift] = (counts[shift] || 0) + 1;
+            if (shift) {
+                if (SHIFT_ORDER.includes(shift as ShiftPatternId)) {
+                    counts[shift] = (counts[shift] || 0) + 1;
+                } else if (shift === '振') {
+                    counts['振'] = (counts['振'] || 0) + 1;
+                } else if (shift === '有') {
+                    counts['有'] = (counts['有'] || 0) + 1;
+                }
             }
         });
 
@@ -55,7 +63,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
     // Calculate maximum count for scaling bars
     const allCounts = targetStaff.map(s => getStaffShiftCounts(s));
     const maxTotal = Math.max(...allCounts.map(counts =>
-        Object.values(counts).reduce((sum, c) => sum + c, 0)
+        SHIFT_ORDER.reduce((sum, shift) => sum + (counts[shift] || 0), 0)
     ), 1);
 
     // Calculate fairness scores (standard deviation)
@@ -155,11 +163,13 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                         <div className="space-y-2">
                             {targetStaff.map(s => {
                                 const counts = getStaffShiftCounts(s);
-                                const total = Object.values(counts).reduce((sum, c) => sum + c, 0);
+                                const total = SHIFT_ORDER.reduce((sum, shift) => sum + (counts[shift] || 0), 0);
+                                const furikyu = counts['振'] || 0;
+                                const yukyu = counts['有'] || 0;
 
                                 return (
-                                    <div key={s.id} className="flex items-center gap-3">
-                                        <div className="w-24 text-sm font-medium text-gray-700 truncate">
+                                    <div key={s.id} className="flex items-center gap-2">
+                                        <div className="w-20 text-sm font-medium text-gray-700 truncate">
                                             {s.name}
                                         </div>
                                         <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden flex">
@@ -183,8 +193,23 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                                 );
                                             })}
                                         </div>
-                                        <div className="w-12 text-sm font-bold text-gray-600 text-right">
+                                        <div className="w-10 text-sm font-bold text-gray-600 text-right">
                                             {total}日
+                                        </div>
+                                        {/* Leave Badges */}
+                                        <div className="flex gap-1 w-16 justify-end">
+                                            {furikyu > 0 && (
+                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300" title="振替休日">
+                                                    <RefreshCcw size={10} />
+                                                    {furikyu}
+                                                </span>
+                                            )}
+                                            {yukyu > 0 && (
+                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold rounded-full bg-pink-100 text-pink-700 border border-pink-300" title="有給休暇">
+                                                    <Heart size={10} />
+                                                    {yukyu}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 );
@@ -202,6 +227,16 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                     <span className="text-xs text-gray-600">{shift}</span>
                                 </div>
                             ))}
+                            <div className="flex items-center gap-1">
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300">
+                                    <RefreshCcw size={10} />振
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded-full bg-pink-100 text-pink-700 border border-pink-300">
+                                    <Heart size={10} />有
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
