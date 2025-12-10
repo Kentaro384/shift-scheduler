@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { X, Clock, Users } from 'lucide-react';
+import { X, Clock } from 'lucide-react';
 import type { Staff, ShiftSchedule, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
 import { getFormattedDate } from '../lib/utils';
 
@@ -27,13 +27,19 @@ function parseTimeToMinutes(time: string): number {
     return h * 60 + (m || 0);
 }
 
-// Check if a time (in minutes) falls within a range
-function isTimeInRange(time: number, start: number, end: number): boolean {
-    return time >= start && time < end;
-}
-
 // Hours to display (7:00 - 19:00)
-const HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
+const START_HOUR = 7;
+const END_HOUR = 19;
+const TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60;
+
+interface StaffWorkTime {
+    staffId: number;
+    name: string;
+    isQualified: boolean;
+    startMinutes: number;
+    endMinutes: number;
+    label: string; // e.g., "A" or "9:00-14:00"
+}
 
 export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
     day,
@@ -48,68 +54,85 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
     const dateStr = getFormattedDate(year, month, day);
     const dateDisplay = `${month}/${day}(${getDayName(year, month, day)})`;
 
-    // Calculate hourly staff counts
-    const hourlyData = useMemo(() => {
-        return HOURS.map(hour => {
-            const hourMinutes = hour * 60;
-            let qualifiedCount = 0;
-            let totalCount = 0;
-            const staffAtHour: { name: string; isQualified: boolean; shiftLabel: string }[] = [];
+    // Calculate staff work times for Gantt chart
+    const staffWorkTimes = useMemo(() => {
+        const result: StaffWorkTime[] = [];
 
-            staff.forEach(s => {
-                if (s.shiftType === 'cooking' || s.shiftType === 'no_shift') return;
+        staff.forEach(s => {
+            if (s.shiftType === 'cooking' || s.shiftType === 'no_shift') return;
 
-                // Check if part-timer with time range
-                if (s.shiftType === 'part_time') {
-                    const timeRange = timeRangeSchedule[dateStr]?.[s.id];
-                    if (timeRange) {
-                        const start = parseTimeToMinutes(timeRange.start);
-                        const end = parseTimeToMinutes(timeRange.end);
-                        if (isTimeInRange(hourMinutes, start, end)) {
-                            totalCount++;
-                            if (s.hasQualification) qualifiedCount++;
-                            staffAtHour.push({
-                                name: s.name,
-                                isQualified: s.hasQualification,
-                                shiftLabel: `${timeRange.start}-${timeRange.end}`
-                            });
-                        }
-                    }
-                    return;
-                }
-
-                // Regular staff - check shift pattern
-                const shiftId = schedule[dateStr]?.[s.id];
-                if (!shiftId || shiftId === '休' || shiftId === '振' || shiftId === '有') return;
-
-                const pattern = patterns.find(p => p.id === shiftId);
-                if (!pattern) return;
-
-                const [startStr, endStr] = pattern.timeRange.split('-');
-                const start = parseTimeToMinutes(startStr);
-                const end = parseTimeToMinutes(endStr);
-
-                if (isTimeInRange(hourMinutes, start, end)) {
-                    totalCount++;
-                    if (s.hasQualification) qualifiedCount++;
-                    staffAtHour.push({
+            // Part-time workers with time range
+            if (s.shiftType === 'part_time') {
+                const timeRange = timeRangeSchedule[dateStr]?.[s.id];
+                if (timeRange) {
+                    result.push({
+                        staffId: s.id,
                         name: s.name,
                         isQualified: s.hasQualification,
-                        shiftLabel: shiftId
+                        startMinutes: parseTimeToMinutes(timeRange.start),
+                        endMinutes: parseTimeToMinutes(timeRange.end),
+                        label: `${timeRange.start}-${timeRange.end}`
                     });
                 }
-            });
+                return;
+            }
 
-            return { hour, qualifiedCount, totalCount, staffAtHour };
+            // Regular staff with shift pattern
+            const shiftId = schedule[dateStr]?.[s.id];
+            if (!shiftId || shiftId === '休' || shiftId === '振' || shiftId === '有') return;
+
+            const pattern = patterns.find(p => p.id === shiftId);
+            if (!pattern) return;
+
+            const [startStr, endStr] = pattern.timeRange.split('-');
+            result.push({
+                staffId: s.id,
+                name: s.name,
+                isQualified: s.hasQualification,
+                startMinutes: parseTimeToMinutes(startStr),
+                endMinutes: parseTimeToMinutes(endStr),
+                label: shiftId
+            });
+        });
+
+        // Sort by start time, then by qualification
+        return result.sort((a, b) => {
+            if (a.startMinutes !== b.startMinutes) return a.startMinutes - b.startMinutes;
+            return (b.isQualified ? 1 : 0) - (a.isQualified ? 1 : 0);
         });
     }, [staff, schedule, timeRangeSchedule, patterns, dateStr]);
 
-    // Find peak hours
-    const maxCount = Math.max(...hourlyData.map(d => d.totalCount));
+    // Count by hour for summary
+    const hourlyCounts = useMemo(() => {
+        const counts: { qualified: number; total: number }[] = [];
+        for (let hour = START_HOUR; hour <= END_HOUR; hour++) {
+            const hourMinutes = hour * 60;
+            let qualified = 0;
+            let total = 0;
+            staffWorkTimes.forEach(sw => {
+                if (hourMinutes >= sw.startMinutes && hourMinutes < sw.endMinutes) {
+                    total++;
+                    if (sw.isQualified) qualified++;
+                }
+            });
+            counts.push({ qualified, total });
+        }
+        return counts;
+    }, [staffWorkTimes]);
+
+    // Convert minutes to position percentage
+    const getPosition = (minutes: number) => {
+        const startMinutes = START_HOUR * 60;
+        return ((minutes - startMinutes) / TOTAL_MINUTES) * 100;
+    };
+
+    const getWidth = (start: number, end: number) => {
+        return ((end - start) / TOTAL_MINUTES) * 100;
+    };
 
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in-up p-4">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden max-h-[90vh] flex flex-col">
                 {/* Header */}
                 <div className="header-gradient p-4 flex justify-between items-center flex-shrink-0">
                     <h2 className="text-lg font-bold text-white drop-shadow-md flex items-center gap-2">
@@ -125,101 +148,114 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                     </button>
                 </div>
 
-                {/* Chart */}
-                <div className="overflow-y-auto flex-1 p-4">
-                    <div className="space-y-2">
-                        {hourlyData.map(({ hour, qualifiedCount, totalCount }) => {
-                            const isLow = qualifiedCount < 2; // Warning if less than 2 qualified
-
-                            return (
-                                <div key={hour} className="flex items-center gap-3">
-                                    {/* Hour label */}
-                                    <div className="w-12 text-right text-sm font-medium text-gray-600">
-                                        {hour}:00
-                                    </div>
-
-                                    {/* Bar */}
-                                    <div className="flex-1 relative">
-                                        <div className="h-8 bg-gray-100 rounded-lg overflow-hidden">
-                                            {/* Qualified portion */}
-                                            <div
-                                                className={`h-full transition-all duration-300 ${isLow ? 'bg-red-400' : 'bg-green-400'}`}
-                                                style={{ width: `${(qualifiedCount / maxCount) * 100}%` }}
-                                            />
-                                            {/* Non-qualified portion */}
-                                            <div
-                                                className="h-full bg-gray-300 absolute top-0"
-                                                style={{
-                                                    left: `${(qualifiedCount / maxCount) * 100}%`,
-                                                    width: `${((totalCount - qualifiedCount) / maxCount) * 100}%`
-                                                }}
-                                            />
-                                        </div>
-
-                                        {/* Count label */}
-                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs">
-                                            <span className={`font-bold ${isLow ? 'text-red-700' : 'text-green-700'}`}>
-                                                {qualifiedCount}資
-                                            </span>
-                                            <span className="text-gray-500">/ {totalCount}名</span>
-                                        </div>
-                                    </div>
+                {/* Time axis header */}
+                <div className="px-4 pt-3 pb-1 bg-gray-50 border-b">
+                    <div className="flex">
+                        <div className="w-24 flex-shrink-0"></div>
+                        <div className="flex-1 relative h-6">
+                            {Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i).map(hour => (
+                                <div
+                                    key={hour}
+                                    className="absolute text-[10px] text-gray-500 font-medium"
+                                    style={{ left: `${getPosition(hour * 60)}%`, transform: 'translateX(-50%)' }}
+                                >
+                                    {hour}
                                 </div>
-                            );
-                        })}
-                    </div>
-
-                    {/* Legend */}
-                    <div className="mt-6 flex gap-4 justify-center text-xs text-gray-500">
-                        <span className="flex items-center gap-1">
-                            <div className="w-3 h-3 bg-green-400 rounded"></div>
-                            資格者
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <div className="w-3 h-3 bg-gray-300 rounded"></div>
-                            資格なし
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <div className="w-3 h-3 bg-red-400 rounded"></div>
-                            資格者2名未満
-                        </span>
-                    </div>
-
-                    {/* Staff Detail for peak hour */}
-                    <div className="mt-6 p-4 bg-gray-50 rounded-xl">
-                        <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                            <Users size={16} />
-                            在籍職員一覧（日中帯 9:00-15:00）
-                        </h3>
-                        <div className="flex flex-wrap gap-2">
-                            {hourlyData
-                                .filter(d => d.hour >= 9 && d.hour <= 15)
-                                .flatMap(d => d.staffAtHour)
-                                .filter((v, i, a) => a.findIndex(t => t.name === v.name) === i)
-                                .map((s, i) => (
-                                    <span
-                                        key={i}
-                                        className={`text-xs px-2 py-1 rounded-full ${s.isQualified
-                                            ? 'bg-green-100 text-green-700 border border-green-200'
-                                            : 'bg-gray-100 text-gray-600 border border-gray-200'
-                                            }`}
-                                    >
-                                        {s.name}
-                                        <span className="ml-1 opacity-70">({s.shiftLabel})</span>
-                                    </span>
-                                ))}
+                            ))}
                         </div>
                     </div>
                 </div>
 
-                {/* Footer */}
-                <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 text-center">
-                    <button
-                        onClick={onClose}
-                        className="px-6 py-2 text-sm bg-[#FF6B6B] text-white rounded-xl hover:bg-[#FF5252] transition-colors font-medium"
-                    >
-                        閉じる
-                    </button>
+                {/* Gantt Chart */}
+                <div className="overflow-y-auto flex-1 p-4">
+                    <div className="space-y-1">
+                        {staffWorkTimes.map(sw => (
+                            <div key={sw.staffId} className="flex items-center h-8">
+                                {/* Staff name */}
+                                <div className="w-24 flex-shrink-0 pr-2">
+                                    <span className={`text-xs font-medium truncate block ${sw.isQualified ? 'text-green-700' : 'text-gray-500'}`}>
+                                        {sw.isQualified && '✓ '}{sw.name}
+                                    </span>
+                                </div>
+
+                                {/* Time bar */}
+                                <div className="flex-1 relative h-6 bg-gray-100 rounded">
+                                    {/* Grid lines */}
+                                    {Array.from({ length: END_HOUR - START_HOUR }, (_, i) => (
+                                        <div
+                                            key={i}
+                                            className="absolute top-0 bottom-0 w-px bg-gray-200"
+                                            style={{ left: `${((i + 1) / (END_HOUR - START_HOUR)) * 100}%` }}
+                                        />
+                                    ))}
+
+                                    {/* Work time bar */}
+                                    <div
+                                        className={`absolute top-1 bottom-1 rounded-md flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${sw.isQualified
+                                                ? 'bg-gradient-to-r from-green-400 to-green-500'
+                                                : 'bg-gradient-to-r from-gray-400 to-gray-500'
+                                            }`}
+                                        style={{
+                                            left: `${getPosition(sw.startMinutes)}%`,
+                                            width: `${getWidth(sw.startMinutes, sw.endMinutes)}%`
+                                        }}
+                                        title={`${sw.name}: ${sw.label}`}
+                                    >
+                                        <span className="truncate px-1">{sw.label}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+
+                        {staffWorkTimes.length === 0 && (
+                            <div className="text-center py-8 text-gray-400">
+                                <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                <p>この日の勤務者はいません</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Hourly summary */}
+                    <div className="mt-6 pt-4 border-t">
+                        <h3 className="text-xs font-bold text-gray-600 mb-2">時間帯別人数</h3>
+                        <div className="flex">
+                            <div className="w-24 flex-shrink-0"></div>
+                            <div className="flex-1 flex">
+                                {hourlyCounts.map((count, i) => (
+                                    <div
+                                        key={i}
+                                        className={`flex-1 text-center text-[10px] py-1 border-r border-gray-200 last:border-r-0 ${count.qualified < 2 ? 'bg-red-100 text-red-700 font-bold' : 'text-gray-600'
+                                            }`}
+                                    >
+                                        <div className="font-bold">{count.qualified}</div>
+                                        <div className="text-gray-400">/{count.total}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Legend & Footer */}
+                <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
+                    <div className="flex justify-center gap-6 text-xs text-gray-500 mb-3">
+                        <span className="flex items-center gap-1">
+                            <div className="w-4 h-3 bg-gradient-to-r from-green-400 to-green-500 rounded"></div>
+                            有資格者
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <div className="w-4 h-3 bg-gradient-to-r from-gray-400 to-gray-500 rounded"></div>
+                            無資格者
+                        </span>
+                    </div>
+                    <div className="text-center">
+                        <button
+                            onClick={onClose}
+                            className="px-6 py-2 text-sm bg-[#FF6B6B] text-white rounded-xl hover:bg-[#FF5252] transition-colors font-medium"
+                        >
+                            閉じる
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
