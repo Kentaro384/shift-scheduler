@@ -76,6 +76,14 @@ function App() {
 
     // Subscribe to real-time updates
     const unsubscribe = firestoreStorage.subscribe((data: OrganizationData | null) => {
+      console.log('[SUBSCRIPTION] Data received from Firestore:', {
+        hasData: !!data,
+        timeRangeScheduleKeys: data?.timeRangeSchedule ? Object.keys(data.timeRangeSchedule) : [],
+        scheduleKeys: data?.schedule ? Object.keys(data.schedule) : []
+      });
+      if (data?.timeRangeSchedule) {
+        console.log('[SUBSCRIPTION] timeRangeSchedule sample (2025-12-02):', data.timeRangeSchedule['2025-12-02']);
+      }
       if (data) {
         setStaff(data.staff || []);
         setSchedule(data.schedule || {});
