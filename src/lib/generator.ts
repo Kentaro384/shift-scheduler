@@ -1,6 +1,7 @@
 import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, TimeRangeSchedule } from '../types';
 import { getDaysInMonth, getDayOfWeek, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
 import { SHIFT_PATTERNS } from '../types';
+import { countEffectiveShift, countQualifiedPartTimers } from './shiftCountUtils';
 
 export class ShiftGenerator {
     private staff: Staff[];
@@ -49,21 +50,7 @@ export class ShiftGenerator {
     // Helper: Count qualified part-timers assigned to a specific shift pattern on a given day
     private countQualifiedPartTimersForShift(day: number, shiftPattern: ShiftPatternId): number {
         const dateStr = getFormattedDate(this.year, this.month, day);
-        let count = 0;
-
-        this.staff.forEach(s => {
-            if (s.shiftType !== 'part_time' || !s.hasQualification) return;
-
-            const timeRange = this.timeRangeSchedule[dateStr]?.[s.id];
-            if (!timeRange) return;
-
-            // Check if countAsShifts includes this shift pattern
-            if (timeRange.countAsShifts && timeRange.countAsShifts.includes(shiftPattern)) {
-                count++;
-            }
-        });
-
-        return count;
+        return countQualifiedPartTimers(this.staff, this.timeRangeSchedule, dateStr, shiftPattern);
     }
 
     // Helper: Check if incompatible staff has conflict
@@ -210,24 +197,7 @@ export class ShiftGenerator {
     // Helper: Count specific pattern on a day (includes qualified part-timers with countAsShifts)
     private countPattern(day: number, pattern: ShiftPatternId): number {
         const dateStr = getFormattedDate(this.year, this.month, day);
-        let count = 0;
-
-        this.staff.forEach(s => {
-            // Regular staff: check schedule
-            if (this.schedule[dateStr]?.[s.id] === pattern) {
-                count++;
-            }
-
-            // Qualified part-timers: check countAsShifts
-            if (s.shiftType === 'part_time' && s.hasQualification) {
-                const timeRange = this.timeRangeSchedule[dateStr]?.[s.id];
-                if (timeRange?.countAsShifts?.includes(pattern)) {
-                    count++;
-                }
-            }
-        });
-
-        return count;
+        return countEffectiveShift(this.staff, this.schedule, this.timeRangeSchedule, dateStr, pattern, true);
     }
 
     // Phase 1: Director (always off)

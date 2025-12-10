@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId, TimeRangeSchedule, TimeRange } from './types';
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
+import { countAllPatterns } from './lib/shiftCountUtils';
 import { exportToExcel } from './lib/excelExport';
 import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, DatabaseBackup } from 'lucide-react';
 import { StaffList } from './components/StaffList';
@@ -387,36 +388,7 @@ function App() {
   // Calculate daily qualified staff counts per shift pattern
   const qualifiedCounts = days.map(day => {
     const dateStr = getFormattedDate(year, month, day);
-    const counts: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, J: 0 };
-
-    staff.forEach(s => {
-      if (!s.hasQualification) return;
-
-      // For qualified part-timers, use explicit countAsShifts if set
-      if (s.shiftType === 'part_time') {
-        const timeRange = timeRangeSchedule[dateStr]?.[s.id];
-        if (timeRange) {
-          // Use explicit countAsShifts if set
-          if (timeRange.countAsShifts && timeRange.countAsShifts.length > 0) {
-            timeRange.countAsShifts.forEach(shiftId => {
-              if (['A', 'B', 'C', 'D', 'E', 'J'].includes(shiftId)) {
-                counts[shiftId]++;
-              }
-            });
-          }
-          // Note: No fallback - if countAsShifts is not set, don't count automatically
-          // User should explicitly set which shifts to count toward
-        }
-        return;
-      }
-
-      // Regular staff
-      const shift = schedule[dateStr]?.[s.id];
-      if (shift && ['A', 'B', 'C', 'D', 'E', 'J'].includes(shift)) {
-        counts[shift]++;
-      }
-    });
-    return counts;
+    return countAllPatterns(staff, schedule, timeRangeSchedule, dateStr, true);
   });
 
   const handleDownloadExcel = () => {
