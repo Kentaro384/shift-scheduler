@@ -507,6 +507,10 @@ export class ShiftGenerator {
             const neededA = Math.max(0, 2 - qualifiedPartTimersOnA);
             const neededJ = Math.max(0, 2 - qualifiedPartTimersOnJ);
 
+            // Debug logging
+            console.log(`[Generator Phase4] Day ${d}: qualifiedPartTimersOnA=${qualifiedPartTimersOnA}, neededA=${neededA}`);
+            console.log(`[Generator Phase4] Day ${d}: qualifiedPartTimersOnJ=${qualifiedPartTimersOnJ}, neededJ=${neededJ}`);
+
             if (dayOfWeek >= 1 && dayOfWeek <= 3) {
                 // Mon-Wed: Prioritize A first to secure candidates before J→A conflict
                 assignPattern('A', neededA, false, sortByPatternCount('A'));
