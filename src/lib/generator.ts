@@ -259,19 +259,29 @@ export class ShiftGenerator {
         this.staff.forEach(s => satCounts[s.id] = 0);
 
         saturdays.forEach(day => {
-            // 1. Count existing Part-time staff (Manual inputs)
+            const dateStr = getFormattedDate(this.year, this.month, day);
+
+            // 1. Count existing Part-time staff (Manual inputs from schedule OR timeRangeSchedule)
             let partTimeCount = 0;
             this.staff.forEach(s => {
                 if (s.shiftType === 'part_time') {
+                    // Check schedule first
                     const shift = this.getShift(day, s.id);
                     if (shift && shift !== '休' && shift !== '振' && shift !== '有') {
+                        partTimeCount++;
+                        return;
+                    }
+                    // Also check timeRangeSchedule for part-timers with time ranges set
+                    const timeRange = this.timeRangeSchedule[dateStr]?.[s.id];
+                    if (timeRange) {
                         partTimeCount++;
                     }
                 }
             });
 
-            // 2. Calculate how many Regulars are needed
-            const targetRegularCount = Math.max(0, 3 - partTimeCount);
+            // 2. Calculate how many Regulars are needed (use settings, not hardcoded 3)
+            const targetTotal = this.settings.saturdayStaffCount;
+            const targetRegularCount = Math.max(0, targetTotal - partTimeCount);
 
             // 3. Select Regulars
             // Sort qualified regulars by Saturday count (ascending)
