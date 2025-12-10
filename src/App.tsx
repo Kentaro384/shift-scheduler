@@ -417,16 +417,25 @@ function App() {
     staff.forEach(s => {
       if (!s.hasQualification) return;
 
-      // For qualified part-timers, check time range overlap with each shift
+      // For qualified part-timers, use explicit countAsShifts if set, otherwise fallback to overlap
       if (s.shiftType === 'part_time') {
         const timeRange = timeRangeSchedule[dateStr]?.[s.id];
         if (timeRange) {
-          // Count for each shift pattern where there's overlap
-          ['A', 'B', 'C', 'D', 'E', 'J'].forEach(shiftId => {
-            if (doesTimeRangeOverlapShift(timeRange, shiftId)) {
-              counts[shiftId]++;
-            }
-          });
+          // Use explicit countAsShifts if set
+          if (timeRange.countAsShifts && timeRange.countAsShifts.length > 0) {
+            timeRange.countAsShifts.forEach(shiftId => {
+              if (['A', 'B', 'C', 'D', 'E', 'J'].includes(shiftId)) {
+                counts[shiftId]++;
+              }
+            });
+          } else {
+            // Fallback: Count for each shift pattern where there's significant overlap
+            ['A', 'B', 'C', 'D', 'E', 'J'].forEach(shiftId => {
+              if (doesTimeRangeOverlapShift(timeRange, shiftId)) {
+                counts[shiftId]++;
+              }
+            });
+          }
         }
         return;
       }

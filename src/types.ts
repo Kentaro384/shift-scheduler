@@ -46,6 +46,7 @@ export type ShiftSchedule = Record<string, Record<number, ShiftPatternId>>;
 export interface TimeRange {
     start: string;  // "HH:MM" format (e.g., "09:00")
     end: string;    // "HH:MM" format (e.g., "14:00")
+    countAsShifts?: ShiftPatternId[];  // Which shift patterns this time range counts toward
 }
 
 // Map of YYYY-MM-DD -> StaffId -> TimeRange (for part-time workers)
