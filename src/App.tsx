@@ -76,14 +76,6 @@ function App() {
 
     // Subscribe to real-time updates
     const unsubscribe = firestoreStorage.subscribe((data: OrganizationData | null) => {
-      console.log('[SUBSCRIPTION] Data received from Firestore:', {
-        hasData: !!data,
-        timeRangeScheduleKeys: data?.timeRangeSchedule ? Object.keys(data.timeRangeSchedule) : [],
-        scheduleKeys: data?.schedule ? Object.keys(data.schedule) : []
-      });
-      if (data?.timeRangeSchedule) {
-        console.log('[SUBSCRIPTION] timeRangeSchedule sample (2025-12-02):', data.timeRangeSchedule['2025-12-02']);
-      }
       if (data) {
         setStaff(data.staff || []);
         setSchedule(data.schedule || {});
@@ -685,19 +677,6 @@ function App() {
                         const partTimeRange = dateRanges[s.id] || dateRanges[String(s.id)];
                         const isPartTime = s.shiftType === 'part_time';
 
-                        // Debug log for パート 01 (ID 13) on 12/2
-                        if (s.id === 13 && day === 2) {
-                          console.log('[CELL DEBUG] パート 01 12/2:', {
-                            dateStr,
-                            shiftId,
-                            isPartTime,
-                            partTimeRange,
-                            dateRanges,
-                            'dateRanges[13]': dateRanges[13],
-                            'dateRanges["13"]': dateRanges["13"],
-                            timeRangeScheduleForDate: timeRangeSchedule[dateStr]
-                          });
-                        }
 
                         return (
                           <td
@@ -926,8 +905,6 @@ function App() {
             currentShift={currentShift}
             defaultTimeRange={staffMember?.defaultTimeRange}
             onSaveTimeRange={(timeRange: TimeRange) => {
-              console.log('[DEBUG] onSaveTimeRange called', { dateStr, staffId: editingPartTime.staffId, timeRange });
-
               // Save time range to timeRangeSchedule with deep copy
               const newTimeRangeSchedule = { ...timeRangeSchedule };
               if (!newTimeRangeSchedule[dateStr]) {
@@ -936,11 +913,8 @@ function App() {
                 newTimeRangeSchedule[dateStr] = { ...newTimeRangeSchedule[dateStr] }; // Deep copy
               }
               newTimeRangeSchedule[dateStr][editingPartTime.staffId] = timeRange;
-              console.log('[DEBUG] newTimeRangeSchedule', newTimeRangeSchedule);
               setTimeRangeSchedule(newTimeRangeSchedule);
-              firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule)
-                .then(() => console.log('[DEBUG] timeRangeSchedule saved to Firestore'))
-                .catch(err => console.error('[DEBUG] Error saving timeRangeSchedule:', err));
+              firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule);
 
               // ALWAYS clear schedule entry - set to empty string for Firestore merge
               const newSchedule = { ...schedule };
@@ -948,11 +922,8 @@ function App() {
               newSchedule[dateStr] = { ...newSchedule[dateStr] }; // Deep copy
               // Use empty string instead of delete - Firestore merge won't remove deleted keys
               newSchedule[dateStr][editingPartTime.staffId] = '' as ShiftPatternId;
-              console.log('[DEBUG] newSchedule (clearing to empty string)', newSchedule[dateStr]);
               setSchedule(newSchedule);
-              firestoreStorage.saveSchedule(newSchedule)
-                .then(() => console.log('[DEBUG] schedule saved to Firestore'))
-                .catch(err => console.error('[DEBUG] Error saving schedule:', err));
+              firestoreStorage.saveSchedule(newSchedule);
 
               setEditingPartTime(null);
               toast.success(`${staffMember?.name}`, `${timeRange.start}-${timeRange.end} に設定しました`);
