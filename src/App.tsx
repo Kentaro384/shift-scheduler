@@ -900,20 +900,25 @@ function App() {
             currentTimeRange={currentTimeRange}
             currentShift={currentShift}
             onSaveTimeRange={(timeRange: TimeRange) => {
-              // Save time range to timeRangeSchedule
+              // Save time range to timeRangeSchedule with deep copy
               const newTimeRangeSchedule = { ...timeRangeSchedule };
-              if (!newTimeRangeSchedule[dateStr]) newTimeRangeSchedule[dateStr] = {};
+              if (!newTimeRangeSchedule[dateStr]) {
+                newTimeRangeSchedule[dateStr] = {};
+              } else {
+                newTimeRangeSchedule[dateStr] = { ...newTimeRangeSchedule[dateStr] }; // Deep copy
+              }
               newTimeRangeSchedule[dateStr][editingPartTime.staffId] = timeRange;
               setTimeRangeSchedule(newTimeRangeSchedule);
               firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule);
 
-              // Clear any existing shift pattern
+              // ALWAYS clear schedule entry (including 休) with deep copy
               const newSchedule = { ...schedule };
-              if (newSchedule[dateStr]?.[editingPartTime.staffId]) {
+              if (newSchedule[dateStr]) {
+                newSchedule[dateStr] = { ...newSchedule[dateStr] }; // Deep copy
                 delete newSchedule[dateStr][editingPartTime.staffId];
-                setSchedule(newSchedule);
-                firestoreStorage.saveSchedule(newSchedule);
               }
+              setSchedule(newSchedule);
+              firestoreStorage.saveSchedule(newSchedule);
 
               setEditingPartTime(null);
               toast.success(`${staffMember?.name}`, `${timeRange.start}-${timeRange.end} に設定しました`);
