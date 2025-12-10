@@ -899,6 +899,7 @@ function App() {
             month={month}
             currentTimeRange={currentTimeRange}
             currentShift={currentShift}
+            defaultTimeRange={staffMember?.defaultTimeRange}
             onSaveTimeRange={(timeRange: TimeRange) => {
               console.log('[DEBUG] onSaveTimeRange called', { dateStr, staffId: editingPartTime.staffId, timeRange });
 
@@ -943,7 +944,7 @@ function App() {
               setSchedule(newSchedule);
               firestoreStorage.saveSchedule(newSchedule);
 
-              // IMPORTANT: Always clear time range with proper deep copy
+              // Clear any existing time range
               const newTimeRangeSchedule = { ...timeRangeSchedule };
               if (newTimeRangeSchedule[dateStr]) {
                 newTimeRangeSchedule[dateStr] = { ...newTimeRangeSchedule[dateStr] }; // Deep copy!
@@ -954,6 +955,17 @@ function App() {
 
               setEditingPartTime(null);
               toast.success(`${staffMember?.name}`, `${shiftId} に変更しました`);
+            }}
+            onSaveAsDefault={(timeRange: TimeRange) => {
+              // Save time range as staff's default
+              const newStaff = staff.map(s =>
+                s.id === editingPartTime.staffId
+                  ? { ...s, defaultTimeRange: timeRange }
+                  : s
+              );
+              setStaff(newStaff);
+              firestoreStorage.saveStaff(newStaff);
+              toast.success(`${staffMember?.name}`, `${timeRange.start}-${timeRange.end} をデフォルトに設定しました`);
             }}
             onClear={() => {
               // Clear both time range and shift
