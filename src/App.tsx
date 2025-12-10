@@ -900,6 +900,8 @@ function App() {
             currentTimeRange={currentTimeRange}
             currentShift={currentShift}
             onSaveTimeRange={(timeRange: TimeRange) => {
+              console.log('[DEBUG] onSaveTimeRange called', { dateStr, staffId: editingPartTime.staffId, timeRange });
+
               // Save time range to timeRangeSchedule with deep copy
               const newTimeRangeSchedule = { ...timeRangeSchedule };
               if (!newTimeRangeSchedule[dateStr]) {
@@ -908,8 +910,11 @@ function App() {
                 newTimeRangeSchedule[dateStr] = { ...newTimeRangeSchedule[dateStr] }; // Deep copy
               }
               newTimeRangeSchedule[dateStr][editingPartTime.staffId] = timeRange;
+              console.log('[DEBUG] newTimeRangeSchedule', newTimeRangeSchedule);
               setTimeRangeSchedule(newTimeRangeSchedule);
-              firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule);
+              firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule)
+                .then(() => console.log('[DEBUG] timeRangeSchedule saved to Firestore'))
+                .catch(err => console.error('[DEBUG] Error saving timeRangeSchedule:', err));
 
               // ALWAYS clear schedule entry (including 休) with deep copy
               const newSchedule = { ...schedule };
@@ -917,8 +922,11 @@ function App() {
                 newSchedule[dateStr] = { ...newSchedule[dateStr] }; // Deep copy
                 delete newSchedule[dateStr][editingPartTime.staffId];
               }
+              console.log('[DEBUG] newSchedule', newSchedule);
               setSchedule(newSchedule);
-              firestoreStorage.saveSchedule(newSchedule);
+              firestoreStorage.saveSchedule(newSchedule)
+                .then(() => console.log('[DEBUG] schedule saved to Firestore'))
+                .catch(err => console.error('[DEBUG] Error saving schedule:', err));
 
               setEditingPartTime(null);
               toast.success(`${staffMember?.name}`, `${timeRange.start}-${timeRange.end} に設定しました`);
