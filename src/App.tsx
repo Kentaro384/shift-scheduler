@@ -680,16 +680,24 @@ function App() {
                             className="px-0.5 md:px-1 py-0.5 md:py-1 text-center border-r border-[#E5E7EB] relative group cursor-pointer hover:bg-[#F3F4F6] transition-all duration-150"
                             onClick={() => handleCellClick(s.id, day)}
                           >
-                            {/* Part-time worker with time range */}
-                            {isPartTime && partTimeRange ? (
+                            {/* Display priority: 1) Holiday shifts 2) Part-time time range 3) Other shifts 4) Empty */}
+                            {(shiftId === '休' || shiftId === '振' || shiftId === '有') ? (
+                              /* Holiday shifts - show for everyone including part-timers */
+                              shiftId === '休' ? (
+                                <div className="w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center text-[#9CA3AF] font-medium text-sm opacity-60">
+                                  －
+                                </div>
+                              ) : (
+                                <div className={`w-7 h-6 md:w-9 md:h-8 mx-auto flex items-center justify-center gap-0.5 rounded-md text-xs md:text-sm shadow-sm ${getShiftColor(shiftId)}`}>
+                                  <span className="font-medium">{shiftId}</span>
+                                </div>
+                              )
+                            ) : isPartTime && partTimeRange ? (
+                              /* Part-time worker with time range - only if no holiday set */
                               <div className="w-7 h-8 md:w-9 md:h-10 mx-auto flex flex-col items-center justify-center rounded-md text-[7px] md:text-[8px] shadow-sm transition-all duration-150 hover:scale-105 hover:shadow-md bg-gray-100 border border-gray-300 text-gray-700 font-medium leading-tight">
                                 <span>{partTimeRange.start}</span>
                                 <span className="text-gray-400">↓</span>
                                 <span>{partTimeRange.end}</span>
-                              </div>
-                            ) : shiftId === '休' ? (
-                              <div className="w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center text-[#9CA3AF] font-medium text-sm opacity-60">
-                                －
                               </div>
                             ) : shiftId ? (
                               <div className={`
@@ -698,6 +706,11 @@ function App() {
                                 `}>
                                 <span className="text-[8px] md:text-[10px] opacity-80">{getShiftMarker(shiftId)}</span>
                                 <span className="font-medium">{shiftId}</span>
+                              </div>
+                            ) : isPartTime ? (
+                              /* Part-timer with no assignment - show dash */
+                              <div className="w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center text-[#9CA3AF] font-medium text-sm opacity-60">
+                                －
                               </div>
                             ) : (
                               <div className="w-7 h-6 md:w-9 md:h-8 mx-auto rounded-md hover:bg-[#F3F4F6] transition-colors border border-dashed border-transparent hover:border-[#D1D5DB]"></div>
