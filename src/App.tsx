@@ -8,6 +8,7 @@ import { StaffList } from './components/StaffList';
 import { SettingsModal } from './components/SettingsModal';
 import { HolidayModal } from './components/HolidayModal';
 import { ShiftEditModal } from './components/ShiftEditModal';
+import { CandidateSearchModal } from './components/CandidateSearchModal';
 import { ShiftPaletteIcon } from './components/ShiftPaletteIcon';
 import { ShiftBalanceDashboard } from './components/ShiftBalanceDashboard';
 import { AlertBadge } from './components/ShiftAlerts';
@@ -38,6 +39,8 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showHolidayModal, setShowHolidayModal] = useState(false);
   const [editingCell, setEditingCell] = useState<{ staffId: number; day: number } | null>(null);
+  // Candidate search from summary row - opens modal with pre-selected shift
+  const [candidateSearch, setCandidateSearch] = useState<{ day: number; shiftPattern: ShiftPatternId } | null>(null);
 
   // UX States
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
@@ -677,7 +680,12 @@ function App() {
                         else if (isHigh) cellClass = 'bg-blue-100 text-blue-800 font-bold';
 
                         return (
-                          <td key={idx} className={`px-1 py-1 text-center text-xs border-r ${cellClass}`}>
+                          <td
+                            key={idx}
+                            className={`px-1 py-1 text-center text-xs border-r cursor-pointer hover:ring-2 hover:ring-[#FF6B6B] hover:ring-inset transition-all ${cellClass}`}
+                            onClick={() => setCandidateSearch({ day, shiftPattern: patternId as ShiftPatternId })}
+                            title={`${patternId}シフトの候補者を検索`}
+                          >
                             {count > 0 ? count : '-'}
                           </td>
                         );
@@ -745,6 +753,40 @@ function App() {
           onSelectStaff={handleSelectStaff}
           onSwap={handleSwap}
           onClose={() => setEditingCell(null)}
+        />
+      )}
+
+      {/* Candidate Search Modal - opened from summary row */}
+      {candidateSearch && (
+        <CandidateSearchModal
+          day={candidateSearch.day}
+          year={year}
+          month={month}
+          shiftPattern={candidateSearch.shiftPattern}
+          schedule={schedule}
+          staff={staff}
+          holidays={holidays}
+          settings={settings}
+          onSelectCandidate={(staffId, shiftPattern) => {
+            const dateStr = getFormattedDate(year, month, candidateSearch.day);
+
+            // Update schedule
+            const newSchedule = { ...schedule };
+            if (!newSchedule[dateStr]) newSchedule[dateStr] = {};
+            newSchedule[dateStr][staffId] = shiftPattern;
+
+            setSchedule(newSchedule);
+            firestoreStorage.saveSchedule(newSchedule);
+            setCandidateSearch(null);
+
+            // Show toast
+            const staffMember = staff.find(s => s.id === staffId);
+            toast.success(
+              `${staffMember?.name} → ${shiftPattern}`,
+              `${month}/${candidateSearch.day} に配置しました`
+            );
+          }}
+          onClose={() => setCandidateSearch(null)}
         />
       )}
     </div>
