@@ -26,6 +26,7 @@ export interface Staff {
     earlyShiftLimit: number | null;
     saturdayOnly: boolean;
     hasQualification: boolean;
+    defaultTimeRange?: TimeRange; // Default work hours for part-time workers
 }
 
 export interface Settings {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Clock } from 'lucide-react';
+import { X, Clock, Star } from 'lucide-react';
 import type { TimeRange, ShiftPatternId } from '../types';
 
 interface TimeRangeModalProps {
@@ -10,8 +10,10 @@ interface TimeRangeModalProps {
     month: number;
     currentTimeRange: TimeRange | null;
     currentShift: ShiftPatternId;
+    defaultTimeRange?: TimeRange;  // Staff's default work hours
     onSaveTimeRange: (timeRange: TimeRange) => void;
     onSaveShift: (shift: ShiftPatternId) => void;
+    onSaveAsDefault: (timeRange: TimeRange) => void;  // New: save as default
     onClear: () => void;
     onClose: () => void;
 }
@@ -45,21 +47,30 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
     month,
     currentTimeRange,
     currentShift,
+    defaultTimeRange,
     onSaveTimeRange,
     onSaveShift,
+    onSaveAsDefault,
     onClear,
     onClose
 }) => {
+    // Determine initial time values: current > default > fallback
+    const initialStart = currentTimeRange?.start || defaultTimeRange?.start || '09:00';
+    const initialEnd = currentTimeRange?.end || defaultTimeRange?.end || '17:00';
+
     const [mode, setMode] = useState<'time' | 'holiday'>(
         currentTimeRange ? 'time' : (currentShift === '振' || currentShift === '有' || currentShift === '休') ? 'holiday' : 'time'
     );
-    const [startTime, setStartTime] = useState(currentTimeRange?.start || '09:00');
-    const [endTime, setEndTime] = useState(currentTimeRange?.end || '17:00');
+    const [startTime, setStartTime] = useState(initialStart);
+    const [endTime, setEndTime] = useState(initialEnd);
     const [selectedHoliday, setSelectedHoliday] = useState<ShiftPatternId>(
         (currentShift === '振' || currentShift === '有' || currentShift === '休') ? currentShift : '休'
     );
 
     const dateStr = `${month}/${day}(${getDayName(year, month, day)})`;
+
+    // Check if current selection matches the default
+    const isDefaultTime = defaultTimeRange && startTime === defaultTimeRange.start && endTime === defaultTimeRange.end;
 
     const handleSave = () => {
         if (mode === 'time') {
@@ -67,6 +78,10 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
         } else {
             onSaveShift(selectedHoliday);
         }
+    };
+
+    const handleSaveAsDefault = () => {
+        onSaveAsDefault({ start: startTime, end: endTime });
     };
 
     const holidayOptions = [
@@ -98,8 +113,8 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
                     <button
                         onClick={() => setMode('time')}
                         className={`flex-1 py-3 text-sm font-medium transition-colors ${mode === 'time'
-                                ? 'text-[#FF6B6B] border-b-2 border-[#FF6B6B]'
-                                : 'text-gray-500 hover:text-gray-700'
+                            ? 'text-[#FF6B6B] border-b-2 border-[#FF6B6B]'
+                            : 'text-gray-500 hover:text-gray-700'
                             }`}
                     >
                         <Clock size={16} className="inline mr-1" />
@@ -108,8 +123,8 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
                     <button
                         onClick={() => setMode('holiday')}
                         className={`flex-1 py-3 text-sm font-medium transition-colors ${mode === 'holiday'
-                                ? 'text-[#FF6B6B] border-b-2 border-[#FF6B6B]'
-                                : 'text-gray-500 hover:text-gray-700'
+                            ? 'text-[#FF6B6B] border-b-2 border-[#FF6B6B]'
+                            : 'text-gray-500 hover:text-gray-700'
                             }`}
                     >
                         休暇
@@ -120,6 +135,14 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
                 <div className="p-4">
                     {mode === 'time' ? (
                         <div className="space-y-4">
+                            {/* Default time indicator */}
+                            {defaultTimeRange && (
+                                <div className="flex items-center justify-center gap-2 text-xs text-amber-600 bg-amber-50 rounded-lg py-2 px-3">
+                                    <Star size={14} className="fill-amber-400 text-amber-400" />
+                                    <span>デフォルト: {defaultTimeRange.start} - {defaultTimeRange.end}</span>
+                                </div>
+                            )}
+
                             <p className="text-xs text-gray-500">
                                 勤務時間を15分単位で指定してください
                             </p>
@@ -160,7 +183,23 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
                                 <span className="text-lg font-bold text-gray-800">
                                     {startTime} - {endTime}
                                 </span>
+                                {isDefaultTime && (
+                                    <span className="ml-2 text-xs text-amber-600">
+                                        <Star size={12} className="inline fill-amber-400 text-amber-400" /> デフォルト
+                                    </span>
+                                )}
                             </div>
+
+                            {/* Save as default button */}
+                            {!isDefaultTime && (
+                                <button
+                                    onClick={handleSaveAsDefault}
+                                    className="w-full py-2 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors flex items-center justify-center gap-1"
+                                >
+                                    <Star size={14} />
+                                    この時間をデフォルトに設定
+                                </button>
+                            )}
                         </div>
                     ) : (
                         <div className="space-y-4">
@@ -174,8 +213,8 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
                                         key={opt.id}
                                         onClick={() => setSelectedHoliday(opt.id)}
                                         className={`p-4 rounded-xl border-2 transition-all ${selectedHoliday === opt.id
-                                                ? `${opt.color} border-current ring-2 ring-offset-2`
-                                                : 'bg-white border-gray-200 hover:border-gray-300'
+                                            ? `${opt.color} border-current ring-2 ring-offset-2`
+                                            : 'bg-white border-gray-200 hover:border-gray-300'
                                             }`}
                                     >
                                         <span className="text-xl font-bold">{opt.id}</span>
