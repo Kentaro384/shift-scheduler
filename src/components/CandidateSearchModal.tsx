@@ -31,15 +31,16 @@ function ConstraintBadge({ violation }: { violation: ConstraintViolation }) {
     );
 }
 
-// Shift color function - consistent with App.tsx getShiftColor
+// Shift color function - consistent with App.tsx getShiftColor and Rev5 spec
 function getShiftColor(shiftId: ShiftPatternId): string {
     const colors: Record<string, string> = {
-        'A': 'bg-[#FFD580] text-[#1F2937]',      // Early - Orange
-        'B': 'bg-[#A5D8FF] text-[#1F2937]',      // Standard - Blue
-        'C': 'bg-[#6CA6E0] text-[#1F2937]',      // Standard+ - Deeper Blue
-        'D': 'bg-[#E0B0FF] text-[#1F2937]',      // Late - Purple
-        'E': 'bg-[#C080E0] text-[#1F2937]',      // Late+ - Deeper Purple
-        'J': 'bg-[#FFB8B8] text-[#1F2937]',      // Latest - Pink
+        // Rev5: 時間帯カラー（サンライズ → モーニング → ミッドデイ → サンセット → トワイライト → ナイト）
+        'A': 'bg-[rgba(245,158,11,0.20)] text-[#1F2937] border-l-4 border-l-[#F59E0B]',   // Sunrise Amber
+        'B': 'bg-[rgba(56,189,248,0.15)] text-[#1F2937] border-l-4 border-l-[#38BDF8]',   // Morning Sky Blue
+        'C': 'bg-[rgba(59,130,246,0.15)] text-[#1F2937] border-l-4 border-l-[#3B82F6]',   // Midday Blue
+        'D': 'bg-[rgba(249,115,22,0.20)] text-[#1F2937] border-l-4 border-l-[#F97316]',   // Sunset Orange ← Fixed!
+        'E': 'bg-[rgba(168,85,247,0.15)] text-[#1F2937] border-l-4 border-l-[#A855F7]',   // Twilight Purple
+        'J': 'bg-[rgba(220,38,38,0.15)] text-[#1F2937] border-l-4 border-l-[#DC2626]',    // Night Crimson
         '振': 'bg-[#F3F4F6] text-[#10B981] border border-[#10B981]',
         '有': 'bg-[#F3F4F6] text-[#F472B6] border border-[#F472B6]',
         '休': 'bg-gray-100 text-gray-400',
@@ -157,8 +158,8 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
                                         onClick={() => candidate.isAssignable && handleSelect(candidate.staffId)}
                                         disabled={!candidate.isAssignable}
                                         className={`w-full p-3 rounded-xl text-left transition-all ${candidate.isAssignable
-                                                ? 'bg-white border border-gray-200 hover:border-green-400 hover:shadow-md'
-                                                : 'bg-gray-50 border border-gray-100 cursor-not-allowed opacity-60'
+                                            ? 'bg-white border border-gray-200 hover:border-green-400 hover:shadow-md'
+                                            : 'bg-gray-50 border border-gray-100 cursor-not-allowed opacity-60'
                                             }`}
                                     >
                                         <div className="flex items-center justify-between">
