@@ -671,7 +671,10 @@ function App() {
                       {days.map(day => {
                         const dateStr = getFormattedDate(year, month, day);
                         const shiftId = schedule[dateStr]?.[s.id] || '';
-                        const partTimeRange = timeRangeSchedule[dateStr]?.[s.id];
+                        // Handle potential Firestore key type inconsistency (number vs string)
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const dateRanges = (timeRangeSchedule[dateStr] || {}) as Record<string | number, TimeRange>;
+                        const partTimeRange = dateRanges[s.id] || dateRanges[String(s.id)];
                         const isPartTime = s.shiftType === 'part_time';
 
                         return (
