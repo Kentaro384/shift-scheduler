@@ -360,31 +360,6 @@ function App() {
     return markers[shiftId] || '';
   };
 
-  // Helper function to check if a time range overlaps with a shift pattern
-  const doesTimeRangeOverlapShift = (timeRange: TimeRange, shiftPatternId: string): boolean => {
-    const pattern = patterns.find(p => p.id === shiftPatternId);
-    if (!pattern) return false;
-
-    // Parse shift pattern time range (e.g., "7:15-16:15")
-    const [shiftStart, shiftEnd] = pattern.timeRange.split('-');
-    const parseTime = (t: string) => {
-      const [h, m] = t.split(':').map(Number);
-      return h * 60 + m;
-    };
-
-    const partStart = parseTime(timeRange.start);
-    const partEnd = parseTime(timeRange.end);
-    const shiftStartMin = parseTime(shiftStart);
-    const shiftEndMin = parseTime(shiftEnd);
-
-    // Check if there's significant overlap (at least 2 hours = 120 minutes)
-    const overlapStart = Math.max(partStart, shiftStartMin);
-    const overlapEnd = Math.min(partEnd, shiftEndMin);
-    const overlap = overlapEnd - overlapStart;
-
-    return overlap >= 120; // At least 2 hours overlap
-  };
-
   // Calculate daily staff counts (including part-timers with time ranges)
   const dailyCounts = days.map(day => {
     const dateStr = getFormattedDate(year, month, day);
@@ -417,7 +392,7 @@ function App() {
     staff.forEach(s => {
       if (!s.hasQualification) return;
 
-      // For qualified part-timers, use explicit countAsShifts if set, otherwise fallback to overlap
+      // For qualified part-timers, use explicit countAsShifts if set
       if (s.shiftType === 'part_time') {
         const timeRange = timeRangeSchedule[dateStr]?.[s.id];
         if (timeRange) {
@@ -428,14 +403,9 @@ function App() {
                 counts[shiftId]++;
               }
             });
-          } else {
-            // Fallback: Count for each shift pattern where there's significant overlap
-            ['A', 'B', 'C', 'D', 'E', 'J'].forEach(shiftId => {
-              if (doesTimeRangeOverlapShift(timeRange, shiftId)) {
-                counts[shiftId]++;
-              }
-            });
           }
+          // Note: No fallback - if countAsShifts is not set, don't count automatically
+          // User should explicitly set which shifts to count toward
         }
         return;
       }
