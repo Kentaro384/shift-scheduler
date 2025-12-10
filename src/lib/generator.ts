@@ -66,6 +66,37 @@ export class ShiftGenerator {
         return false;
     }
 
+    // Helper: Get distance between two shift patterns (A=0, B=1, C=2, D=3, E=4, J=5)
+    private getShiftDistance(a: ShiftPatternId, b: ShiftPatternId): number {
+        const order = ['A', 'B', 'C', 'D', 'E', 'J'];
+        const indexA = order.indexOf(a);
+        const indexB = order.indexOf(b);
+        if (indexA === -1 || indexB === -1) return 999; // Non-work shifts have no distance
+        return Math.abs(indexA - indexB);
+    }
+
+    // Helper: Check if same-floor staff already has this or adjacent shift (soft constraint)
+    private hasSameFloorConflict(day: number, staffId: number, shift: ShiftPatternId): boolean {
+        const staff = this.staff.find(s => s.id === staffId);
+        if (!staff?.floor || staff.floor === 'free' || staff.floor === 'none') return false;
+
+        const dateStr = getFormattedDate(this.year, this.month, day);
+        const sameFloorStaff = this.staff.filter(s =>
+            s.id !== staffId &&
+            s.floor === staff.floor &&
+            s.floor !== 'free' &&
+            s.floor !== 'none'
+        );
+
+        for (const s of sameFloorStaff) {
+            const existingShift = this.schedule[dateStr]?.[s.id];
+            if (existingShift && this.getShiftDistance(shift, existingShift) < 1) {
+                return true; // Same shift = distance 0, which is < 1
+            }
+        }
+        return false;
+    }
+
     // Helper: Check if early shift limit is exceeded
     private isEarlyShiftLimitExceeded(staffId: number): boolean {
         const staff = this.staff.find(s => s.id === staffId);
@@ -437,6 +468,8 @@ export class ShiftGenerator {
                         if (!relaxConstraints && this.hasWeeklyAJLimitConflict(d, s.id)) continue;
                     }
                     if (this.hasIncompatibleConflict(d, s.id, pattern)) continue;
+                    // Floor constraint: same-floor staff should not have same shift (soft but important)
+                    if (!relaxConstraints && this.hasSameFloorConflict(d, s.id, pattern)) continue;
 
                     this.setShift(d, s.id, pattern);
                     assignedIds.add(s.id);

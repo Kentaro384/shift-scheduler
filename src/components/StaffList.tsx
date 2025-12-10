@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { Staff, StaffPosition, StaffShiftType, StaffRole, ShiftPatternId } from '../types';
+import type { Staff, StaffPosition, StaffShiftType, StaffRole, ShiftPatternId, FloorType } from '../types';
 import { X, Plus, Edit2, Trash2, Save, Users } from 'lucide-react';
 
 interface StaffListProps {
@@ -12,6 +12,7 @@ const POSITIONS: StaffPosition[] = ['園長', '主任', '保育士', 'パート'
 const SHIFT_TYPES: StaffShiftType[] = ['no_shift', 'backup', 'regular', 'part_time', 'cooking'];
 const ROLES: (StaffRole | 'null')[] = ['infant', 'toddler', 'free', 'cooking', 'null'];
 const SHIFT_PATTERNS: ShiftPatternId[] = ['A', 'B', 'C', 'D', 'E', 'J'];
+const FLOORS: FloorType[] = ['1F', '2F', '3F', 'free', 'none'];
 
 export const StaffList: React.FC<StaffListProps> = ({ staff, onUpdate, onClose }) => {
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -115,6 +116,12 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, onUpdate, onClose }
                                                 <label className="block text-xs text-gray-500 mb-1">担当</label>
                                                 <select className="w-full border rounded p-2" value={editForm.role || 'null'} onChange={e => handleChange('role', e.target.value === 'null' ? null : e.target.value)}>
                                                     {ROLES.map(r => <option key={r} value={String(r)}>{r === 'null' ? '指定なし' : r}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="col-span-2">
+                                                <label className="block text-xs text-gray-500 mb-1">フロア</label>
+                                                <select className="w-full border rounded p-2" value={editForm.floor || 'none'} onChange={e => handleChange('floor', e.target.value)}>
+                                                    {FLOORS.map(f => <option key={f} value={f}>{f === 'none' ? '指定なし' : f === 'free' ? 'フリー' : f}</option>)}
                                                 </select>
                                             </div>
                                             <div className="col-span-2">

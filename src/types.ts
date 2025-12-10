@@ -13,6 +13,7 @@ export interface ShiftPatternDefinition {
 export type StaffPosition = '園長' | '主任' | '保育士' | 'パート' | '調理';
 export type StaffShiftType = 'no_shift' | 'backup' | 'regular' | 'part_time' | 'cooking';
 export type StaffRole = 'infant' | 'toddler' | 'free' | 'cooking' | null;
+export type FloorType = '1F' | '2F' | '3F' | 'free' | 'none';
 
 export interface Staff {
     id: number;
@@ -27,6 +28,7 @@ export interface Staff {
     saturdayOnly: boolean;
     hasQualification: boolean;
     defaultTimeRange?: TimeRange; // Default work hours for part-time workers
+    floor?: FloorType; // フロア担当（同一フロアのスタッフはシフトを分ける）
 }
 
 export interface Settings {
