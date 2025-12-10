@@ -1,17 +1,18 @@
-import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings } from '../types';
+import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, TimeRangeSchedule } from '../types';
 import { getDaysInMonth, getDayOfWeek, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
 import { SHIFT_PATTERNS } from '../types';
 
 export class ShiftGenerator {
     private staff: Staff[];
     private schedule: ShiftSchedule;
+    private timeRangeSchedule: TimeRangeSchedule;  // Part-timer time ranges with countAsShifts
     private holidays: Holiday[];
     private settings: Settings;
     private year: number;
     private month: number;
     private daysInMonth: number;
 
-    constructor(staff: Staff[], holidays: Holiday[], year: number, month: number, settings: Settings, currentSchedule: ShiftSchedule = {}) {
+    constructor(staff: Staff[], holidays: Holiday[], year: number, month: number, settings: Settings, currentSchedule: ShiftSchedule = {}, timeRangeSchedule: TimeRangeSchedule = {}) {
         this.staff = staff;
         this.holidays = holidays;
         this.settings = settings;
@@ -19,6 +20,7 @@ export class ShiftGenerator {
         this.month = month;
         this.daysInMonth = getDaysInMonth(year, month);
         this.schedule = {};
+        this.timeRangeSchedule = timeRangeSchedule;
 
         // Initialize schedule structure with current schedule
         // IMPORTANT: Preserve '有' (Paid Leave) and '振' (Substitute Holiday) exactly as entered
@@ -42,6 +44,26 @@ export class ShiftGenerator {
                 }
             }
         }
+    }
+
+    // Helper: Count qualified part-timers assigned to a specific shift pattern on a given day
+    private countQualifiedPartTimersForShift(day: number, shiftPattern: ShiftPatternId): number {
+        const dateStr = getFormattedDate(this.year, this.month, day);
+        let count = 0;
+
+        this.staff.forEach(s => {
+            if (s.shiftType !== 'part_time' || !s.hasQualification) return;
+
+            const timeRange = this.timeRangeSchedule[dateStr]?.[s.id];
+            if (!timeRange) return;
+
+            // Check if countAsShifts includes this shift pattern
+            if (timeRange.countAsShifts && timeRange.countAsShifts.includes(shiftPattern)) {
+                count++;
+            }
+        });
+
+        return count;
     }
 
     // Helper: Check if incompatible staff has conflict
@@ -472,14 +494,20 @@ export class ShiftGenerator {
                     (this.countTotalShifts(b.id, 'A') + this.countTotalShifts(b.id, 'B') + this.countTotalShifts(b.id, 'J'));
             };
 
+            // Calculate needed counts after subtracting qualified part-timers
+            const qualifiedPartTimersOnA = this.countQualifiedPartTimersForShift(d, 'A');
+            const qualifiedPartTimersOnJ = this.countQualifiedPartTimersForShift(d, 'J');
+            const neededA = Math.max(0, 2 - qualifiedPartTimersOnA);
+            const neededJ = Math.max(0, 2 - qualifiedPartTimersOnJ);
+
             if (dayOfWeek >= 1 && dayOfWeek <= 3) {
                 // Mon-Wed: Prioritize A first to secure candidates before J→A conflict
-                assignPattern('A', 2, false, sortByPatternCount('A'));
-                assignPattern('J', 2, false, sortByPatternCount('J'));
+                assignPattern('A', neededA, false, sortByPatternCount('A'));
+                assignPattern('J', neededJ, false, sortByPatternCount('J'));
             } else {
                 // Thu-Fri: Prioritize J first (less impact on next week's A)
-                assignPattern('J', 2, false, sortByPatternCount('J'));
-                assignPattern('A', 2, false, sortByPatternCount('A'));
+                assignPattern('J', neededJ, false, sortByPatternCount('J'));
+                assignPattern('A', neededA, false, sortByPatternCount('A'));
             }
 
             // 3. Assign D (Late) - Min 1
