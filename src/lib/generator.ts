@@ -1,7 +1,7 @@
 import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, TimeRangeSchedule } from '../types';
 import { getDaysInMonth, getDayOfWeek, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
 import { SHIFT_PATTERNS } from '../types';
-import { countEffectiveShift, countQualifiedPartTimers } from './shiftCountUtils';
+import { countEffectiveShift, countQualifiedPartTimers, countWorkingStaff as countWorkingStaffUtil } from './shiftCountUtils';
 
 export class ShiftGenerator {
     private staff: Staff[];
@@ -180,18 +180,11 @@ export class ShiftGenerator {
         return 0; // No previous work day in this month
     }
 
-    // Helper: Count working staff on a day (excluding cooking)
+    // Helper: Count working staff on a day (including part-timers, excluding cooking)
     private countWorkingStaff(day: number): number {
         const dateStr = getFormattedDate(this.year, this.month, day);
-        let count = 0;
-        this.staff.forEach(s => {
-            if (s.shiftType === 'cooking' || s.position === '園長') return;
-            const shift = this.schedule[dateStr]?.[s.id];
-            if (shift && shift !== '休' && shift !== '振' && shift !== '有') {
-                count++;
-            }
-        });
-        return count;
+        // Use utility function that includes part-timers with timeRangeSchedule
+        return countWorkingStaffUtil(this.staff, this.schedule, this.timeRangeSchedule, dateStr);
     }
 
     // Helper: Count specific pattern on a day (includes qualified part-timers with countAsShifts)
