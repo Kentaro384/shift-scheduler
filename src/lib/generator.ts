@@ -51,25 +51,18 @@ export class ShiftGenerator {
         const dateStr = getFormattedDate(this.year, this.month, day);
         let count = 0;
 
-        // Debug: log what we're checking
-        console.log(`[Generator] countQualifiedPartTimersForShift(${dateStr}, ${shiftPattern})`);
-        console.log(`[Generator] timeRangeSchedule for ${dateStr}:`, this.timeRangeSchedule[dateStr]);
-
         this.staff.forEach(s => {
             if (s.shiftType !== 'part_time' || !s.hasQualification) return;
 
             const timeRange = this.timeRangeSchedule[dateStr]?.[s.id];
-            console.log(`[Generator] Part-timer ${s.name} (ID ${s.id}):`, timeRange);
             if (!timeRange) return;
 
             // Check if countAsShifts includes this shift pattern
             if (timeRange.countAsShifts && timeRange.countAsShifts.includes(shiftPattern)) {
-                console.log(`[Generator] -> Counting ${s.name} for ${shiftPattern}`);
                 count++;
             }
         });
 
-        console.log(`[Generator] Result for ${shiftPattern} on ${dateStr}: ${count}`);
         return count;
     }
 
@@ -214,15 +207,26 @@ export class ShiftGenerator {
         return count;
     }
 
-    // Helper: Count specific pattern on a day
+    // Helper: Count specific pattern on a day (includes qualified part-timers with countAsShifts)
     private countPattern(day: number, pattern: ShiftPatternId): number {
         const dateStr = getFormattedDate(this.year, this.month, day);
         let count = 0;
+
         this.staff.forEach(s => {
+            // Regular staff: check schedule
             if (this.schedule[dateStr]?.[s.id] === pattern) {
                 count++;
             }
+
+            // Qualified part-timers: check countAsShifts
+            if (s.shiftType === 'part_time' && s.hasQualification) {
+                const timeRange = this.timeRangeSchedule[dateStr]?.[s.id];
+                if (timeRange?.countAsShifts?.includes(pattern)) {
+                    count++;
+                }
+            }
         });
+
         return count;
     }
 
@@ -507,9 +511,6 @@ export class ShiftGenerator {
             const neededA = Math.max(0, 2 - qualifiedPartTimersOnA);
             const neededJ = Math.max(0, 2 - qualifiedPartTimersOnJ);
 
-            // Debug logging
-            console.log(`[Generator Phase4] Day ${d}: qualifiedPartTimersOnA=${qualifiedPartTimersOnA}, neededA=${neededA}`);
-            console.log(`[Generator Phase4] Day ${d}: qualifiedPartTimersOnJ=${qualifiedPartTimersOnJ}, neededJ=${neededJ}`);
 
             if (dayOfWeek >= 1 && dayOfWeek <= 3) {
                 // Mon-Wed: Prioritize A first to secure candidates before J→A conflict
