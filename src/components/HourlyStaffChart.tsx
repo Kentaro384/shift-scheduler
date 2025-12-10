@@ -95,11 +95,8 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
             });
         });
 
-        // Sort by start time, then by qualification
-        return result.sort((a, b) => {
-            if (a.startMinutes !== b.startMinutes) return a.startMinutes - b.startMinutes;
-            return (b.isQualified ? 1 : 0) - (a.isQualified ? 1 : 0);
-        });
+        // Keep original staff order (same as monthly view)
+        return result;
     }, [staff, schedule, timeRangeSchedule, patterns, dateStr]);
 
     // Count by hour for summary
@@ -173,8 +170,8 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                             <div key={sw.staffId} className="flex items-center h-8">
                                 {/* Staff name */}
                                 <div className="w-24 flex-shrink-0 pr-2">
-                                    <span className={`text-xs font-medium truncate block ${sw.isQualified ? 'text-green-700' : 'text-gray-500'}`}>
-                                        {sw.isQualified && '✓ '}{sw.name}
+                                    <span className="text-xs font-medium truncate block text-gray-700">
+                                        {sw.name}
                                     </span>
                                 </div>
 
@@ -191,9 +188,9 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
 
                                     {/* Work time bar */}
                                     <div
-                                        className={`absolute top-1 bottom-1 rounded-md flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${sw.isQualified
-                                                ? 'bg-gradient-to-r from-green-400 to-green-500'
-                                                : 'bg-gradient-to-r from-gray-400 to-gray-500'
+                                        className={`absolute top-1 bottom-1 rounded-md flex items-center justify-center text-[10px] font-bold shadow-sm ${sw.isQualified
+                                            ? 'bg-gradient-to-r from-[#FFB5B5] to-[#FFA0A0] text-[#8B3A3A]'
+                                            : 'bg-gradient-to-r from-gray-300 to-gray-400 text-gray-600'
                                             }`}
                                         style={{
                                             left: `${getPosition(sw.startMinutes)}%`,
@@ -240,11 +237,11 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                 <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
                     <div className="flex justify-center gap-6 text-xs text-gray-500 mb-3">
                         <span className="flex items-center gap-1">
-                            <div className="w-4 h-3 bg-gradient-to-r from-green-400 to-green-500 rounded"></div>
+                            <div className="w-4 h-3 bg-gradient-to-r from-[#FFB5B5] to-[#FFA0A0] rounded"></div>
                             有資格者
                         </span>
                         <span className="flex items-center gap-1">
-                            <div className="w-4 h-3 bg-gradient-to-r from-gray-400 to-gray-500 rounded"></div>
+                            <div className="w-4 h-3 bg-gradient-to-r from-gray-300 to-gray-400 rounded"></div>
                             無資格者
                         </span>
                     </div>
