@@ -117,7 +117,8 @@ export class ShiftGenerator {
                 const shift = this.schedule[dateStr][s.id];
 
                 // If shift is falsy (undefined, null, empty string, etc.), set to '休'
-                if (!shift) {
+                // EXCEPTION: Part-time workers should stay as '' - they use timeRangeSchedule
+                if (!shift && s.shiftType !== 'part_time') {
                     this.schedule[dateStr][s.id] = '休';
                 }
             }
@@ -781,7 +782,8 @@ export class ShiftGenerator {
             for (const s of this.staff) {
                 const shift = this.schedule[dateStr][s.id];
                 // Check for undefined, null, or empty string
-                if (shift === undefined || shift === null || shift === '') {
+                // EXCEPTION: Part-time workers should stay as '' - they use timeRangeSchedule
+                if ((shift === undefined || shift === null || shift === '') && s.shiftType !== 'part_time') {
                     this.schedule[dateStr][s.id] = '休';
                 }
             }
