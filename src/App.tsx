@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId } from './types';
+import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId, TimeRangeSchedule, TimeRange } from './types';
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { exportToExcel } from './lib/excelExport';
@@ -9,6 +9,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { HolidayModal } from './components/HolidayModal';
 import { ShiftEditModal } from './components/ShiftEditModal';
 import { CandidateSearchModal } from './components/CandidateSearchModal';
+import { TimeRangeModal } from './components/TimeRangeModal';
 import { ShiftPaletteIcon } from './components/ShiftPaletteIcon';
 import { ShiftBalanceDashboard } from './components/ShiftBalanceDashboard';
 import { AlertBadge } from './components/ShiftAlerts';
@@ -33,12 +34,15 @@ function App() {
   const [settings, setSettings] = useState<Settings>(firestoreStorage.getDefaultSettings());
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [patterns, setPatterns] = useState<ShiftPatternDefinition[]>([]);
+  const [timeRangeSchedule, setTimeRangeSchedule] = useState<TimeRangeSchedule>({});
 
   // Modal States
   const [showStaffList, setShowStaffList] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showHolidayModal, setShowHolidayModal] = useState(false);
   const [editingCell, setEditingCell] = useState<{ staffId: number; day: number } | null>(null);
+  // Part-time worker time range editing
+  const [editingPartTime, setEditingPartTime] = useState<{ staffId: number; day: number } | null>(null);
   // Candidate search from summary row - opens modal with pre-selected shift
   const [candidateSearch, setCandidateSearch] = useState<{ day: number; shiftPattern: ShiftPatternId } | null>(null);
 
@@ -75,6 +79,7 @@ function App() {
         setSettings(data.settings || firestoreStorage.getDefaultSettings());
         setHolidays(data.holidays || []);
         setPatterns(data.patterns || firestoreStorage.getDefaultPatterns());
+        setTimeRangeSchedule(data.timeRangeSchedule || {});
       } else {
         // Initialize with defaults if no data exists
         setPatterns(firestoreStorage.getDefaultPatterns());
@@ -164,7 +169,13 @@ function App() {
   };
 
   const handleCellClick = (staffId: number, day: number) => {
-    setEditingCell({ staffId, day });
+    const staffMember = staff.find(s => s.id === staffId);
+    // Part-time workers use TimeRangeModal instead of ShiftEditModal
+    if (staffMember?.shiftType === 'part_time') {
+      setEditingPartTime({ staffId, day });
+    } else {
+      setEditingCell({ staffId, day });
+    }
   };
 
   const handleShiftUpdate = (shiftId: ShiftPatternId) => {
@@ -601,13 +612,23 @@ function App() {
                       {days.map(day => {
                         const dateStr = getFormattedDate(year, month, day);
                         const shiftId = schedule[dateStr]?.[s.id] || '';
+                        const partTimeRange = timeRangeSchedule[dateStr]?.[s.id];
+                        const isPartTime = s.shiftType === 'part_time';
+
                         return (
                           <td
                             key={day}
                             className="px-0.5 md:px-1 py-0.5 md:py-1 text-center border-r border-[#E5E7EB] relative group cursor-pointer hover:bg-[#F3F4F6] transition-all duration-150"
                             onClick={() => handleCellClick(s.id, day)}
                           >
-                            {shiftId === '休' ? (
+                            {/* Part-time worker with time range */}
+                            {isPartTime && partTimeRange ? (
+                              <div className="w-12 md:w-14 h-6 md:h-8 mx-auto flex items-center justify-center rounded-md text-[8px] md:text-[9px] shadow-sm transition-all duration-150 hover:scale-105 hover:shadow-md bg-gray-100 border border-gray-300 text-gray-700 font-medium">
+                                <span>{partTimeRange.start.slice(0, 5)}</span>
+                                <span className="mx-0.5">-</span>
+                                <span>{partTimeRange.end.slice(0, 5)}</span>
+                              </div>
+                            ) : shiftId === '休' ? (
                               <div className="w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center text-[#9CA3AF] font-medium text-sm opacity-60">
                                 －
                               </div>
@@ -789,6 +810,80 @@ function App() {
           onClose={() => setCandidateSearch(null)}
         />
       )}
+
+      {/* TimeRangeModal - for part-time workers */}
+      {editingPartTime && (() => {
+        const staffMember = staff.find(s => s.id === editingPartTime.staffId);
+        const dateStr = getFormattedDate(year, month, editingPartTime.day);
+        const currentTimeRange = timeRangeSchedule[dateStr]?.[editingPartTime.staffId] || null;
+        const currentShift = schedule[dateStr]?.[editingPartTime.staffId] || '';
+
+        return (
+          <TimeRangeModal
+            staffId={editingPartTime.staffId}
+            staffName={staffMember?.name || ''}
+            day={editingPartTime.day}
+            year={year}
+            month={month}
+            currentTimeRange={currentTimeRange}
+            currentShift={currentShift}
+            onSaveTimeRange={(timeRange: TimeRange) => {
+              // Save time range to timeRangeSchedule
+              const newTimeRangeSchedule = { ...timeRangeSchedule };
+              if (!newTimeRangeSchedule[dateStr]) newTimeRangeSchedule[dateStr] = {};
+              newTimeRangeSchedule[dateStr][editingPartTime.staffId] = timeRange;
+              setTimeRangeSchedule(newTimeRangeSchedule);
+              firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule);
+
+              // Clear any existing shift pattern
+              const newSchedule = { ...schedule };
+              if (newSchedule[dateStr]?.[editingPartTime.staffId]) {
+                delete newSchedule[dateStr][editingPartTime.staffId];
+                setSchedule(newSchedule);
+                firestoreStorage.saveSchedule(newSchedule);
+              }
+
+              setEditingPartTime(null);
+              toast.success(`${staffMember?.name}`, `${timeRange.start}-${timeRange.end} に設定しました`);
+            }}
+            onSaveShift={(shiftId: ShiftPatternId) => {
+              // Save holiday shift
+              const newSchedule = { ...schedule };
+              if (!newSchedule[dateStr]) newSchedule[dateStr] = {};
+              newSchedule[dateStr][editingPartTime.staffId] = shiftId;
+              setSchedule(newSchedule);
+              firestoreStorage.saveSchedule(newSchedule);
+
+              // Clear any existing time range
+              const newTimeRangeSchedule = { ...timeRangeSchedule };
+              if (newTimeRangeSchedule[dateStr]?.[editingPartTime.staffId]) {
+                delete newTimeRangeSchedule[dateStr][editingPartTime.staffId];
+                setTimeRangeSchedule(newTimeRangeSchedule);
+                firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule);
+              }
+
+              setEditingPartTime(null);
+            }}
+            onClear={() => {
+              // Clear both time range and shift
+              const newSchedule = { ...schedule };
+              if (newSchedule[dateStr]?.[editingPartTime.staffId]) {
+                delete newSchedule[dateStr][editingPartTime.staffId];
+                setSchedule(newSchedule);
+                firestoreStorage.saveSchedule(newSchedule);
+              }
+              const newTimeRangeSchedule = { ...timeRangeSchedule };
+              if (newTimeRangeSchedule[dateStr]?.[editingPartTime.staffId]) {
+                delete newTimeRangeSchedule[dateStr][editingPartTime.staffId];
+                setTimeRangeSchedule(newTimeRangeSchedule);
+                firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule);
+              }
+              setEditingPartTime(null);
+            }}
+            onClose={() => setEditingPartTime(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

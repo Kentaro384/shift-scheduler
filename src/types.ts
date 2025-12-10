@@ -41,6 +41,15 @@ export interface Holiday {
 // Map of YYYY-MM-DD -> StaffId -> ShiftPatternId
 export type ShiftSchedule = Record<string, Record<number, ShiftPatternId>>;
 
+// Time range for part-time workers
+export interface TimeRange {
+    start: string;  // "HH:MM" format (e.g., "09:00")
+    end: string;    // "HH:MM" format (e.g., "14:00")
+}
+
+// Map of YYYY-MM-DD -> StaffId -> TimeRange (for part-time workers)
+export type TimeRangeSchedule = Record<string, Record<number, TimeRange>>;
+
 export const SHIFT_PATTERNS: ShiftPatternDefinition[] = [
     { id: 'A', name: '早番', timeRange: '7:15-16:15', minCount: 2, breakTime: '1:00', workTime: '9:00', color: 'bg-blue-200' },
     { id: 'B', name: '標準', timeRange: '8:00-17:00', minCount: 1, breakTime: '1:00', workTime: '9:00', color: 'bg-green-200' },
