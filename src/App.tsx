@@ -680,55 +680,28 @@ function App() {
                             className="px-0.5 md:px-1 py-0.5 md:py-1 text-center border-r border-[#E5E7EB] relative group cursor-pointer hover:bg-[#F3F4F6] transition-all duration-150"
                             onClick={() => handleCellClick(s.id, day)}
                           >
-                            {/* Display logic with proper priority */}
-                            {(() => {
-                              // Part-time workers: time range first, then holidays, then empty dash
-                              if (isPartTime) {
-                                if (partTimeRange) {
-                                  return (
-                                    <div className="w-7 h-8 md:w-9 md:h-10 mx-auto flex flex-col items-center justify-center rounded-md text-[7px] md:text-[8px] shadow-sm transition-all duration-150 hover:scale-105 hover:shadow-md bg-gray-100 border border-gray-300 text-gray-700 font-medium leading-tight">
-                                      <span>{partTimeRange.start}</span>
-                                      <span className="text-gray-400">↓</span>
-                                      <span>{partTimeRange.end}</span>
-                                    </div>
-                                  );
-                                }
-                                if (shiftId === '振' || shiftId === '有') {
-                                  return (
-                                    <div className={`w-7 h-6 md:w-9 md:h-8 mx-auto flex items-center justify-center gap-0.5 rounded-md text-xs md:text-sm shadow-sm ${getShiftColor(shiftId)}`}>
-                                      <span className="font-medium">{shiftId}</span>
-                                    </div>
-                                  );
-                                }
-                                // Empty or 休 - show simple dash
-                                return (
-                                  <div className="w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center text-[#9CA3AF] font-medium text-sm opacity-60">
-                                    －
-                                  </div>
-                                );
-                              }
-
-                              // Regular staff display logic
-                              if (shiftId === '休') {
-                                return (
-                                  <div className="w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center text-[#9CA3AF] font-medium text-sm opacity-60">
-                                    －
-                                  </div>
-                                );
-                              }
-                              if (shiftId) {
-                                return (
-                                  <div className={`w-7 h-6 md:w-9 md:h-8 mx-auto flex items-center justify-center gap-0.5 rounded-md text-xs md:text-sm shadow-sm transition-all duration-150 hover:scale-110 hover:shadow-md active:scale-95 ${getShiftColor(shiftId)}`}>
-                                    <span className="text-[8px] md:text-[10px] opacity-80">{getShiftMarker(shiftId)}</span>
-                                    <span className="font-medium">{shiftId}</span>
-                                  </div>
-                                );
-                              }
-                              // Empty cell
-                              return (
-                                <div className="w-7 h-6 md:w-9 md:h-8 mx-auto rounded-md hover:bg-[#F3F4F6] transition-colors border border-dashed border-transparent hover:border-[#D1D5DB]"></div>
-                              );
-                            })()}
+                            {/* Part-time worker with time range */}
+                            {isPartTime && partTimeRange ? (
+                              <div className="w-7 h-8 md:w-9 md:h-10 mx-auto flex flex-col items-center justify-center rounded-md text-[7px] md:text-[8px] shadow-sm transition-all duration-150 hover:scale-105 hover:shadow-md bg-gray-100 border border-gray-300 text-gray-700 font-medium leading-tight">
+                                <span>{partTimeRange.start}</span>
+                                <span className="text-gray-400">↓</span>
+                                <span>{partTimeRange.end}</span>
+                              </div>
+                            ) : shiftId === '休' ? (
+                              <div className="w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center text-[#9CA3AF] font-medium text-sm opacity-60">
+                                －
+                              </div>
+                            ) : shiftId ? (
+                              <div className={`
+                                  w-7 h-6 md:w-9 md:h-8 mx-auto flex items-center justify-center gap-0.5 rounded-md text-xs md:text-sm shadow-sm transition-all duration-150 hover:scale-110 hover:shadow-md active:scale-95
+                                  ${getShiftColor(shiftId)}
+                                `}>
+                                <span className="text-[8px] md:text-[10px] opacity-80">{getShiftMarker(shiftId)}</span>
+                                <span className="font-medium">{shiftId}</span>
+                              </div>
+                            ) : (
+                              <div className="w-7 h-6 md:w-9 md:h-8 mx-auto rounded-md hover:bg-[#F3F4F6] transition-colors border border-dashed border-transparent hover:border-[#D1D5DB]"></div>
+                            )}
                           </td>
                         );
                       })}
@@ -933,17 +906,23 @@ function App() {
               toast.success(`${staffMember?.name}`, `${timeRange.start}-${timeRange.end} に設定しました`);
             }}
             onSaveShift={(shiftId: ShiftPatternId) => {
-              // Save holiday shift
+              // Save holiday shift  
               const newSchedule = { ...schedule };
-              newSchedule[dateStr] = { ...schedule[dateStr] }; // Deep copy nested object
+              if (!newSchedule[dateStr]) {
+                newSchedule[dateStr] = {};
+              } else {
+                newSchedule[dateStr] = { ...newSchedule[dateStr] }; // Deep copy
+              }
               newSchedule[dateStr][editingPartTime.staffId] = shiftId;
               setSchedule(newSchedule);
               firestoreStorage.saveSchedule(newSchedule);
 
-              // Always clear time range when setting a holiday - deep copy required!
+              // IMPORTANT: Always clear time range with proper deep copy
               const newTimeRangeSchedule = { ...timeRangeSchedule };
-              newTimeRangeSchedule[dateStr] = { ...timeRangeSchedule[dateStr] }; // Deep copy
-              delete newTimeRangeSchedule[dateStr][editingPartTime.staffId];
+              if (newTimeRangeSchedule[dateStr]) {
+                newTimeRangeSchedule[dateStr] = { ...newTimeRangeSchedule[dateStr] }; // Deep copy!
+                delete newTimeRangeSchedule[dateStr][editingPartTime.staffId];
+              }
               setTimeRangeSchedule(newTimeRangeSchedule);
               firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule);
 
