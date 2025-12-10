@@ -935,14 +935,14 @@ function App() {
             onSaveShift={(shiftId: ShiftPatternId) => {
               // Save holiday shift
               const newSchedule = { ...schedule };
-              if (!newSchedule[dateStr]) newSchedule[dateStr] = {};
+              newSchedule[dateStr] = { ...schedule[dateStr] }; // Deep copy nested object
               newSchedule[dateStr][editingPartTime.staffId] = shiftId;
               setSchedule(newSchedule);
               firestoreStorage.saveSchedule(newSchedule);
 
-              // Always clear time range when setting a holiday
+              // Always clear time range when setting a holiday - deep copy required!
               const newTimeRangeSchedule = { ...timeRangeSchedule };
-              if (!newTimeRangeSchedule[dateStr]) newTimeRangeSchedule[dateStr] = {};
+              newTimeRangeSchedule[dateStr] = { ...timeRangeSchedule[dateStr] }; // Deep copy
               delete newTimeRangeSchedule[dateStr][editingPartTime.staffId];
               setTimeRangeSchedule(newTimeRangeSchedule);
               firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule);
