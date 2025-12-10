@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
-import { X, CheckCircle, AlertTriangle, Users } from 'lucide-react';
+import { X, Users } from 'lucide-react';
 import type { ShiftPatternId, Staff, ShiftSchedule, Holiday, Settings } from '../types';
-import { SHIFT_PATTERNS } from '../types';
 import {
     evaluateCandidates,
     createConstraintContext,
@@ -21,22 +20,31 @@ interface CandidateSearchModalProps {
     onClose: () => void;
 }
 
-// Constraint badge component
+// Constraint badge component - flat design
 function ConstraintBadge({ violation }: { violation: ConstraintViolation }) {
     const isHard = violation.type === 'hard';
     return (
         <span className={`inline-flex items-center text-xs px-1.5 py-0.5 rounded ${isHard ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
             }`}>
-            {isHard ? '⚠️' : '⚡'} {violation.message}
+            {isHard ? '✕' : '△'} {violation.message}
         </span>
     );
 }
 
-// Get shift display info
-function getShiftInfo(shiftId: ShiftPatternId) {
-    const pattern = SHIFT_PATTERNS.find(p => p.id === shiftId);
-    if (pattern) return { name: pattern.name, color: pattern.color };
-    return { name: shiftId || '休', color: 'bg-gray-100' };
+// Shift color function - consistent with App.tsx getShiftColor
+function getShiftColor(shiftId: ShiftPatternId): string {
+    const colors: Record<string, string> = {
+        'A': 'bg-[#FFD580] text-[#1F2937]',      // Early - Orange
+        'B': 'bg-[#A5D8FF] text-[#1F2937]',      // Standard - Blue
+        'C': 'bg-[#6CA6E0] text-[#1F2937]',      // Standard+ - Deeper Blue
+        'D': 'bg-[#E0B0FF] text-[#1F2937]',      // Late - Purple
+        'E': 'bg-[#C080E0] text-[#1F2937]',      // Late+ - Deeper Purple
+        'J': 'bg-[#FFB8B8] text-[#1F2937]',      // Latest - Pink
+        '振': 'bg-[#F3F4F6] text-[#10B981] border border-[#10B981]',
+        '有': 'bg-[#F3F4F6] text-[#F472B6] border border-[#F472B6]',
+        '休': 'bg-gray-100 text-gray-400',
+    };
+    return colors[shiftId] || 'bg-gray-100 text-gray-500';
 }
 
 // Get day of week name
@@ -44,6 +52,15 @@ function getDayName(year: number, month: number, day: number): string {
     const date = new Date(year, month - 1, day);
     const names = ['日', '月', '火', '水', '木', '金', '土'];
     return names[date.getDay()];
+}
+
+// Get shift label
+function getShiftLabel(shiftId: ShiftPatternId): string {
+    const labels: Record<string, string> = {
+        'A': '早番', 'B': '標準', 'C': '標準+', 'D': '遅番', 'E': '遅番+', 'J': '最遅番',
+        '振': '振休', '有': '有給', '休': '休み'
+    };
+    return labels[shiftId] || shiftId || '休';
 }
 
 export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
@@ -68,7 +85,6 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
         [ctx, day, shiftPattern]
     );
 
-    const shiftInfo = getShiftInfo(shiftPattern);
     const dateStr = `${month}/${day}(${getDayName(year, month, day)})`;
 
     const handleSelect = (staffId: number) => {
@@ -82,11 +98,11 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
                 <div className="header-gradient p-4 flex justify-between items-center flex-shrink-0">
                     <h2 className="text-lg font-bold text-white drop-shadow-md flex items-center gap-2">
                         <Users size={20} />
-                        <span className={`px-2 py-0.5 rounded ${shiftInfo.color} text-sm`}>
+                        <span className={`px-2 py-0.5 rounded ${getShiftColor(shiftPattern)} text-sm font-bold`}>
                             {shiftPattern}
                         </span>
                         シフト候補者
-                        <span className="text-sm font-normal ml-2 opacity-90">{dateStr}</span>
+                        <span className="text-sm font-normal ml-1 opacity-90">{dateStr}</span>
                     </h2>
                     <button
                         onClick={onClose}
@@ -100,10 +116,10 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
                 <div className="px-4 pt-3 pb-2 bg-gradient-to-r from-pink-50 to-amber-50 border-b border-gray-100">
                     <p className="text-sm text-gray-600">
                         <span className="font-medium">{dateStr}</span>に
-                        <span className={`mx-1 px-2 py-0.5 rounded ${shiftInfo.color} font-medium`}>
-                            {shiftInfo.name}({shiftPattern})
+                        <span className={`mx-1 px-2 py-0.5 rounded ${getShiftColor(shiftPattern)} font-bold`}>
+                            {shiftPattern}
                         </span>
-                        を配置できる職員:
+                        ({getShiftLabel(shiftPattern)})を配置できる職員:
                     </p>
                 </div>
 
@@ -119,7 +135,21 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
                             {candidates.map((candidate) => {
                                 const hardViolations = candidate.violations.filter(v => v.type === 'hard');
                                 const softViolations = candidate.violations.filter(v => v.type === 'soft');
-                                const currentShiftInfo = getShiftInfo(candidate.currentShift);
+
+                                // Flat design status indicator
+                                let statusIcon: React.ReactNode;
+                                if (candidate.isAssignable) {
+                                    if (candidate.violations.length === 0) {
+                                        // Green circle - OK
+                                        statusIcon = <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold">○</div>;
+                                    } else {
+                                        // Amber circle - Warning
+                                        statusIcon = <div className="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center text-white text-xs font-bold">△</div>;
+                                    }
+                                } else {
+                                    // Gray circle - Disabled
+                                    statusIcon = <div className="w-5 h-5 rounded-full bg-gray-300 flex items-center justify-center text-white text-xs font-bold">✕</div>;
+                                }
 
                                 return (
                                     <button
@@ -133,22 +163,15 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
                                     >
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
-                                                {candidate.isAssignable ? (
-                                                    candidate.violations.length === 0 ? (
-                                                        <CheckCircle className="w-5 h-5 text-green-500" />
-                                                    ) : (
-                                                        <AlertTriangle className="w-5 h-5 text-amber-500" />
-                                                    )
-                                                ) : (
-                                                    <X className="w-5 h-5 text-gray-400" />
-                                                )}
+                                                {statusIcon}
                                                 <span className={`font-medium ${candidate.isAssignable ? 'text-gray-800' : 'text-gray-400'
                                                     }`}>
                                                     {candidate.staffName}
                                                 </span>
                                             </div>
-                                            <span className={`text-xs px-2 py-0.5 rounded ${currentShiftInfo.color}`}>
-                                                現在: {currentShiftInfo.name}
+                                            {/* Current shift with A~J notation and consistent colors */}
+                                            <span className={`text-xs px-2 py-0.5 rounded font-bold ${getShiftColor(candidate.currentShift)}`}>
+                                                現在: {candidate.currentShift || '休'}
                                             </span>
                                         </div>
 
@@ -169,10 +192,16 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
                     )}
                 </div>
 
-                {/* Footer */}
+                {/* Footer - flat design */}
                 <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 text-xs text-gray-500 flex justify-between">
-                    <span>✅ 配置可能: {candidates.filter(c => c.isAssignable).length}名</span>
-                    <span>❌ 制約違反: {candidates.filter(c => !c.isAssignable).length}名</span>
+                    <span className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        配置可能: {candidates.filter(c => c.isAssignable).length}名
+                    </span>
+                    <span className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded-full bg-gray-300"></div>
+                        制約違反: {candidates.filter(c => !c.isAssignable).length}名
+                    </span>
                 </div>
             </div>
         </div>
