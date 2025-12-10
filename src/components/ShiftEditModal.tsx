@@ -166,11 +166,19 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
                                 {shiftOptions.map((option) => {
                                     const violations = shiftViolations[option.id] || [];
                                     const hasHardViolation = violations.some(v => v.type === 'hard');
+                                    const hardViolations = violations.filter(v => v.type === 'hard');
+                                    const softViolations = violations.filter(v => v.type === 'soft');
+
+                                    // Create tooltip text
+                                    const tooltipText = violations.length > 0
+                                        ? violations.map(v => `${v.type === 'hard' ? '⚠️' : '⚡'} ${v.message}`).join('\n')
+                                        : '問題なし ✓';
 
                                     return (
-                                        <div key={option.id} className="flex flex-col">
+                                        <div key={option.id} className="flex flex-col group relative">
                                             <button
                                                 onClick={() => handleShiftSelect(option.id)}
+                                                title={tooltipText}
                                                 className={`
                           relative flex flex-col items-center justify-center p-3 rounded-xl transition-all duration-200 
                           ${option.color}
@@ -189,6 +197,36 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
                                                 <span className="text-xl font-bold">{option.id || '-'}</span>
                                                 <span className="text-xs font-medium opacity-90">{option.label}</span>
                                             </button>
+
+                                            {/* Hover tooltip - detailed constraint info */}
+                                            {violations.length > 0 && (
+                                                <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
+                                                    <div className="bg-gray-800 text-white text-xs rounded-lg p-2 shadow-lg">
+                                                        <p className="font-bold mb-1 border-b border-gray-600 pb-1">
+                                                            {option.label}シフトの制約
+                                                        </p>
+                                                        {hardViolations.length > 0 && (
+                                                            <div className="mb-1">
+                                                                <span className="text-red-300 font-medium">ハード制約:</span>
+                                                                {hardViolations.map((v, i) => (
+                                                                    <p key={i} className="ml-2 text-red-200">⚠️ {v.message}</p>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        {softViolations.length > 0 && (
+                                                            <div>
+                                                                <span className="text-amber-300 font-medium">ソフト制約:</span>
+                                                                {softViolations.map((v, i) => (
+                                                                    <p key={i} className="ml-2 text-amber-200">⚡ {v.message}</p>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full">
+                                                            <div className="border-8 border-transparent border-t-gray-800"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
 
                                             {/* Violation summary */}
                                             {violations.length > 0 && (
