@@ -51,18 +51,25 @@ export class ShiftGenerator {
         const dateStr = getFormattedDate(this.year, this.month, day);
         let count = 0;
 
+        // Debug: log what we're checking
+        console.log(`[Generator] countQualifiedPartTimersForShift(${dateStr}, ${shiftPattern})`);
+        console.log(`[Generator] timeRangeSchedule for ${dateStr}:`, this.timeRangeSchedule[dateStr]);
+
         this.staff.forEach(s => {
             if (s.shiftType !== 'part_time' || !s.hasQualification) return;
 
             const timeRange = this.timeRangeSchedule[dateStr]?.[s.id];
+            console.log(`[Generator] Part-timer ${s.name} (ID ${s.id}):`, timeRange);
             if (!timeRange) return;
 
             // Check if countAsShifts includes this shift pattern
             if (timeRange.countAsShifts && timeRange.countAsShifts.includes(shiftPattern)) {
+                console.log(`[Generator] -> Counting ${s.name} for ${shiftPattern}`);
                 count++;
             }
         });
 
+        console.log(`[Generator] Result for ${shiftPattern} on ${dateStr}: ${count}`);
         return count;
     }
 
