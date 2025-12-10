@@ -916,13 +916,13 @@ function App() {
                 .then(() => console.log('[DEBUG] timeRangeSchedule saved to Firestore'))
                 .catch(err => console.error('[DEBUG] Error saving timeRangeSchedule:', err));
 
-              // ALWAYS clear schedule entry (including 休) with deep copy
+              // ALWAYS clear schedule entry - set to empty string for Firestore merge
               const newSchedule = { ...schedule };
-              if (newSchedule[dateStr]) {
-                newSchedule[dateStr] = { ...newSchedule[dateStr] }; // Deep copy
-                delete newSchedule[dateStr][editingPartTime.staffId];
-              }
-              console.log('[DEBUG] newSchedule', newSchedule);
+              if (!newSchedule[dateStr]) newSchedule[dateStr] = {};
+              newSchedule[dateStr] = { ...newSchedule[dateStr] }; // Deep copy
+              // Use empty string instead of delete - Firestore merge won't remove deleted keys
+              newSchedule[dateStr][editingPartTime.staffId] = '' as ShiftPatternId;
+              console.log('[DEBUG] newSchedule (clearing to empty string)', newSchedule[dateStr]);
               setSchedule(newSchedule);
               firestoreStorage.saveSchedule(newSchedule)
                 .then(() => console.log('[DEBUG] schedule saved to Firestore'))
