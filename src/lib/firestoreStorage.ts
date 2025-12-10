@@ -6,7 +6,7 @@ import {
 } from 'firebase/firestore';
 import type { Unsubscribe } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition } from '../types';
+import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, TimeRangeSchedule } from '../types';
 import { SHIFT_PATTERNS } from '../types';
 
 // Collection paths
@@ -21,6 +21,7 @@ interface OrganizationData {
     holidays: Holiday[];
     patterns: ShiftPatternDefinition[];
     manualShifts: ShiftSchedule;
+    timeRangeSchedule: TimeRangeSchedule;  // Part-time worker time ranges
     updatedAt: number;
 }
 
@@ -99,6 +100,10 @@ export const firestoreStorage = {
 
     async saveManualShifts(manualShifts: ShiftSchedule): Promise<void> {
         await this.saveAll({ manualShifts });
+    },
+
+    async saveTimeRangeSchedule(timeRangeSchedule: TimeRangeSchedule): Promise<void> {
+        await this.saveAll({ timeRangeSchedule });
     },
 
     // Get default values
