@@ -10,6 +10,7 @@ import { HolidayModal } from './components/HolidayModal';
 import { ShiftEditModal } from './components/ShiftEditModal';
 import { CandidateSearchModal } from './components/CandidateSearchModal';
 import { TimeRangeModal } from './components/TimeRangeModal';
+import { HourlyStaffChart } from './components/HourlyStaffChart';
 import { ShiftPaletteIcon } from './components/ShiftPaletteIcon';
 import { ShiftBalanceDashboard } from './components/ShiftBalanceDashboard';
 import { AlertBadge } from './components/ShiftAlerts';
@@ -45,6 +46,8 @@ function App() {
   const [editingPartTime, setEditingPartTime] = useState<{ staffId: number; day: number } | null>(null);
   // Candidate search from summary row - opens modal with pre-selected shift
   const [candidateSearch, setCandidateSearch] = useState<{ day: number; shiftPattern: ShiftPatternId } | null>(null);
+  // Hourly staff chart - shows time-based workload for selected day
+  const [hourlyChartDay, setHourlyChartDay] = useState<number | null>(null);
 
   // UX States
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
@@ -357,12 +360,47 @@ function App() {
     return markers[shiftId] || '';
   };
 
-  // Calculate daily staff counts
+  // Helper function to check if a time range overlaps with a shift pattern
+  const doesTimeRangeOverlapShift = (timeRange: TimeRange, shiftPatternId: string): boolean => {
+    const pattern = patterns.find(p => p.id === shiftPatternId);
+    if (!pattern) return false;
+
+    // Parse shift pattern time range (e.g., "7:15-16:15")
+    const [shiftStart, shiftEnd] = pattern.timeRange.split('-');
+    const parseTime = (t: string) => {
+      const [h, m] = t.split(':').map(Number);
+      return h * 60 + m;
+    };
+
+    const partStart = parseTime(timeRange.start);
+    const partEnd = parseTime(timeRange.end);
+    const shiftStartMin = parseTime(shiftStart);
+    const shiftEndMin = parseTime(shiftEnd);
+
+    // Check if there's significant overlap (at least 2 hours = 120 minutes)
+    const overlapStart = Math.max(partStart, shiftStartMin);
+    const overlapEnd = Math.min(partEnd, shiftEndMin);
+    const overlap = overlapEnd - overlapStart;
+
+    return overlap >= 120; // At least 2 hours overlap
+  };
+
+  // Calculate daily staff counts (including part-timers with time ranges)
   const dailyCounts = days.map(day => {
     const dateStr = getFormattedDate(year, month, day);
     let count = 0;
     staff.forEach(s => {
       if (s.shiftType === 'cooking') return;
+
+      // For part-time workers, check if they have a time range entry
+      if (s.shiftType === 'part_time') {
+        const timeRange = timeRangeSchedule[dateStr]?.[s.id];
+        if (timeRange) {
+          count++; // Part-timer is working
+        }
+        return;
+      }
+
       const shift = schedule[dateStr]?.[s.id];
       if (shift && shift !== '休' && shift !== '振' && shift !== '有') {
         count++;
@@ -378,6 +416,22 @@ function App() {
 
     staff.forEach(s => {
       if (!s.hasQualification) return;
+
+      // For qualified part-timers, check time range overlap with each shift
+      if (s.shiftType === 'part_time') {
+        const timeRange = timeRangeSchedule[dateStr]?.[s.id];
+        if (timeRange) {
+          // Count for each shift pattern where there's overlap
+          ['A', 'B', 'C', 'D', 'E', 'J'].forEach(shiftId => {
+            if (doesTimeRangeOverlapShift(timeRange, shiftId)) {
+              counts[shiftId]++;
+            }
+          });
+        }
+        return;
+      }
+
+      // Regular staff
       const shift = schedule[dateStr]?.[s.id];
       if (shift && ['A', 'B', 'C', 'D', 'E', 'J'].includes(shift)) {
         counts[shift]++;
@@ -588,7 +642,12 @@ function App() {
                     }
 
                     return (
-                      <th key={day} className={`border-b border-r border-[#D1D5DB] p-1 md:p-2 min-w-[32px] md:min-w-[45px] text-center ${textColor} ${bgColor}`}>
+                      <th
+                        key={day}
+                        className={`border-b border-r border-[#D1D5DB] p-1 md:p-2 min-w-[32px] md:min-w-[45px] text-center ${textColor} ${bgColor} cursor-pointer hover:opacity-80 transition-opacity`}
+                        onClick={() => setHourlyChartDay(day)}
+                        title="クリックで時間帯別人員を表示"
+                      >
                         <div className="font-bold text-sm md:text-lg">{day}</div>
                         <div className="text-[10px] md:text-xs opacity-80">({['日', '月', '火', '水', '木', '金', '土'][dayOfWeek]})</div>
                       </th>
@@ -884,6 +943,20 @@ function App() {
           />
         );
       })()}
+
+      {/* HourlyStaffChart - time-based workload visualization */}
+      {hourlyChartDay && (
+        <HourlyStaffChart
+          day={hourlyChartDay}
+          year={year}
+          month={month}
+          staff={staff}
+          schedule={schedule}
+          timeRangeSchedule={timeRangeSchedule}
+          patterns={patterns}
+          onClose={() => setHourlyChartDay(null)}
+        />
+      )}
     </div>
   );
 }
