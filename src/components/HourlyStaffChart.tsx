@@ -39,6 +39,7 @@ interface StaffWorkTime {
     startMinutes: number;
     endMinutes: number;
     label: string; // e.g., "A" or "9:00-14:00"
+    originalIndex: number; // Keep original order from staff array
 }
 
 export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
@@ -58,7 +59,7 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
     const staffWorkTimes = useMemo(() => {
         const result: StaffWorkTime[] = [];
 
-        staff.forEach(s => {
+        staff.forEach((s, index) => {
             if (s.shiftType === 'cooking' || s.shiftType === 'no_shift') return;
 
             // Part-time workers with time range
@@ -71,7 +72,8 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                         isQualified: s.hasQualification,
                         startMinutes: parseTimeToMinutes(timeRange.start),
                         endMinutes: parseTimeToMinutes(timeRange.end),
-                        label: `${timeRange.start}-${timeRange.end}`
+                        label: `${timeRange.start}-${timeRange.end}`,
+                        originalIndex: index
                     });
                 }
                 return;
@@ -91,15 +93,13 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                 isQualified: s.hasQualification,
                 startMinutes: parseTimeToMinutes(startStr),
                 endMinutes: parseTimeToMinutes(endStr),
-                label: shiftId
+                label: shiftId,
+                originalIndex: index
             });
         });
 
-        // Sort by start time, then by qualification
-        return result.sort((a, b) => {
-            if (a.startMinutes !== b.startMinutes) return a.startMinutes - b.startMinutes;
-            return (b.isQualified ? 1 : 0) - (a.isQualified ? 1 : 0);
-        });
+        // Sort by original staff array order (same as monthly view)
+        return result.sort((a, b) => a.originalIndex - b.originalIndex);
     }, [staff, schedule, timeRangeSchedule, patterns, dateStr]);
 
     // Count by hour for summary
@@ -148,11 +148,12 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                     </button>
                 </div>
 
-                {/* Time axis header */}
-                <div className="px-4 pt-3 pb-1 bg-gray-50 border-b">
+                {/* Time axis header + Hourly counts (moved below time labels) */}
+                <div className="px-4 pt-3 pb-2 bg-gray-50 border-b">
+                    {/* Time labels */}
                     <div className="flex">
                         <div className="w-24 flex-shrink-0"></div>
-                        <div className="flex-1 relative h-6">
+                        <div className="flex-1 relative h-5">
                             {Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i).map(hour => (
                                 <div
                                     key={hour}
@@ -164,6 +165,23 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                             ))}
                         </div>
                     </div>
+
+                    {/* Hourly counts - directly below time labels */}
+                    <div className="flex mt-1">
+                        <div className="w-24 flex-shrink-0 text-[9px] text-gray-400 pr-1 text-right">人数</div>
+                        <div className="flex-1 flex">
+                            {hourlyCounts.map((count, i) => (
+                                <div
+                                    key={i}
+                                    className={`flex-1 text-center text-[10px] py-0.5 border-r border-gray-200 last:border-r-0 rounded-sm ${count.qualified < 2 ? 'bg-red-100 text-red-700 font-bold' : 'text-gray-600'
+                                        }`}
+                                >
+                                    <span className="font-bold">{count.qualified}</span>
+                                    <span className="text-gray-400">/{count.total}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Gantt Chart */}
@@ -171,10 +189,10 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                     <div className="space-y-1">
                         {staffWorkTimes.map(sw => (
                             <div key={sw.staffId} className="flex items-center h-8">
-                                {/* Staff name */}
+                                {/* Staff name - no checkmark */}
                                 <div className="w-24 flex-shrink-0 pr-2">
-                                    <span className={`text-xs font-medium truncate block ${sw.isQualified ? 'text-green-700' : 'text-gray-500'}`}>
-                                        {sw.isQualified && '✓ '}{sw.name}
+                                    <span className={`text-xs font-medium truncate block ${sw.isQualified ? 'text-gray-700' : 'text-gray-500'}`}>
+                                        {sw.name}
                                     </span>
                                 </div>
 
@@ -189,11 +207,11 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                                         />
                                     ))}
 
-                                    {/* Work time bar */}
+                                    {/* Work time bar - coral pink for qualified, gray for unqualified */}
                                     <div
                                         className={`absolute top-1 bottom-1 rounded-md flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${sw.isQualified
-                                            ? 'bg-gradient-to-r from-green-400 to-green-500'
-                                            : 'bg-gradient-to-r from-gray-400 to-gray-500'
+                                                ? 'bg-gradient-to-r from-[#FFA8A8] to-[#FF8A8A]' // Light coral pink
+                                                : 'bg-gradient-to-r from-gray-400 to-gray-500'
                                             }`}
                                         style={{
                                             left: `${getPosition(sw.startMinutes)}%`,
@@ -214,33 +232,13 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                             </div>
                         )}
                     </div>
-
-                    {/* Hourly summary */}
-                    <div className="mt-6 pt-4 border-t">
-                        <h3 className="text-xs font-bold text-gray-600 mb-2">時間帯別人数</h3>
-                        <div className="flex">
-                            <div className="w-24 flex-shrink-0"></div>
-                            <div className="flex-1 flex">
-                                {hourlyCounts.map((count, i) => (
-                                    <div
-                                        key={i}
-                                        className={`flex-1 text-center text-[10px] py-1 border-r border-gray-200 last:border-r-0 ${count.qualified < 2 ? 'bg-red-100 text-red-700 font-bold' : 'text-gray-600'
-                                            }`}
-                                    >
-                                        <div className="font-bold">{count.qualified}</div>
-                                        <div className="text-gray-400">/{count.total}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 {/* Legend & Footer */}
                 <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
                     <div className="flex justify-center gap-6 text-xs text-gray-500 mb-3">
                         <span className="flex items-center gap-1">
-                            <div className="w-4 h-3 bg-gradient-to-r from-green-400 to-green-500 rounded"></div>
+                            <div className="w-4 h-3 bg-gradient-to-r from-[#FFA8A8] to-[#FF8A8A] rounded"></div>
                             有資格者
                         </span>
                         <span className="flex items-center gap-1">
