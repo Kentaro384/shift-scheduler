@@ -940,15 +940,15 @@ function App() {
               setSchedule(newSchedule);
               firestoreStorage.saveSchedule(newSchedule);
 
-              // Clear any existing time range
+              // Always clear time range when setting a holiday
               const newTimeRangeSchedule = { ...timeRangeSchedule };
-              if (newTimeRangeSchedule[dateStr]?.[editingPartTime.staffId]) {
-                delete newTimeRangeSchedule[dateStr][editingPartTime.staffId];
-                setTimeRangeSchedule(newTimeRangeSchedule);
-                firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule);
-              }
+              if (!newTimeRangeSchedule[dateStr]) newTimeRangeSchedule[dateStr] = {};
+              delete newTimeRangeSchedule[dateStr][editingPartTime.staffId];
+              setTimeRangeSchedule(newTimeRangeSchedule);
+              firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule);
 
               setEditingPartTime(null);
+              toast.success(`${staffMember?.name}`, `${shiftId} に変更しました`);
             }}
             onClear={() => {
               // Clear both time range and shift
