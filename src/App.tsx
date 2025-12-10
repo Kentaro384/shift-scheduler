@@ -682,10 +682,10 @@ function App() {
                           >
                             {/* Part-time worker with time range */}
                             {isPartTime && partTimeRange ? (
-                              <div className="w-12 md:w-14 h-6 md:h-8 mx-auto flex items-center justify-center rounded-md text-[8px] md:text-[9px] shadow-sm transition-all duration-150 hover:scale-105 hover:shadow-md bg-gray-100 border border-gray-300 text-gray-700 font-medium">
-                                <span>{partTimeRange.start.slice(0, 5)}</span>
-                                <span className="mx-0.5">-</span>
-                                <span>{partTimeRange.end.slice(0, 5)}</span>
+                              <div className="w-7 h-8 md:w-9 md:h-10 mx-auto flex flex-col items-center justify-center rounded-md text-[7px] md:text-[8px] shadow-sm transition-all duration-150 hover:scale-105 hover:shadow-md bg-gray-100 border border-gray-300 text-gray-700 font-medium leading-tight">
+                                <span>{partTimeRange.start}</span>
+                                <span className="text-gray-400">↓</span>
+                                <span>{partTimeRange.end}</span>
                               </div>
                             ) : shiftId === '休' ? (
                               <div className="w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center text-[#9CA3AF] font-medium text-sm opacity-60">
