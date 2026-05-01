@@ -8,8 +8,8 @@ import { auth, googleProvider } from './firebase';
 
 export type AuthUser = User | null;
 
-// Whitelist of allowed email addresses
-// Add emails here to grant access
+// Client-side allowlist is only for user experience.
+// Firestore access must also be enforced by firestore.rules.
 const ALLOWED_EMAILS: string[] = [
     'owner.com',
     'member.com',

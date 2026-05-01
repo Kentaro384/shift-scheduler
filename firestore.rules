@@ -1,0 +1,25 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function allowedEmail() {
+      return signedIn()
+        && request.auth.token.email in [
+          'owner.com',
+          'member.com'
+        ];
+    }
+
+    match /organizations/default {
+      allow read, write: if allowedEmail();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
