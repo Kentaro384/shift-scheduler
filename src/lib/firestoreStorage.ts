@@ -4,7 +4,7 @@ import {
     setDoc,
     onSnapshot,
 } from 'firebase/firestore';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { FirestoreError, Unsubscribe } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, TimeRangeSchedule } from '../types';
 import { SHIFT_PATTERNS } from '../types';
@@ -64,7 +64,7 @@ export const firestoreStorage = {
     },
 
     // Subscribe to real-time updates
-    subscribe(callback: (data: OrganizationData | null) => void): Unsubscribe {
+    subscribe(callback: (data: OrganizationData | null, error?: FirestoreError) => void): Unsubscribe {
         return onSnapshot(getDocRef(), (docSnap) => {
             if (docSnap.exists()) {
                 callback(docSnap.data() as OrganizationData);
@@ -73,7 +73,7 @@ export const firestoreStorage = {
             }
         }, (error) => {
             console.error('Firestore subscription error:', error);
-            callback(null);
+            callback(null, error);
         });
     },
 

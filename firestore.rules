@@ -6,16 +6,17 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function allowedEmail() {
+    function allowedUser() {
       return signedIn()
-        && request.auth.token.email in [
-          'owner.com',
-          'member.com'
-        ];
+        && exists(/databases/$(database)/documents/allowedUsers/$(request.auth.uid));
     }
 
     match /organizations/default {
-      allow read, write: if allowedEmail();
+      allow read, write: if allowedUser();
+    }
+
+    match /allowedUsers/{userId} {
+      allow read, write: if false;
     }
 
     match /{document=**} {

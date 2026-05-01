@@ -5,9 +5,10 @@ import { signInWithGoogle } from '../lib/auth';
 interface LoginScreenProps {
     onLogin: () => void;
     isLoading: boolean;
+    accessDenied?: boolean;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isLoading }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isLoading, accessDenied = false }) => {
     const handleLogin = async () => {
         try {
             await signInWithGoogle();
@@ -37,6 +38,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isLoading }) 
                     <h2 className="text-xl font-bold text-gray-800 text-center mb-6">
                         ログイン
                     </h2>
+
+                    {accessDenied && (
+                        <div className="mb-5 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+                            このアカウントにはアクセス権限がありません。
+                        </div>
+                    )}
 
                     <button
                         onClick={handleLogin}

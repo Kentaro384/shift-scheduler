@@ -29,6 +29,7 @@ function App() {
   const [user, setUser] = useState<AuthUser>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -60,6 +61,9 @@ function App() {
   // Listen for auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChange((authUser) => {
+      if (authUser) {
+        setAccessDenied(false);
+      }
       setUser(authUser);
       setAuthLoading(false);
     });
@@ -76,7 +80,16 @@ function App() {
     setDataLoading(true);
 
     // Subscribe to real-time updates
-    const unsubscribe = firestoreStorage.subscribe((data: OrganizationData | null) => {
+    const unsubscribe = firestoreStorage.subscribe((data: OrganizationData | null, error) => {
+      if (error) {
+        if (error.code === 'permission-denied') {
+          setAccessDenied(true);
+          void signOut();
+        }
+        setDataLoading(false);
+        return;
+      }
+
       if (data) {
         setStaff(data.staff || []);
         setSchedule(data.schedule || {});
@@ -417,7 +430,7 @@ function App() {
 
   // Show login screen if not authenticated
   if (!user) {
-    return <LoginScreen onLogin={() => { }} isLoading={false} />;
+    return <LoginScreen onLogin={() => { }} isLoading={false} accessDenied={accessDenied} />;
   }
 
   // Show loading while fetching data
