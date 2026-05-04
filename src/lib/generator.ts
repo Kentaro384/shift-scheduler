@@ -1,7 +1,7 @@
-import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, TimeRangeSchedule } from '../types';
+import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
 import { getDaysInMonth, getDayOfWeek, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
 import { SHIFT_PATTERNS } from '../types';
-import { countEffectiveShift, countQualifiedPartTimers, countWorkingStaff as countWorkingStaffUtil } from './shiftCountUtils';
+import { countEffectiveShift, countWorkingStaff as countWorkingStaffUtil } from './shiftCountUtils';
 
 export class ShiftGenerator {
     private staff: Staff[];
@@ -9,14 +9,16 @@ export class ShiftGenerator {
     private timeRangeSchedule: TimeRangeSchedule;  // Part-timer time ranges with countAsShifts
     private holidays: Holiday[];
     private settings: Settings;
+    private patterns: ShiftPatternDefinition[];
     private year: number;
     private month: number;
     private daysInMonth: number;
 
-    constructor(staff: Staff[], holidays: Holiday[], year: number, month: number, settings: Settings, currentSchedule: ShiftSchedule = {}, timeRangeSchedule: TimeRangeSchedule = {}) {
+    constructor(staff: Staff[], holidays: Holiday[], year: number, month: number, settings: Settings, currentSchedule: ShiftSchedule = {}, timeRangeSchedule: TimeRangeSchedule = {}, patterns: ShiftPatternDefinition[] = SHIFT_PATTERNS) {
         this.staff = staff;
         this.holidays = holidays;
         this.settings = settings;
+        this.patterns = patterns.length > 0 ? patterns : SHIFT_PATTERNS;
         this.year = year;
         this.month = month;
         this.daysInMonth = getDaysInMonth(year, month);
@@ -45,12 +47,6 @@ export class ShiftGenerator {
                 }
             }
         }
-    }
-
-    // Helper: Count qualified part-timers assigned to a specific shift pattern on a given day
-    private countQualifiedPartTimersForShift(day: number, shiftPattern: ShiftPatternId): number {
-        const dateStr = getFormattedDate(this.year, this.month, day);
-        return countQualifiedPartTimers(this.staff, this.timeRangeSchedule, dateStr, shiftPattern);
     }
 
     // Helper: Check if incompatible staff has conflict
@@ -134,7 +130,15 @@ export class ShiftGenerator {
         this.phase7_ChiefBackup();
         this.phase8_CompensatoryOff();
         this.phase9_FillEmpty();
-        this.phase10_Validation();
+        const fixCount = this.phase10_Validation();
+
+        // Phase 10 may convert A/J violations to B, which can re-open pattern
+        // shortages or late-role coverage gaps. Re-run the adjustment phases once.
+        if (fixCount > 0) {
+            this.phase4_5_LateShiftCoverage();
+            this.phase6_MinCountAdjustment();
+            this.phase7_ChiefBackup();
+        }
 
         // FINAL SAFETY: Absolutely ensure no empty cells remain
         this.finalSafetyFill();
@@ -219,9 +223,26 @@ export class ShiftGenerator {
     }
 
     // Helper: Count specific pattern on a day (includes qualified part-timers with countAsShifts)
-    private countPattern(day: number, pattern: ShiftPatternId): number {
+    private countPattern(day: number, pattern: ShiftPatternId, qualifiedOnly: boolean = true): number {
         const dateStr = getFormattedDate(this.year, this.month, day);
-        return countEffectiveShift(this.staff, this.schedule, this.timeRangeSchedule, dateStr, pattern, true);
+        return countEffectiveShift(this.staff, this.schedule, this.timeRangeSchedule, dateStr, pattern, qualifiedOnly);
+    }
+
+    private countSchedulePattern(day: number, pattern: ShiftPatternId): number {
+        const dateStr = getFormattedDate(this.year, this.month, day);
+        return this.staff.reduce((count, s) => (
+            this.schedule[dateStr]?.[s.id] === pattern ? count + 1 : count
+        ), 0);
+    }
+
+    private getPatternMinCount(pattern: ShiftPatternId): number {
+        return this.patterns.find(p => p.id === pattern)?.minCount
+            ?? SHIFT_PATTERNS.find(p => p.id === pattern)?.minCount
+            ?? 0;
+    }
+
+    private getWorkPatterns(): ShiftPatternDefinition[] {
+        return this.patterns.filter(p => ['A', 'B', 'C', 'D', 'E', 'J'].includes(p.id));
     }
 
     // Phase 1: Director (always off)
@@ -346,8 +367,8 @@ export class ShiftGenerator {
                     if (currentShift !== '' && currentShift !== '休') continue;
 
                     // Count TOTAL offs on this day (振 + 有) to avoid clustering
-                    const transferCount = this.countPattern(targetDay, '振');
-                    const paidLeaveCount = this.countPattern(targetDay, '有');
+                    const transferCount = this.countSchedulePattern(targetDay, '振');
+                    const paidLeaveCount = this.countSchedulePattern(targetDay, '有');
                     const totalOffCount = transferCount + paidLeaveCount;
 
                     if (totalOffCount < minOffCount) {
@@ -419,15 +440,9 @@ export class ShiftGenerator {
             // Get day of week (1=Mon, 5=Fri)
             const dayOfWeek = new Date(this.year, this.month - 1, d).getDay();
 
-            // Helper to count existing shifts (including part-timers)
+            // Helper to count existing qualified coverage, including part-time time ranges.
             const countExistingPattern = (pattern: ShiftPatternId): number => {
-                let count = 0;
-                this.staff.forEach(s => {
-                    if (this.schedule[dateStr]?.[s.id] === pattern) {
-                        count++;
-                    }
-                });
-                return count;
+                return this.countPattern(d, pattern);
             };
 
             // Helper to assign pattern with dynamic constraint relaxation
@@ -511,31 +526,28 @@ export class ShiftGenerator {
                     (this.countTotalShifts(b.id, 'A') + this.countTotalShifts(b.id, 'B') + this.countTotalShifts(b.id, 'J'));
             };
 
-            // Calculate needed counts after subtracting qualified part-timers
-            const qualifiedPartTimersOnA = this.countQualifiedPartTimersForShift(d, 'A');
-            const qualifiedPartTimersOnJ = this.countQualifiedPartTimersForShift(d, 'J');
-            const neededA = Math.max(0, 2 - qualifiedPartTimersOnA);
-            const neededJ = Math.max(0, 2 - qualifiedPartTimersOnJ);
+            const minA = this.getPatternMinCount('A');
+            const minJ = this.getPatternMinCount('J');
 
 
             if (dayOfWeek >= 1 && dayOfWeek <= 3) {
                 // Mon-Wed: Prioritize A first to secure candidates before J→A conflict
-                assignPattern('A', neededA, false, sortByPatternCount('A'));
-                assignPattern('J', neededJ, false, sortByPatternCount('J'));
+                assignPattern('A', minA, false, sortByPatternCount('A'));
+                assignPattern('J', minJ, false, sortByPatternCount('J'));
             } else {
                 // Thu-Fri: Prioritize J first (less impact on next week's A)
-                assignPattern('J', neededJ, false, sortByPatternCount('J'));
-                assignPattern('A', neededA, false, sortByPatternCount('A'));
+                assignPattern('J', minJ, false, sortByPatternCount('J'));
+                assignPattern('A', minA, false, sortByPatternCount('A'));
             }
 
             // 3. Assign D (Late) - Min 1
-            assignPattern('D', 1, false);
+            assignPattern('D', this.getPatternMinCount('D'), false);
 
             // 4. Assign E (Late+) - Min 1
-            assignPattern('E', 1, false);
+            assignPattern('E', this.getPatternMinCount('E'), false);
 
             // 5. Assign C (Standard+) - Min 1
-            assignPattern('C', 1, false);
+            assignPattern('C', this.getPatternMinCount('C'), false);
 
             // 6. Assign remaining regular staff to B (or C/D fallback)
             const remaining = regulars.filter(s => !isAssigned(s.id));
@@ -623,7 +635,7 @@ export class ShiftGenerator {
             if (this.isHoliday(d) || this.isSaturday(d)) continue;
 
             // 1. Check specific pattern minimums
-            for (const pattern of SHIFT_PATTERNS) {
+            for (const pattern of this.getWorkPatterns()) {
                 const minCount = pattern.minCount;
                 let currentCount = this.countPattern(d, pattern.id);
 
@@ -703,6 +715,12 @@ export class ShiftGenerator {
 
         let backupCount = 0;
         const LIMIT = 8;
+        for (let d = 1; d <= this.daysInMonth; d++) {
+            const shift = this.getShift(d, chief.id);
+            if (['A', 'B', 'C', 'D', 'E', 'J'].includes(shift)) {
+                backupCount++;
+            }
+        }
 
         for (let d = 1; d <= this.daysInMonth; d++) {
             if (this.isHoliday(d)) {
@@ -781,19 +799,19 @@ export class ShiftGenerator {
             };
 
             // 1. Check A shortage (Critical)
-            if (assignIfShort('A', 2)) continue;
+            if (assignIfShort('A', this.getPatternMinCount('A'))) continue;
 
             // 2. Check J shortage (Critical)
-            if (assignIfShort('J', 2)) continue;
+            if (assignIfShort('J', this.getPatternMinCount('J'))) continue;
 
             // 3. Check D shortage
-            if (assignIfShort('D', 1)) continue;
+            if (assignIfShort('D', this.getPatternMinCount('D'))) continue;
 
             // 4. Check E shortage
-            if (assignIfShort('E', 1)) continue;
+            if (assignIfShort('E', this.getPatternMinCount('E'))) continue;
 
             // 5. Check C shortage
-            if (assignIfShort('C', 1)) continue;
+            if (assignIfShort('C', this.getPatternMinCount('C'))) continue;
 
             // 6. Check Total shortage
             const total = this.countWorkingStaff(d);
@@ -837,7 +855,8 @@ export class ShiftGenerator {
     }
 
     // Phase 10: Validation & Fix
-    private phase10_Validation() {
+    private phase10_Validation(): number {
+        let fixCount = 0;
         for (let d = 1; d <= this.daysInMonth; d++) {
             if (this.isHoliday(d)) continue;
 
@@ -854,18 +873,22 @@ export class ShiftGenerator {
                 // 1. J -> A violation
                 if (prevShift === 'J' && currShift === 'A') {
                     this.setShift(d, s.id, 'B');
+                    fixCount++;
                 }
 
                 // 2. A -> A violation
                 if (prevShift === 'A' && currShift === 'A') {
                     this.setShift(d, s.id, 'B');
+                    fixCount++;
                 }
 
                 // 3. J -> J violation
                 if (prevShift === 'J' && currShift === 'J') {
                     this.setShift(d, s.id, 'B'); // Or D/E?
+                    fixCount++;
                 }
             });
         }
+        return fixCount;
     }
 }

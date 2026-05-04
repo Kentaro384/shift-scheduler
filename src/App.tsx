@@ -122,7 +122,7 @@ function App() {
     // Small delay to show loading animation (Doherty threshold - 0.4s)
     await new Promise(resolve => setTimeout(resolve, 400));
 
-    const generator = new ShiftGenerator(staff, holidays, year, month, settings, schedule, timeRangeSchedule);
+    const generator = new ShiftGenerator(staff, holidays, year, month, settings, schedule, timeRangeSchedule, patterns);
     const newSchedule = generator.generate();
     setSchedule(newSchedule);
     firestoreStorage.saveSchedule(newSchedule);
