@@ -611,6 +611,7 @@ function App() {
   const fixedDefaultStaffCount = staff.filter(s =>
     isTimeRangeStaff(s) && (s.defaultTimeRange || Object.keys(s.weeklyTimeRanges || {}).length > 0)
   ).length;
+  const monthlyHolidayCount = monthDateStrings.filter(dateStr => holidays.some(h => h.date === dateStr)).length;
   const manualFixedCount = monthDateStrings.reduce((total, dateStr) =>
     total + Object.keys(manualShifts[dateStr] || {}).length
   , 0);
@@ -651,6 +652,7 @@ function App() {
   };
   const setupSteps = [
     { label: '初期化', done: true, note: isMonthBlank ? '白紙' : '入力中', onClick: handleForceClearMonth, icon: Trash2, danger: true },
+    { label: '祝日設定', done: monthlyHolidayCount > 0, note: monthlyHolidayCount > 0 ? `${monthlyHolidayCount}件` : '確認', onClick: () => setShowHolidayModal(true), icon: Calendar },
     { label: '固定勤務', done: hasTimeRangeInput, note: hasTimeRangeInput ? '反映済み' : `${fixedDefaultStaffCount}人対象`, onClick: handleApplyDefaultTimeRanges, icon: CalendarCheck },
     { label: '固定予定', done: manualFixedCount > 0, note: manualFixedCount > 0 ? `${manualFixedCount}件` : '必要時', onClick: () => setShowHolidayModal(true), icon: Calendar },
     { label: '自動生成', done: hasGeneratedShift, note: hasGeneratedShift ? '生成済み' : '未生成', onClick: handleGenerate, icon: RefreshCw },
@@ -817,11 +819,8 @@ function App() {
             <div className="flex shrink-0 items-center gap-2">
               <CalendarCheck size={17} className="text-[#10B981]" />
               <h2 className="text-sm font-bold text-gray-800">今月の準備</h2>
-              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
-                {year}年{month}月
-              </span>
             </div>
-            <div className="grid flex-1 grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="grid flex-1 grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-7">
               {setupSteps.map(step => {
                 const StepIcon = step.icon;
                 const hasIssue = step.label === '不足確認' && !step.done && hasGeneratedShift && shortageIssueCount > 0;

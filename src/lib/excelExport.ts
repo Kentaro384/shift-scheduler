@@ -194,8 +194,8 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         const labelCell = worksheet.getCell(row, 1);
         labelCell.value = label;
         labelCell.font = font(11);
-        labelCell.alignment = { horizontal: 'center', vertical: 'middle' };
-        setSolidFill(labelCell, COLORS.headerBg);
+        labelCell.alignment = { horizontal: 'center', vertical: 'middle', textRotation: row === noteRow ? 255 : undefined };
+        setNoFill(labelCell);
         applyThinBorder(labelCell);
         worksheet.getRow(row).height = height;
     });
@@ -237,7 +237,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         const noteCell = worksheet.getCell(noteRow, col);
         noteCell.value = getNoteText(dateStr, notes, holidays);
         noteCell.font = font(8);
-        noteCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        noteCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true, textRotation: 255 };
 
         [dateCell, weekdayCell, noteCell].forEach(cell => {
             if (dayFill) setSolidFill(cell, dayFill);
@@ -272,16 +272,15 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
             if (!shift && isTimeRangeStaff(s) && timeRange) {
                 cell.value = `${timeRange.start}\n${timeRange.end}`;
                 cell.font = font(8);
-                setNoFill(cell);
             } else if (shift) {
                 cell.value = shift;
                 cell.font = font(shift.length > 1 ? 9 : 11);
-                setNoFill(cell);
             } else {
                 cell.value = '';
-                if (dayFill) setSolidFill(cell, dayFill);
-                else setNoFill(cell);
             }
+
+            if (dayFill) setSolidFill(cell, dayFill);
+            else setNoFill(cell);
 
             cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
             applyThinBorder(cell);
@@ -323,7 +322,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
     worksheet.getCell(patternTitleRow, 1).value = 'シフトパターン';
     worksheet.getCell(patternTitleRow, 1).font = font(11);
     worksheet.getCell(patternTitleRow, 1).alignment = { horizontal: 'center', vertical: 'middle' };
-    setSolidFill(worksheet.getCell(patternTitleRow, 1), COLORS.headerBg);
+    setNoFill(worksheet.getCell(patternTitleRow, 1));
     applyThinBorder(worksheet.getCell(patternTitleRow, 1));
 
     const topLegendPatterns = legendPatterns.filter(pattern => pattern.id !== "C'");
@@ -335,7 +334,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         worksheet.mergeCells(patternTitleRow, legendCol, patternTitleRow + (isLast ? 1 : 0), mergeEnd);
         const cell = worksheet.getCell(patternTitleRow, legendCol);
         cell.value = `${pattern.id} ${pattern.timeRange}${pattern.id === 'F' ? '\n（園長保育対応）' : ''}`;
-        cell.font = font(9);
+        cell.font = font(11);
         cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: pattern.id === 'F' || undefined };
         setNoFill(cell);
         for (let row = patternTitleRow; row <= patternTitleRow + (isLast ? 1 : 0); row++) {
@@ -363,16 +362,12 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         worksheet.mergeCells(currentRow, 12, currentRow, Math.min(16, printLastCol));
         const cell = worksheet.getCell(currentRow, 12);
         cell.value = `${standardPlus.id}  ${standardPlus.timeRange}`;
-        cell.font = font(9);
+        cell.font = font(11);
         cell.alignment = { horizontal: 'left', vertical: 'middle' };
         setNoFill(cell);
         for (let col = 12; col <= Math.min(16, printLastCol); col++) {
             applyThinBorder(worksheet.getCell(currentRow, col));
         }
-    }
-
-    for (let col = 17; col <= Math.min(26, printLastCol); col++) {
-        applyThinBorder(worksheet.getCell(currentRow, col));
     }
 
     worksheet.getRow(currentRow).height = 24;
