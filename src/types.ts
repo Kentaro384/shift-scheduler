@@ -24,6 +24,18 @@ export type StaffPosition = '園長' | '主任' | '保育士' | 'パート' | '�
 export type StaffShiftType = 'no_shift' | 'backup' | 'regular' | 'part_time' | 'cooking';
 export type StaffRole = 'infant' | 'toddler' | 'free' | 'cooking' | null;
 export type FloorType = '1F' | '2F' | '3F' | 'free' | 'none';
+export type StaffWeekday = 1 | 2 | 3 | 4 | 5 | 6;
+
+export const STAFF_WEEKDAY_LABELS: Record<StaffWeekday, string> = {
+    1: '月',
+    2: '火',
+    3: '水',
+    4: '木',
+    5: '金',
+    6: '土',
+};
+
+export const STAFF_WEEKDAYS: StaffWeekday[] = [1, 2, 3, 4, 5, 6];
 
 export interface Staff {
     id: number;
@@ -37,12 +49,27 @@ export interface Staff {
     earlyShiftLimit: number | null;
     saturdayOnly: boolean;
     hasQualification: boolean;
+    availableWeekdays?: StaffWeekday[]; // 勤務可能曜日。未設定なら月〜土すべて可
     defaultTimeRange?: TimeRange; // Default work hours for part-time workers
     floor?: FloorType; // フロア担当（同一フロアのスタッフはシフトを分ける）
 }
 
 export function isTimeRangeStaff(staff: Staff): boolean {
     return staff.shiftType === 'part_time' || staff.position === '看護師';
+}
+
+export function getStaffAvailableWeekdays(staff: Staff): StaffWeekday[] {
+    if (staff.saturdayOnly) return [6];
+    return staff.availableWeekdays?.length ? staff.availableWeekdays : STAFF_WEEKDAYS;
+}
+
+export function isStaffAvailableOnWeekday(staff: Staff, weekday: number): boolean {
+    return getStaffAvailableWeekdays(staff).includes(weekday as StaffWeekday);
+}
+
+export function staffAllowsShift(staff: Staff, shift: ShiftPatternId): boolean {
+    const preferredShifts = staff.preferredShifts || [];
+    return preferredShifts.length === 0 || preferredShifts.includes(shift);
 }
 
 export interface Settings {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import type { Staff, StaffPosition, StaffShiftType, StaffRole, ShiftPatternDefinition, ShiftPatternId, FloorType } from '../types';
+import type { Staff, StaffPosition, StaffShiftType, StaffRole, ShiftPatternDefinition, ShiftPatternId, FloorType, StaffWeekday } from '../types';
+import { getStaffAvailableWeekdays, STAFF_WEEKDAY_LABELS, STAFF_WEEKDAYS } from '../types';
 import { X, Plus, Edit2, Trash2, Save, Users } from 'lucide-react';
 
 interface StaffListProps {
@@ -94,6 +95,14 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
         handleChange('preferredShifts', updated);
     };
 
+    const toggleAvailableWeekday = (weekday: StaffWeekday) => {
+        const current = getStaffAvailableWeekdays(editForm as Staff);
+        const updated = current.includes(weekday)
+            ? current.filter(day => day !== weekday)
+            : [...current, weekday].sort((a, b) => a - b);
+        handleChange('availableWeekdays', updated);
+    };
+
     const toggleIncompatibleStaff = (staffId: number) => {
         const current = editForm.incompatibleWith || [];
         const updated = current.includes(staffId)
@@ -159,7 +168,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                                 </select>
                                             </div>
                                             <div className="col-span-2">
-                                                <label className="block text-xs text-gray-500 mb-1">週勤務日</label>
+                                                <label className="block text-xs text-gray-500 mb-1">週勤務上限</label>
                                                 <input type="number" className="w-full border rounded p-2" value={editForm.weeklyDays} onChange={e => handleChange('weeklyDays', parseInt(e.target.value))} />
                                             </div>
                                         </div>
@@ -176,7 +185,27 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                         </div>
 
                                         <div>
-                                            <label className="block text-xs text-gray-500 mb-2">希望シフト (選択したシフトのみ割り当てられます)</label>
+                                            <label className="block text-xs text-gray-500 mb-2">勤務可能曜日</label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {STAFF_WEEKDAYS.map(day => (
+                                                    <button
+                                                        key={day}
+                                                        onClick={() => toggleAvailableWeekday(day)}
+                                                        disabled={editForm.saturdayOnly && day !== 6}
+                                                        className={`w-10 h-9 rounded-lg text-sm font-semibold border transition-all ${(getStaffAvailableWeekdays(editForm as Staff)).includes(day)
+                                                            ? 'bg-[#45B7D1] text-white border-[#45B7D1]'
+                                                            : 'bg-white text-gray-500 border-gray-200 hover:border-[#FF6B6B]'
+                                                            } disabled:opacity-40 disabled:cursor-not-allowed`}
+                                                    >
+                                                        {STAFF_WEEKDAY_LABELS[day]}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <p className="mt-1 text-[11px] text-gray-500">未選択に戻したい場合は全曜日を選んでください。土曜専門の場合は土曜のみになります。</p>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-2">勤務可能シフト</label>
                                             <div className="flex flex-wrap gap-2">
                                                 {patterns.map(pattern => {
                                                     const p = pattern.id;
@@ -195,6 +224,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                                     );
                                                 })}
                                             </div>
+                                            <p className="mt-1 text-[11px] text-gray-500">未選択なら全シフト可。選択すると自動生成・候補検索では選択したシフトだけに制限します。</p>
                                         </div>
 
                                         <div>
@@ -238,6 +268,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                                 <span>タイプ: {SHIFT_TYPE_LABELS[s.shiftType]}</span>
                                                 <span>担当: {s.role ? ROLE_LABELS[s.role] : '指定なし'}</span>
                                                 <span>週: {s.weeklyDays}日</span>
+                                                <span>曜日: {getStaffAvailableWeekdays(s).map(day => STAFF_WEEKDAY_LABELS[day]).join('')}</span>
                                             </div>
                                             {(s.preferredShifts.length > 0 || s.incompatibleWith.length > 0) && (
                                                 <div className="flex space-x-4 mt-2">

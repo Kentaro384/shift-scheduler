@@ -351,6 +351,8 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
                                 month={month}
                                 schedule={schedule}
                                 staff={staff}
+                                holidays={holidays}
+                                settings={settings}
                                 patterns={patterns}
                                 currentStaff={staff.find(s => s.id === staffId)!}
                                 onApplySwap={onSwap}

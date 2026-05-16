@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ArrowLeftRight, AlertTriangle, CheckCircle, XCircle, ArrowRightLeft } from 'lucide-react';
-import type { ShiftSchedule, Staff, ShiftPatternDefinition, ShiftPatternId } from '../types';
+import type { Holiday, Settings, ShiftPatternDefinition, ShiftPatternId, ShiftSchedule, Staff } from '../types';
 import { isWorkShiftId } from '../types';
 import { getSwapCandidates, type SwapViolation } from '../lib/swapConstraintChecker';
 
@@ -10,6 +10,8 @@ interface SwapSuggestionsProps {
     month: number;
     schedule: ShiftSchedule;
     staff: Staff[];
+    holidays: Holiday[];
+    settings: Settings;
     patterns: ShiftPatternDefinition[];
     currentStaff: Staff; // The staff whose cell was clicked
     onApplySwap: (staffAId: number, staffBId: number) => void;
@@ -34,6 +36,8 @@ export const SwapSuggestions: React.FC<SwapSuggestionsProps> = ({
     month,
     schedule,
     staff,
+    holidays,
+    settings,
     patterns,
     currentStaff,
     onApplySwap,
@@ -44,8 +48,8 @@ export const SwapSuggestions: React.FC<SwapSuggestionsProps> = ({
 
     // Get all swap candidates with violations
     const candidates = useMemo(() =>
-        getSwapCandidates(currentStaff, day, schedule, staff, year, month, patterns),
-        [currentStaff, day, schedule, staff, year, month, patterns]
+        getSwapCandidates(currentStaff, day, schedule, staff, holidays, settings, year, month, patterns),
+        [currentStaff, day, schedule, staff, holidays, settings, year, month, patterns]
     );
 
     const getSeverityIcon = (violations: SwapViolation[]) => {

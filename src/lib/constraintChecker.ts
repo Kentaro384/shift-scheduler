@@ -6,7 +6,7 @@
  */
 
 import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, ShiftPatternDefinition } from '../types';
-import { getShiftPatternKind, isTimeRangeStaff, normalizeShiftPatterns, SHIFT_PATTERNS } from '../types';
+import { getShiftPatternKind, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns, SHIFT_PATTERNS, staffAllowsShift } from '../types';
 import { getDaysInMonth, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
 
 // ============================================
@@ -25,9 +25,12 @@ export type ConstraintCode =
     | 'CONSECUTIVE_A'    // A連続
     | 'CONSECUTIVE_J'    // J連続
     | 'INCOMPATIBLE'     // 相性NG
+    | 'SAME_FLOOR'       // 同一フロア同一シフト
     | 'WEEKLY_AJ_LIMIT'  // 週2回目のA/J
+    | 'SIX_CONSECUTIVE'  // 6連勤以上
     | 'MIN_COUNT_A'      // A枠減少
     | 'MIN_COUNT_J'      // J枠減少
+    | 'STAFF_CONDITION'  // 職員ごとの勤務条件
     | 'MIN_TOTAL'        // 総人数不足
     // Soft constraints
     | 'EARLY_LIMIT'      // 早番制限超過
@@ -51,6 +54,11 @@ export interface ConstraintContext {
     year: number;
     month: number;
     patterns: ShiftPatternDefinition[];
+}
+
+export interface ConstraintCheckOptions {
+    includeSoft?: boolean;
+    ignoreCodes?: ConstraintCode[];
 }
 
 // ============================================
@@ -115,6 +123,45 @@ function countMonthlyPattern(ctx: ConstraintContext, staffId: number, pattern: S
     for (let d = 1; d <= daysInMonth; d++) {
         if (getShift(ctx, d, staffId) === pattern) count++;
     }
+    return count;
+}
+
+function countWeeklyWorkDays(ctx: ConstraintContext, staffId: number, day: number): number {
+    const date = new Date(ctx.year, ctx.month - 1, day);
+    const dayOfWeek = date.getDay();
+    if (dayOfWeek === 0) return 0;
+
+    const startOfWeek = day - (dayOfWeek - 1);
+    const endOfWeek = startOfWeek + 5;
+    const daysInMonth = getDaysInMonth(ctx.year, ctx.month);
+    let count = 0;
+
+    for (let d = startOfWeek; d <= endOfWeek; d++) {
+        if (d < 1 || d > daysInMonth || d === day) continue;
+        if (isWorkShiftId(getShift(ctx, d, staffId))) count++;
+    }
+
+    return count;
+}
+
+function countConsecutiveWorkDays(ctx: ConstraintContext, staffId: number, day: number): number {
+    let count = 1;
+
+    let d = day - 1;
+    while (d >= 1) {
+        if (!isWorkShiftId(getShift(ctx, d, staffId))) break;
+        count++;
+        d--;
+    }
+
+    const daysInMonth = getDaysInMonth(ctx.year, ctx.month);
+    d = day + 1;
+    while (d <= daysInMonth) {
+        if (!isWorkShiftId(getShift(ctx, d, staffId))) break;
+        count++;
+        d++;
+    }
+
     return count;
 }
 
@@ -242,6 +289,96 @@ function checkIncompatibleViolation(ctx: ConstraintContext, day: number, staffId
     return null;
 }
 
+function checkSameFloorViolation(ctx: ConstraintContext, day: number, staffId: number, shift: ShiftPatternId): ConstraintViolation | null {
+    const targetStaff = ctx.staff.find(s => s.id === staffId);
+    if (!targetStaff?.floor || targetStaff.floor === 'free' || targetStaff.floor === 'none') return null;
+    if (!isWorkShiftId(shift)) return null;
+
+    const dateStr = getFormattedDate(ctx.year, ctx.month, day);
+    const sameFloorStaff = ctx.staff.filter(s =>
+        s.id !== staffId &&
+        s.floor === targetStaff.floor &&
+        s.floor !== 'free' &&
+        s.floor !== 'none'
+    );
+
+    const conflictStaff = sameFloorStaff.find(s => ctx.schedule[dateStr]?.[s.id] === shift);
+    if (!conflictStaff) return null;
+
+    return {
+        type: 'soft',
+        code: 'SAME_FLOOR',
+        message: `同一フロアで同じシフト（${conflictStaff.name}さん）`
+    };
+}
+
+function applyConstraintOptions(
+    violations: ConstraintViolation[],
+    options: ConstraintCheckOptions = {}
+): ConstraintViolation[] {
+    const ignoreCodes = options.ignoreCodes || [];
+    return violations.filter(v => {
+        if (ignoreCodes.includes(v.code)) return false;
+        if (options.includeSoft === false && v.type === 'soft') return false;
+        return true;
+    });
+}
+
+function checkStaffConditionViolation(ctx: ConstraintContext, day: number, staffId: number, shift: ShiftPatternId): ConstraintViolation | null {
+    if (!isWorkShiftId(shift)) return null;
+
+    const targetStaff = ctx.staff.find(s => s.id === staffId);
+    if (!targetStaff) return null;
+
+    const weekday = new Date(ctx.year, ctx.month - 1, day).getDay();
+    if (!isStaffAvailableOnWeekday(targetStaff, weekday)) {
+        return {
+            type: 'hard',
+            code: 'STAFF_CONDITION',
+            message: '勤務不可曜日です'
+        };
+    }
+
+    if (targetStaff.weeklyDays <= 0) {
+        return {
+            type: 'hard',
+            code: 'STAFF_CONDITION',
+            message: '週勤務上限が0日です'
+        };
+    }
+
+    if (countWeeklyWorkDays(ctx, staffId, day) >= targetStaff.weeklyDays) {
+        return {
+            type: 'hard',
+            code: 'STAFF_CONDITION',
+            message: `週勤務上限(${targetStaff.weeklyDays}日)を超えます`
+        };
+    }
+
+    if (!staffAllowsShift(targetStaff, shift)) {
+        return {
+            type: 'hard',
+            code: 'STAFF_CONDITION',
+            message: '勤務可能シフト外です'
+        };
+    }
+
+    return null;
+}
+
+function checkSixConsecutiveViolation(ctx: ConstraintContext, day: number, staffId: number, shift: ShiftPatternId): ConstraintViolation | null {
+    if (!isWorkShiftId(shift)) return null;
+
+    const consecutiveDays = countConsecutiveWorkDays(ctx, staffId, day);
+    if (consecutiveDays < 6) return null;
+
+    return {
+        type: 'soft',
+        code: 'SIX_CONSECUTIVE',
+        message: `${consecutiveDays}日連勤になります`
+    };
+}
+
 /**
  * Check weekly A/J limit (max 1 per week)
  */
@@ -358,7 +495,8 @@ export function checkConstraints(
     ctx: ConstraintContext,
     day: number,
     staffId: number,
-    newShift: ShiftPatternId
+    newShift: ShiftPatternId,
+    options: ConstraintCheckOptions = {}
 ): ConstraintViolation[] {
     const violations: ConstraintViolation[] = [];
 
@@ -375,6 +513,12 @@ export function checkConstraints(
     const incompatible = checkIncompatibleViolation(ctx, day, staffId, newShift);
     if (incompatible) violations.push(incompatible);
 
+    const sameFloor = checkSameFloorViolation(ctx, day, staffId, newShift);
+    if (sameFloor) violations.push(sameFloor);
+
+    const staffCondition = checkStaffConditionViolation(ctx, day, staffId, newShift);
+    if (staffCondition) violations.push(staffCondition);
+
     const weeklyLimit = checkWeeklyAJLimitViolation(ctx, day, staffId, newShift);
     if (weeklyLimit) violations.push(weeklyLimit);
 
@@ -382,13 +526,26 @@ export function checkConstraints(
     if (minCount) violations.push(minCount);
 
     // Soft constraints
+    const sixConsecutive = checkSixConsecutiveViolation(ctx, day, staffId, newShift);
+    if (sixConsecutive) violations.push(sixConsecutive);
+
     const earlyLimit = checkEarlyLimitViolation(ctx, day, staffId, newShift);
     if (earlyLimit) violations.push(earlyLimit);
 
     const fairness = checkFairnessViolation(ctx, day, staffId, newShift);
     if (fairness) violations.push(fairness);
 
-    return violations;
+    return applyConstraintOptions(violations, options);
+}
+
+export function canAssignShift(
+    ctx: ConstraintContext,
+    day: number,
+    staffId: number,
+    shift: ShiftPatternId,
+    options: ConstraintCheckOptions = { includeSoft: false }
+): boolean {
+    return checkConstraints(ctx, day, staffId, shift, options).length === 0;
 }
 
 /**
