@@ -47,6 +47,18 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editForm, setEditForm] = useState<Partial<Staff>>({});
     const isTimeRangeEditable = editForm.shiftType === 'part_time' || editForm.position === '看護師' || editForm.position === '園長';
+    const canCountAsShift = editForm.position !== '園長';
+
+    const removeShiftCounts = (timeRange?: TimeRange): TimeRange | undefined => {
+        return timeRange ? { ...timeRange, countAsShifts: [] } : undefined;
+    };
+
+    const removeWeeklyShiftCounts = (weeklyRanges?: Partial<Record<StaffWeekday, TimeRange>>): Partial<Record<StaffWeekday, TimeRange>> | undefined => {
+        if (!weeklyRanges) return undefined;
+        return Object.fromEntries(
+            Object.entries(weeklyRanges).map(([weekday, timeRange]) => [weekday, removeShiftCounts(timeRange)])
+        ) as Partial<Record<StaffWeekday, TimeRange>>;
+    };
 
     const handleEdit = (s: Staff) => {
         setEditingId(s.id);
@@ -58,7 +70,14 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
         const normalizedForm = editForm.position === '看護師'
             ? { ...editForm, shiftType: 'part_time' as const, role: null }
             : editForm.position === '園長'
-                ? { ...editForm, shiftType: 'no_shift' as const, role: null, hasQualification: false }
+                ? {
+                    ...editForm,
+                    shiftType: 'no_shift' as const,
+                    role: null,
+                    hasQualification: false,
+                    defaultTimeRange: removeShiftCounts(editForm.defaultTimeRange),
+                    weeklyTimeRanges: removeWeeklyShiftCounts(editForm.weeklyTimeRanges),
+                }
             : editForm.position === '調理'
                 ? { ...editForm, shiftType: 'cooking' as const, role: 'cooking' as const, hasQualification: false }
                 : editForm;
@@ -106,9 +125,17 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
         onUpdate(reorderedStaff);
     };
 
-    const handleChange = (field: keyof Staff, value: any) => {
+    const handleChange = <K extends keyof Staff>(field: K, value: Staff[K]) => {
         if (field === 'position' && value === '園長') {
-            setEditForm(prev => ({ ...prev, position: value, shiftType: 'no_shift', role: null, hasQualification: false }));
+            setEditForm(prev => ({
+                ...prev,
+                position: value,
+                shiftType: 'no_shift',
+                role: null,
+                hasQualification: false,
+                defaultTimeRange: removeShiftCounts(prev.defaultTimeRange),
+                weeklyTimeRanges: removeWeeklyShiftCounts(prev.weeklyTimeRanges),
+            }));
             return;
         }
         if (field === 'position' && value === '調理') {
@@ -155,7 +182,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
         const current = (editForm.weeklyTimeRanges || {}) as Partial<Record<StaffWeekday, TimeRange>>;
         const updated = { ...current };
         if (timeRange) {
-            updated[weekday] = timeRange;
+            updated[weekday] = canCountAsShift ? timeRange : { ...timeRange, countAsShifts: [] };
         } else {
             delete updated[weekday];
         }
@@ -199,7 +226,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                             </div>
                                             <div className="col-span-2">
                                                 <label className="block text-xs text-gray-500 mb-1">役職</label>
-                                                <select className="w-full border rounded p-2" value={editForm.position} onChange={e => handleChange('position', e.target.value)}>
+                                                <select className="w-full border rounded p-2" value={editForm.position} onChange={e => handleChange('position', e.target.value as StaffPosition)}>
                                                     {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
                                                 </select>
                                             </div>
@@ -208,7 +235,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                                 <select
                                                     className="w-full border rounded p-2 disabled:bg-gray-100 disabled:text-gray-500"
                                                     value={editForm.position === '看護師' ? 'part_time' : editForm.position === '調理' ? 'cooking' : editForm.position === '園長' ? 'no_shift' : editForm.shiftType}
-                                                    onChange={e => handleChange('shiftType', e.target.value)}
+                                                    onChange={e => handleChange('shiftType', e.target.value as StaffShiftType)}
                                                     disabled={editForm.position === '看護師' || editForm.position === '調理' || editForm.position === '園長'}
                                                 >
                                                     {SHIFT_TYPES.map(t => <option key={t} value={t}>{SHIFT_TYPE_LABELS[t]}</option>)}
@@ -228,13 +255,13 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                             </div>
                                             <div className="col-span-2">
                                                 <label className="block text-xs text-gray-500 mb-1">担当</label>
-                                                <select className="w-full border rounded p-2" value={editForm.role || 'null'} onChange={e => handleChange('role', e.target.value === 'null' ? null : e.target.value)}>
+                                                <select className="w-full border rounded p-2" value={editForm.role || 'null'} onChange={e => handleChange('role', e.target.value === 'null' ? null : e.target.value as Exclude<StaffRole, null>)}>
                                                     {ROLES.map(r => <option key={r} value={String(r)}>{ROLE_LABELS[r]}</option>)}
                                                 </select>
                                             </div>
                                             <div className="col-span-2">
                                                 <label className="block text-xs text-gray-500 mb-1">フロア</label>
-                                                <select className="w-full border rounded p-2" value={editForm.floor || 'none'} onChange={e => handleChange('floor', e.target.value)}>
+                                                <select className="w-full border rounded p-2" value={editForm.floor || 'none'} onChange={e => handleChange('floor', e.target.value as FloorType)}>
                                                     {FLOORS.map(f => <option key={f} value={f}>{f === 'none' ? '指定なし' : f === 'free' ? 'フリー' : f}</option>)}
                                                 </select>
                                             </div>
@@ -280,7 +307,11 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                                 <div className="flex items-center justify-between gap-3 mb-3">
                                                     <div>
                                                         <label className="block text-xs text-gray-600 font-semibold">固定勤務パターン</label>
-                                                        <p className="text-[11px] text-gray-500">曜日ごとの時間帯と、集計にカウントするシフトを設定します。固定勤務ボタンで月次表へ反映されます。</p>
+                                                        <p className="text-[11px] text-gray-500">
+                                                            {canCountAsShift
+                                                                ? '曜日ごとの時間帯と、集計にカウントするシフトを設定します。固定勤務ボタンで月次表へ反映されます。'
+                                                                : '園長は曜日ごとの時間帯だけを設定します。固定勤務ボタンで月次表へ反映され、人員・有資格者数にはカウントしません。'}
+                                                        </p>
                                                     </div>
                                                 </div>
                                                 <div className="space-y-2">
@@ -317,32 +348,38 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                                                     >
                                                                         {TIME_OPTIONS.filter(time => time > (range?.start || '09:00')).map(time => <option key={time} value={time}>{time}</option>)}
                                                                     </select>
-                                                                    <div className="flex flex-wrap gap-1">
-                                                                        <button
-                                                                            type="button"
-                                                                            disabled={!isEnabled}
-                                                                            onClick={() => updateWeekdayTimeRange(day, { countAsShifts: [] })}
-                                                                            title="勤務時間だけ反映し、A〜Fなどのシフト枠にはカウントしません"
-                                                                            className={`px-1.5 py-1 rounded border text-[11px] font-bold ${!range?.countAsShifts?.length ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-500'} disabled:cursor-not-allowed`}
-                                                                        >
-                                                                            割当なし
-                                                                        </button>
-                                                                        {patterns.map(pattern => {
-                                                                            const selected = !!range?.countAsShifts?.includes(pattern.id);
-                                                                            return (
-                                                                                <button
-                                                                                    key={pattern.id}
-                                                                                    type="button"
-                                                                                    disabled={!isEnabled}
-                                                                                    onClick={() => toggleWeekdayShift(day, pattern.id)}
-                                                                                    title={pattern.name}
-                                                                                    className={`min-w-7 px-1.5 py-1 rounded border text-[11px] font-bold ${selected ? 'bg-[#FF6B6B] text-white border-[#FF6B6B]' : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-[#FF6B6B]'} disabled:cursor-not-allowed`}
-                                                                                >
-                                                                                    {pattern.id}
-                                                                                </button>
-                                                                            );
-                                                                        })}
-                                                                    </div>
+                                                                    {canCountAsShift ? (
+                                                                        <div className="flex flex-wrap gap-1">
+                                                                            <button
+                                                                                type="button"
+                                                                                disabled={!isEnabled}
+                                                                                onClick={() => updateWeekdayTimeRange(day, { countAsShifts: [] })}
+                                                                                title="勤務時間だけ反映し、A〜Fなどのシフト枠にはカウントしません"
+                                                                                className={`px-1.5 py-1 rounded border text-[11px] font-bold ${!range?.countAsShifts?.length ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-500'} disabled:cursor-not-allowed`}
+                                                                            >
+                                                                                割当なし
+                                                                            </button>
+                                                                            {patterns.map(pattern => {
+                                                                                const selected = !!range?.countAsShifts?.includes(pattern.id);
+                                                                                return (
+                                                                                    <button
+                                                                                        key={pattern.id}
+                                                                                        type="button"
+                                                                                        disabled={!isEnabled}
+                                                                                        onClick={() => toggleWeekdayShift(day, pattern.id)}
+                                                                                        title={pattern.name}
+                                                                                        className={`min-w-7 px-1.5 py-1 rounded border text-[11px] font-bold ${selected ? 'bg-[#FF6B6B] text-white border-[#FF6B6B]' : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-[#FF6B6B]'} disabled:cursor-not-allowed`}
+                                                                                    >
+                                                                                        {pattern.id}
+                                                                                    </button>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-semibold text-gray-500">
+                                                                            集計対象外
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         );

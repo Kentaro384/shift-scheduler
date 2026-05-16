@@ -5,7 +5,7 @@ import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { countAllPatterns } from './lib/shiftCountUtils';
 import { exportToExcel } from './lib/excelExport';
-import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, DatabaseBackup, Trash2, CheckCircle2, Circle, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, DatabaseBackup, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { StaffList } from './components/StaffList';
 import { SettingsModal } from './components/SettingsModal';
 import { HolidayModal } from './components/HolidayModal';
@@ -288,7 +288,7 @@ function App() {
         newTimeRangeSchedule[dateStr][s.id] = {
           start: defaultTimeRange.start,
           end: defaultTimeRange.end,
-          countAsShifts: [...(defaultTimeRange.countAsShifts || [])],
+          countAsShifts: countsForStaffing(s) ? [...(defaultTimeRange.countAsShifts || [])] : [],
         };
         appliedCount++;
       });
@@ -617,24 +617,21 @@ function App() {
     });
   });
   const firstUnassignedTimeRange = unassignedTimeRanges[0];
+  const openFirstIssue = () => {
+    if (firstUnassignedTimeRange) {
+      setEditingPartTime({ staffId: firstUnassignedTimeRange.staffId, day: Number(firstUnassignedTimeRange.dateStr.slice(-2)) });
+    } else {
+      setHourlyChartDay(shortageDayNumbers[0] || null);
+    }
+  };
   const setupSteps = [
-    { label: '初期化', done: true, note: isMonthBlank ? '白紙' : '入力中' },
-    { label: '固定勤務', done: hasTimeRangeInput, note: hasTimeRangeInput ? '反映済み' : `${fixedDefaultStaffCount}人対象` },
-    { label: '固定予定', done: manualFixedCount > 0, note: manualFixedCount > 0 ? `${manualFixedCount}件` : '必要時' },
-    { label: '自動生成', done: hasGeneratedShift, note: hasGeneratedShift ? '生成済み' : '未生成' },
-    { label: '不足確認', done: hasGeneratedShift && shortageDays === 0 && unassignedTimeRanges.length === 0, note: `${shortageDays + unassignedTimeRanges.length}件` },
-    { label: 'Excel', done: false, note: '出力' },
+    { label: '初期化', done: true, note: isMonthBlank ? '白紙' : '入力中', onClick: handleForceClearMonth, icon: Trash2, danger: true },
+    { label: '固定勤務', done: hasTimeRangeInput, note: hasTimeRangeInput ? '反映済み' : `${fixedDefaultStaffCount}人対象`, onClick: handleApplyDefaultTimeRanges, icon: CalendarCheck },
+    { label: '固定予定', done: manualFixedCount > 0, note: manualFixedCount > 0 ? `${manualFixedCount}件` : '必要時', onClick: () => setShowHolidayModal(true), icon: Calendar },
+    { label: '自動生成', done: hasGeneratedShift, note: hasGeneratedShift ? '生成済み' : '未生成', onClick: handleGenerate, icon: RefreshCw },
+    { label: '不足確認', done: hasGeneratedShift && shortageDays === 0 && unassignedTimeRanges.length === 0, note: `${shortageDays + unassignedTimeRanges.length}件`, onClick: openFirstIssue, icon: AlertTriangle },
+    { label: 'Excel', done: false, note: '出力', onClick: handleDownloadExcel, icon: Download },
   ];
-  const nextAction = isMonthBlank
-    ? { label: '固定勤務を反映', description: 'パートさんの曜日別勤務を今月へ入れます', onClick: handleApplyDefaultTimeRanges, icon: CalendarCheck }
-    : !hasTimeRangeInput && fixedDefaultStaffCount > 0
-      ? { label: '固定勤務を反映', description: '未入力日に固定勤務を追加します', onClick: handleApplyDefaultTimeRanges, icon: CalendarCheck }
-      : !hasGeneratedShift
-        ? { label: '自動生成する', description: '固定勤務と手動予定を残して作成します', onClick: handleGenerate, icon: RefreshCw }
-        : shortageDays > 0 || unassignedTimeRanges.length > 0
-          ? { label: '不足を確認', description: `出勤不足${shortageDays}日、未割当${unassignedTimeRanges.length}件`, onClick: () => firstUnassignedTimeRange ? setEditingPartTime({ staffId: firstUnassignedTimeRange.staffId, day: Number(firstUnassignedTimeRange.dateStr.slice(-2)) }) : setHourlyChartDay(shortageDayNumbers[0] || null), icon: AlertTriangle }
-          : { label: 'Excel出力', description: '調整済みの勤務表を書き出します', onClick: handleDownloadExcel, icon: Download };
-  const NextActionIcon = nextAction.icon;
 
   // Show loading screen while checking auth
   if (authLoading) {
@@ -824,60 +821,50 @@ function App() {
       </header>
 
       <main className="flex-1 overflow-auto p-1.5 landscape:p-1 md:p-4">
-        <div className="max-w-[1920px] mx-auto mb-2 md:mb-3 rounded-xl border border-[#E5E7EB] bg-[#FDFDFD] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-3 md:p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <CalendarCheck size={18} className="text-[#10B981]" />
-                <h2 className="text-sm md:text-base font-bold text-gray-800">今月の準備</h2>
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] md:text-xs font-semibold text-gray-500">
-                  {year}年{month}月
-                </span>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
-                {setupSteps.map(step => (
-                  <div
+        <div className="max-w-[1920px] mx-auto mb-2 md:mb-3 rounded-xl border border-[#E5E7EB] bg-[#FDFDFD] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-2.5 md:p-3">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+            <div className="flex shrink-0 items-center gap-2">
+              <CalendarCheck size={17} className="text-[#10B981]" />
+              <h2 className="text-sm font-bold text-gray-800">今月の準備</h2>
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                {year}年{month}月
+              </span>
+            </div>
+            <div className="grid flex-1 grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+              {setupSteps.map(step => {
+                const StepIcon = step.icon;
+                const hasIssue = step.label === '不足確認' && !step.done && hasGeneratedShift && (shortageDays > 0 || unassignedTimeRanges.length > 0);
+                return (
+                  <button
                     key={step.label}
-                    className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 ${step.done ? 'border-emerald-100 bg-emerald-50 text-emerald-800' : 'border-gray-200 bg-white text-gray-600'}`}
+                    type="button"
+                    onClick={step.onClick}
+                    disabled={isGenerating && step.label === '自動生成'}
+                    className={`flex min-h-[44px] items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-all active:scale-[0.98] disabled:cursor-wait disabled:opacity-75 ${
+                      hasIssue
+                        ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                        : step.done
+                          ? 'border-emerald-100 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                          : step.danger
+                            ? 'border-gray-200 bg-white text-gray-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
+                            : 'border-gray-200 bg-white text-gray-600 hover:border-[#FF6B6B] hover:bg-pink-50 hover:text-[#FF6B6B]'
+                    }`}
+                    title={step.label}
                   >
                     {step.done ? (
-                      <CheckCircle2 size={15} className="shrink-0 text-emerald-600" />
+                      <CheckCircle2 size={16} className="shrink-0 text-emerald-600" />
+                    ) : hasIssue ? (
+                      <AlertTriangle size={16} className="shrink-0 text-amber-600" />
                     ) : (
-                      <Circle size={15} className="shrink-0 text-gray-300" />
+                      <StepIcon size={16} className={`shrink-0 ${isGenerating && step.label === '自動生成' ? 'animate-spin' : ''}`} />
                     )}
                     <div className="min-w-0">
-                      <div className="truncate text-xs font-bold">{step.label}</div>
+                      <div className="truncate text-xs font-bold">{isGenerating && step.label === '自動生成' ? '生成中...' : step.label}</div>
                       <div className="truncate text-[10px] opacity-75">{step.note}</div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row lg:items-center">
-              {unassignedTimeRanges.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => firstUnassignedTimeRange && setEditingPartTime({ staffId: firstUnassignedTimeRange.staffId, day: Number(firstUnassignedTimeRange.dateStr.slice(-2)) })}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-left text-amber-800 hover:bg-amber-100 transition-colors"
-                >
-                  <span className="flex items-center gap-2 text-xs font-bold">
-                    <AlertTriangle size={16} />
-                    未割当 {unassignedTimeRanges.length}件
-                  </span>
-                  <span className="text-[10px] font-medium">確認</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={nextAction.onClick}
-                disabled={isGenerating}
-                className="flex min-w-[210px] items-center justify-center gap-2 rounded-lg bg-[#FF6B6B] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-[#ff5a5a] active:scale-95 disabled:cursor-wait disabled:opacity-75"
-              >
-                <NextActionIcon size={17} className={isGenerating ? 'animate-spin' : ''} />
-                <span>{isGenerating ? '生成中...' : nextAction.label}</span>
-              </button>
-              <p className="text-[11px] text-gray-500 sm:max-w-[190px]">{nextAction.description}</p>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
