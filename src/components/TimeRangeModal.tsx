@@ -87,7 +87,11 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
     // Determine initial values: current > default > fallback
     const initialStart = currentTimeRange?.start || defaultTimeRange?.start || '09:00';
     const initialEnd = currentTimeRange?.end || defaultTimeRange?.end || '17:00';
-    const initialShifts = disableShiftCounting ? [] : currentTimeRange?.countAsShifts || defaultTimeRange?.countAsShifts || [];
+    const initialShifts = disableShiftCounting
+        ? []
+        : currentTimeRange
+            ? [...(currentTimeRange.countAsShifts ?? [])]
+            : [...(defaultTimeRange?.countAsShifts ?? [])];
 
     const [mode, setMode] = useState<'time' | 'holiday'>(
         currentTimeRange ? 'time' : (currentShift && !isWorkShiftId(currentShift)) ? 'holiday' : 'time'
@@ -111,14 +115,14 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
     const isDefaultTime = defaultTimeRange &&
         startTime === defaultTimeRange.start &&
         endTime === defaultTimeRange.end &&
-        JSON.stringify(selectedShifts.sort()) === JSON.stringify((defaultTimeRange.countAsShifts || []).sort());
+        JSON.stringify([...selectedShifts].sort()) === JSON.stringify([...(defaultTimeRange.countAsShifts || [])].sort());
 
     const handleSave = () => {
         if (mode === 'time') {
             onSaveTimeRange({
                 start: startTime,
                 end: endTime,
-                countAsShifts: !disableShiftCounting && selectedShifts.length > 0 ? selectedShifts : undefined
+                countAsShifts: !disableShiftCounting ? selectedShifts : []
             });
         } else {
             onSaveShift(selectedHoliday);
@@ -129,7 +133,7 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
         onSaveAsDefault({
             start: startTime,
             end: endTime,
-            countAsShifts: !disableShiftCounting && selectedShifts.length > 0 ? selectedShifts : undefined
+            countAsShifts: !disableShiftCounting ? selectedShifts : []
         });
     };
 
@@ -307,7 +311,7 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
                                 </span>
                                 {selectedShifts.length > 0 && (
                                     <span className="ml-2 text-sm font-bold text-[#FF6B6B]">
-                                        [{selectedShifts.sort().join(',')}]
+                                        [{[...selectedShifts].sort().join(',')}]
                                     </span>
                                 )}
                                 {isDefaultTime && (

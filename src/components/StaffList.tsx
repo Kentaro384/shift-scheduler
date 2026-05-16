@@ -173,7 +173,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
         const nextShifts = currentShifts.includes(shiftId)
             ? currentShifts.filter(id => id !== shiftId)
             : [...currentShifts, shiftId];
-        setEditTimeRangeForWeekday(weekday, { ...current, countAsShifts: nextShifts.length > 0 ? nextShifts : undefined });
+        setEditTimeRangeForWeekday(weekday, { ...current, countAsShifts: nextShifts });
     };
 
     return (
@@ -321,7 +321,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                                                         <button
                                                                             type="button"
                                                                             disabled={!isEnabled}
-                                                                            onClick={() => updateWeekdayTimeRange(day, { countAsShifts: undefined })}
+                                                                            onClick={() => updateWeekdayTimeRange(day, { countAsShifts: [] })}
                                                                             title="勤務時間だけ反映し、A〜Fなどのシフト枠にはカウントしません"
                                                                             className={`px-1.5 py-1 rounded border text-[11px] font-bold ${!range?.countAsShifts?.length ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-500'} disabled:cursor-not-allowed`}
                                                                         >
