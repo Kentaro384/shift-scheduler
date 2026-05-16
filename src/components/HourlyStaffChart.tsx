@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { X, Clock } from 'lucide-react';
 import type { Staff, ShiftSchedule, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
+import { isTimeRangeStaff } from '../types';
 import { getFormattedDate } from '../lib/utils';
 
 interface HourlyStaffChartProps {
@@ -62,8 +63,8 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
         staff.forEach((s, index) => {
             if (s.shiftType === 'cooking' || s.shiftType === 'no_shift') return;
 
-            // Part-time workers with time range
-            if (s.shiftType === 'part_time') {
+            // Time-range workers with time range
+            if (isTimeRangeStaff(s)) {
                 const timeRange = timeRangeSchedule[dateStr]?.[s.id];
                 if (timeRange) {
                     result.push({

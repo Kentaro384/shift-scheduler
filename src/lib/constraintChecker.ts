@@ -6,7 +6,7 @@
  */
 
 import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, ShiftPatternDefinition } from '../types';
-import { getShiftPatternKind, normalizeShiftPatterns, SHIFT_PATTERNS } from '../types';
+import { getShiftPatternKind, isTimeRangeStaff, normalizeShiftPatterns, SHIFT_PATTERNS } from '../types';
 import { getDaysInMonth, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
 
 // ============================================
@@ -327,14 +327,14 @@ function checkFairnessViolation(ctx: ConstraintContext, _day: number, staffId: n
     if (!isOpeningShift(ctx, shift) && !isClosingShift(ctx, shift)) return null;
 
     // Calculate average for regular staff
-    const regularStaff = ctx.staff.filter(s => s.shiftType === 'regular');
+    const regularStaff = ctx.staff.filter(s => s.shiftType === 'regular' && !isTimeRangeStaff(s));
     if (regularStaff.length === 0) return null;
 
     const counts = regularStaff.map(s => countMonthlyPattern(ctx, s.id, shift));
     const avg = counts.reduce((a, b) => a + b, 0) / counts.length;
 
     const targetStaff = ctx.staff.find(s => s.id === staffId);
-    if (!targetStaff || targetStaff.shiftType !== 'regular') return null;
+    if (!targetStaff || targetStaff.shiftType !== 'regular' || isTimeRangeStaff(targetStaff)) return null;
 
     const myCount = countMonthlyPattern(ctx, staffId, shift);
     if (myCount > avg + 1) {
@@ -403,7 +403,7 @@ export function evaluateCandidates(
 
     // Filter eligible staff (regular and backup only for main shifts)
     const eligibleStaff = ctx.staff.filter(s =>
-        s.shiftType === 'regular' || s.shiftType === 'backup'
+        (s.shiftType === 'regular' || s.shiftType === 'backup') && !isTimeRangeStaff(s)
     );
 
     for (const staff of eligibleStaff) {
@@ -512,7 +512,7 @@ export function findSwapSuggestions(
 
     // Get all regular staff
     const regularStaff = ctx.staff.filter(s =>
-        s.shiftType === 'regular' || s.shiftType === 'backup'
+        (s.shiftType === 'regular' || s.shiftType === 'backup') && !isTimeRangeStaff(s)
     );
 
     // Find staff who could take the shortage pattern

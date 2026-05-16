@@ -20,7 +20,7 @@ export interface ShiftPatternDefinition {
     color: string;
 }
 
-export type StaffPosition = '園長' | '主任' | '保育士' | 'パート' | '調理';
+export type StaffPosition = '園長' | '主任' | '保育士' | 'パート' | '看護師' | '調理';
 export type StaffShiftType = 'no_shift' | 'backup' | 'regular' | 'part_time' | 'cooking';
 export type StaffRole = 'infant' | 'toddler' | 'free' | 'cooking' | null;
 export type FloorType = '1F' | '2F' | '3F' | 'free' | 'none';
@@ -39,6 +39,10 @@ export interface Staff {
     hasQualification: boolean;
     defaultTimeRange?: TimeRange; // Default work hours for part-time workers
     floor?: FloorType; // フロア担当（同一フロアのスタッフはシフトを分ける）
+}
+
+export function isTimeRangeStaff(staff: Staff): boolean {
+    return staff.shiftType === 'part_time' || staff.position === '看護師';
 }
 
 export interface Settings {

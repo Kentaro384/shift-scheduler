@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId, TimeRangeSchedule, TimeRange } from './types';
+import { isTimeRangeStaff } from './types';
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { countAllPatterns } from './lib/shiftCountUtils';
@@ -151,8 +152,8 @@ function App() {
         const currentShift = newSchedule[dateStr][s.id];
         if (!currentShift) return;
 
-        if (s.shiftType === 'part_time') {
-          // Keep ALL part-time shifts (assume manual)
+        if (isTimeRangeStaff(s)) {
+          // Keep ALL time-range staff shifts (assume manual)
           return;
         } else if (s.shiftType === 'regular' || s.position === '主任') {
           // Keep Paid Leave ONLY (Compensatory Off '振' is now auto-generated, so clear it)
@@ -195,8 +196,8 @@ function App() {
 
   const handleCellClick = (staffId: number, day: number) => {
     const staffMember = staff.find(s => s.id === staffId);
-    // Part-time workers use TimeRangeModal instead of ShiftEditModal
-    if (staffMember?.shiftType === 'part_time') {
+    // Part-time/nurse workers use TimeRangeModal instead of ShiftEditModal
+    if (staffMember && isTimeRangeStaff(staffMember)) {
       setEditingPartTime({ staffId, day });
     } else {
       setEditingCell({ staffId, day });
@@ -389,11 +390,11 @@ function App() {
     staff.forEach(s => {
       if (s.shiftType === 'cooking') return;
 
-      // For part-time workers, check if they have a time range entry
-      if (s.shiftType === 'part_time') {
+      // For time-range workers, check if they have a time range entry
+      if (isTimeRangeStaff(s)) {
         const timeRange = timeRangeSchedule[dateStr]?.[s.id];
         if (timeRange) {
-          count++; // Part-timer is working
+          count++; // Time-range staff is working
         }
         return;
       }
@@ -653,7 +654,7 @@ function App() {
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const dateRanges = (timeRangeSchedule[dateStr] || {}) as Record<string | number, TimeRange>;
                         const partTimeRange = dateRanges[s.id] || dateRanges[String(s.id)];
-                        const isPartTime = s.shiftType === 'part_time';
+                        const isPartTime = isTimeRangeStaff(s);
 
 
                         return (

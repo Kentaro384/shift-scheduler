@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, Bell, Calendar, Users, Clock, X } from 'lucide-react';
 import type { Staff, ShiftSchedule, Holiday, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
-import { getShiftPatternKind, isWorkShiftId } from '../types';
+import { getShiftPatternKind, isTimeRangeStaff, isWorkShiftId } from '../types';
 import { countWorkingStaff } from '../lib/shiftCountUtils';
 
 interface AlertBadgeProps {
@@ -61,7 +61,7 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
         const getDateStr = (day: number) => `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
         const targetStaff = staff.filter(s =>
-            s.shiftType === 'regular' || s.shiftType === 'backup' || s.shiftType === 'part_time'
+            s.shiftType === 'regular' || s.shiftType === 'backup' || isTimeRangeStaff(s)
         );
 
         // 1. Check consecutive working days (6+)
@@ -103,7 +103,7 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
             }
         });
 
-        // 2. Check understaffed days (including part-timers with timeRangeSchedule)
+        // 2. Check understaffed days (including time-range staff with timeRangeSchedule)
         days.forEach(day => {
             const dateStr = getDateStr(day);
             const date = new Date(year, month - 1, day);
@@ -113,7 +113,7 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
             const isHoliday = holidays.some(h => h.date === dateStr);
 
             if (!isSat && !isSun && !isHoliday) {
-                // Use countWorkingStaff to include part-timers
+                // Use countWorkingStaff to include time-range staff
                 const count = countWorkingStaff(targetStaff, schedule, timeRangeSchedule, dateStr);
 
                 if (count < minCount && count > 0) {

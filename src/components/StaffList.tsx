@@ -9,10 +9,26 @@ interface StaffListProps {
     onClose: () => void;
 }
 
-const POSITIONS: StaffPosition[] = ['園長', '主任', '保育士', 'パート', '調理'];
+const POSITIONS: StaffPosition[] = ['園長', '主任', '保育士', 'パート', '看護師', '調理'];
 const SHIFT_TYPES: StaffShiftType[] = ['no_shift', 'backup', 'regular', 'part_time', 'cooking'];
-const ROLES: (StaffRole | 'null')[] = ['infant', 'toddler', 'free', 'cooking', 'null'];
+const ROLES: (Exclude<StaffRole, null> | 'null')[] = ['infant', 'toddler', 'free', 'cooking', 'null'];
 const FLOORS: FloorType[] = ['1F', '2F', '3F', 'free', 'none'];
+
+const SHIFT_TYPE_LABELS: Record<StaffShiftType, string> = {
+    no_shift: 'シフトなし',
+    backup: 'バックアップ',
+    regular: '通常シフト',
+    part_time: '時間帯固定・入力',
+    cooking: '調理',
+};
+
+const ROLE_LABELS: Record<Exclude<StaffRole, null> | 'null', string> = {
+    infant: '乳児',
+    toddler: '幼児',
+    free: 'フリー',
+    cooking: '調理',
+    null: '指定なし',
+};
 
 export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate, onClose }) => {
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -25,9 +41,12 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
 
     const handleSave = () => {
         if (!editForm.name) return;
+        const normalizedForm = editForm.position === '看護師'
+            ? { ...editForm, shiftType: 'part_time' as const, role: null }
+            : editForm;
 
         const newStaff = staff.map(s =>
-            s.id === editingId ? { ...s, ...editForm } as Staff : s
+            s.id === editingId ? { ...s, ...normalizedForm } as Staff : s
         );
         onUpdate(newStaff);
         setEditingId(null);
@@ -60,6 +79,10 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
     };
 
     const handleChange = (field: keyof Staff, value: any) => {
+        if (field === 'position' && value === '看護師') {
+            setEditForm(prev => ({ ...prev, position: value, shiftType: 'part_time', role: null, hasQualification: true }));
+            return;
+        }
         setEditForm(prev => ({ ...prev, [field]: value }));
     };
 
@@ -108,14 +131,25 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                             </div>
                                             <div className="col-span-3">
                                                 <label className="block text-xs text-gray-500 mb-1">職員タイプ</label>
-                                                <select className="w-full border rounded p-2" value={editForm.shiftType} onChange={e => handleChange('shiftType', e.target.value)}>
-                                                    {SHIFT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                                <select
+                                                    className="w-full border rounded p-2 disabled:bg-gray-100 disabled:text-gray-500"
+                                                    value={editForm.position === '看護師' ? 'part_time' : editForm.shiftType}
+                                                    onChange={e => handleChange('shiftType', e.target.value)}
+                                                    disabled={editForm.position === '看護師'}
+                                                >
+                                                    {SHIFT_TYPES.map(t => <option key={t} value={t}>{SHIFT_TYPE_LABELS[t]}</option>)}
                                                 </select>
+                                                {editForm.shiftType === 'part_time' && editForm.position !== '看護師' && (
+                                                    <p className="mt-1 text-[11px] text-gray-500">パート以外の保育士にも使えます。シフト表のセルから勤務時間帯を入力します。</p>
+                                                )}
+                                                {editForm.position === '看護師' && (
+                                                    <p className="mt-1 text-[11px] text-gray-500">看護師は時間帯固定・入力として扱います。</p>
+                                                )}
                                             </div>
                                             <div className="col-span-2">
                                                 <label className="block text-xs text-gray-500 mb-1">担当</label>
                                                 <select className="w-full border rounded p-2" value={editForm.role || 'null'} onChange={e => handleChange('role', e.target.value === 'null' ? null : e.target.value)}>
-                                                    {ROLES.map(r => <option key={r} value={String(r)}>{r === 'null' ? '指定なし' : r}</option>)}
+                                                    {ROLES.map(r => <option key={r} value={String(r)}>{ROLE_LABELS[r]}</option>)}
                                                 </select>
                                             </div>
                                             <div className="col-span-2">
@@ -201,8 +235,8 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                                 {s.saturdayOnly && <span className="text-xs bg-orange-50 text-orange-600 px-2 py-1 rounded border border-orange-100">土曜専門</span>}
                                             </div>
                                             <div className="text-sm text-gray-500 flex space-x-4">
-                                                <span>タイプ: {s.shiftType}</span>
-                                                <span>担当: {s.role || 'なし'}</span>
+                                                <span>タイプ: {SHIFT_TYPE_LABELS[s.shiftType]}</span>
+                                                <span>担当: {s.role ? ROLE_LABELS[s.role] : '指定なし'}</span>
                                                 <span>週: {s.weeklyDays}日</span>
                                             </div>
                                             {(s.preferredShifts.length > 0 || s.incompatibleWith.length > 0) && (

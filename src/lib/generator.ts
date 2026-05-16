@@ -1,13 +1,13 @@
 import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
 import { getDaysInMonth, getDayOfWeek, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
-import { SHIFT_PATTERNS, getShiftPatternKind, isWorkShiftId, normalizeShiftPatterns } from '../types';
+import { SHIFT_PATTERNS, getShiftPatternKind, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns } from '../types';
 import { countEffectiveShift, countWorkingStaff as countWorkingStaffUtil } from './shiftCountUtils';
 
 export class ShiftGenerator {
     private staff: Staff[];
     private schedule: ShiftSchedule;
     private initialSchedule: ShiftSchedule;
-    private timeRangeSchedule: TimeRangeSchedule;  // Part-timer time ranges with countAsShifts
+    private timeRangeSchedule: TimeRangeSchedule;  // Time-range staff ranges with countAsShifts
     private holidays: Holiday[];
     private settings: Settings;
     private patterns: ShiftPatternDefinition[];
@@ -37,8 +37,8 @@ export class ShiftGenerator {
             for (const s of this.staff) {
                 const existingShift = currentSchedule[dateStr]?.[s.id];
 
-                if (s.shiftType === 'part_time') {
-                    // Part-time: Preserve ALL manual entries
+                if (isTimeRangeStaff(s)) {
+                    // Time-range staff: Preserve ALL manual entries
                     this.schedule[dateStr][s.id] = existingShift ?? '';
                 } else {
                     // Regular/Chief/Director/Cooking: Preserve '有' and '振' only
@@ -168,8 +168,8 @@ export class ShiftGenerator {
                 const shift = this.schedule[dateStr][s.id];
 
                 // If shift is falsy (undefined, null, empty string, etc.), set to '休'
-                // EXCEPTION: Part-time workers should stay as '' - they use timeRangeSchedule
-                if (!shift && s.shiftType !== 'part_time') {
+                // EXCEPTION: Time-range staff should stay as '' - they use timeRangeSchedule
+                if (!shift && !isTimeRangeStaff(s)) {
                     this.schedule[dateStr][s.id] = '休';
                 }
             }
@@ -198,9 +198,9 @@ export class ShiftGenerator {
             return; // Absolutely protected
         }
 
-        // Safety: Do not overwrite part-timer's manual shifts (except empty or 休)
+        // Safety: Do not overwrite time-range staff's manual shifts (except empty or 休)
         const staff = this.staff.find(s => s.id === staffId);
-        if (staff?.shiftType === 'part_time' && current !== '' && current !== '休') {
+        if (staff && isTimeRangeStaff(staff) && current !== '' && current !== '休') {
             return;
         }
 
@@ -291,7 +291,7 @@ export class ShiftGenerator {
     }
 
     private isWeekdayAutoAssignable(s: Staff): boolean {
-        return s.shiftType === 'regular' && !s.saturdayOnly;
+        return s.shiftType === 'regular' && !isTimeRangeStaff(s) && !s.saturdayOnly;
     }
 
     // Phase 1: Director (always off)
@@ -352,6 +352,7 @@ export class ShiftGenerator {
         const qualifiedRegulars = this.staff.filter(s =>
             s.hasQualification &&
             s.shiftType === 'regular' && // Only Regulars for auto-assignment
+            !isTimeRangeStaff(s) &&
             s.position !== '園長'
         );
 
@@ -369,17 +370,17 @@ export class ShiftGenerator {
         saturdays.forEach(day => {
             const dateStr = getFormattedDate(this.year, this.month, day);
 
-            // 1. Count existing Part-time staff (Manual inputs from schedule OR timeRangeSchedule)
+            // 1. Count existing time-range staff (Manual inputs from schedule OR timeRangeSchedule)
             let partTimeCount = 0;
             this.staff.forEach(s => {
-                if (s.shiftType === 'part_time') {
+                if (isTimeRangeStaff(s)) {
                     // Check schedule first
                     const shift = this.getShift(day, s.id);
                     if (shift && shift !== '休' && shift !== '振' && shift !== '有') {
                         partTimeCount++;
                         return;
                     }
-                    // Also check timeRangeSchedule for part-timers with time ranges set
+                    // Also check timeRangeSchedule for time-range staff with ranges set
                     const timeRange = this.timeRangeSchedule[dateStr]?.[s.id];
                     if (timeRange) {
                         partTimeCount++;
@@ -443,9 +444,9 @@ export class ShiftGenerator {
                 }
             });
 
-            // Assign Off to others (excluding Director/Cooking/Part-time)
+            // Assign Off to others (excluding Director/Cooking/time-range staff)
             this.staff.forEach(s => {
-                if (s.position === '園長' || s.shiftType === 'cooking' || s.shiftType === 'part_time') return;
+                if (s.position === '園長' || s.shiftType === 'cooking' || isTimeRangeStaff(s)) return;
                 if (!selected.find(sel => sel.id === s.id)) {
                     this.setShift(day, s.id, '休');
                 }
@@ -711,7 +712,7 @@ export class ShiftGenerator {
                 if (currentCount < minCount) {
                     const candidates = this.staff.filter(s => {
                         const shift = this.getShift(d, s.id);
-                        return this.isWorkShift(shift) && shift !== pattern.id && s.shiftType !== 'cooking' && s.shiftType !== 'part_time' && s.position !== '園長' && !s.saturdayOnly;
+                        return this.isWorkShift(shift) && shift !== pattern.id && s.shiftType !== 'cooking' && !isTimeRangeStaff(s) && s.position !== '園長' && !s.saturdayOnly;
                     });
 
                     // Sort candidates by shift count of target pattern
@@ -747,7 +748,7 @@ export class ShiftGenerator {
                 const availableStaff = this.staff.filter(s =>
                     this.getShift(d, s.id) === '' &&
                     s.shiftType !== 'cooking' &&
-                    s.shiftType !== 'part_time' && // Exclude Part-time from auto-fill
+                    !isTimeRangeStaff(s) && // Exclude time-range staff from auto-fill
                     s.position !== '園長' &&
                     !s.saturdayOnly
                 );
@@ -821,6 +822,7 @@ export class ShiftGenerator {
                 const standardStaff = this.staff.filter(s => {
                     if (s.position === '園長' || s.position === '主任') return false;
                     if (s.shiftType !== 'regular') return false;
+                    if (isTimeRangeStaff(s)) return false;
                     if (s.saturdayOnly) return false;
                     const shift = this.schedule[dateStr]?.[s.id];
                     return this.getShiftKind(shift) === 'standard' || this.getShiftKind(shift) === 'early';
@@ -913,8 +915,8 @@ export class ShiftGenerator {
             for (const s of this.staff) {
                 const shift = this.schedule[dateStr][s.id];
                 // Check for undefined, null, or empty string
-                // EXCEPTION: Part-time workers should stay as '' - they use timeRangeSchedule
-                if ((shift === undefined || shift === null || shift === '') && s.shiftType !== 'part_time') {
+                // EXCEPTION: Time-range staff should stay as '' - they use timeRangeSchedule
+                if ((shift === undefined || shift === null || shift === '') && !isTimeRangeStaff(s)) {
                     this.schedule[dateStr][s.id] = '休';
                 }
             }
@@ -931,8 +933,8 @@ export class ShiftGenerator {
             if (prevDay === 0) continue;
 
             this.staff.forEach(s => {
-                // Skip part-timers - their shifts are manual and should not be changed
-                if (s.shiftType === 'part_time') return;
+                // Skip time-range staff - their shifts are manual and should not be changed
+                if (isTimeRangeStaff(s)) return;
 
                 const prevShift = this.getShift(prevDay, s.id);
                 const currShift = this.getShift(d, s.id);

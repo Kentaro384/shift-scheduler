@@ -1,5 +1,5 @@
 import type { Staff, ShiftSchedule, ShiftPatternDefinition, ShiftPatternId } from '../types';
-import { getShiftPatternKind, isWorkShiftId, normalizeShiftPatterns, SHIFT_PATTERNS } from '../types';
+import { getShiftPatternKind, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns, SHIFT_PATTERNS } from '../types';
 
 export interface SwapViolation {
     staffId: number;
@@ -328,7 +328,7 @@ export function getSwapCandidates(
             if (!isWorkShiftId(shift)) return false; // Only working staff
             if (shift === sourceShift) return false; // Same shift = no point swapping
             // Exclude part-time, cooking, and no_shift staff from swap
-            if (s.shiftType === 'part_time' || s.shiftType === 'cooking' || s.shiftType === 'no_shift') return false;
+            if (isTimeRangeStaff(s) || s.shiftType === 'cooking' || s.shiftType === 'no_shift') return false;
             return true;
         })
         .map(targetStaff => ({

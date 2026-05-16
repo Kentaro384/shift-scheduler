@@ -7,7 +7,7 @@
  */
 
 import type { Staff, ShiftSchedule, TimeRangeSchedule, ShiftPatternId } from '../types';
-import { SHIFT_PATTERNS, isWorkShiftId } from '../types';
+import { SHIFT_PATTERNS, isTimeRangeStaff, isWorkShiftId } from '../types';
 
 /**
  * Count effective staff for a specific shift pattern on a given date.
@@ -26,8 +26,8 @@ export function countEffectiveShift(
     let count = 0;
 
     staff.forEach(s => {
-        // Part-time workers: check countAsShifts
-        if (s.shiftType === 'part_time') {
+        // Time-range workers: check countAsShifts
+        if (isTimeRangeStaff(s)) {
             if (qualifiedOnly && !s.hasQualification) return;
 
             const timeRange = timeRangeSchedule[dateStr]?.[s.id];
@@ -70,8 +70,8 @@ export function countAllPatterns(
 }
 
 /**
- * Count qualified part-timers assigned to a specific shift pattern.
- * Only counts part-timers with hasQualification=true and countAsShifts set.
+ * Count qualified time-range staff assigned to a specific shift pattern.
+ * Only counts time-range staff with hasQualification=true and countAsShifts set.
  */
 export function countQualifiedPartTimers(
     staff: Staff[],
@@ -82,7 +82,7 @@ export function countQualifiedPartTimers(
     let count = 0;
 
     staff.forEach(s => {
-        if (s.shiftType !== 'part_time' || !s.hasQualification) return;
+        if (!isTimeRangeStaff(s) || !s.hasQualification) return;
 
         const timeRange = timeRangeSchedule[dateStr]?.[s.id];
         if (timeRange?.countAsShifts?.includes(pattern)) {
@@ -95,7 +95,7 @@ export function countQualifiedPartTimers(
 
 /**
  * Count total working staff on a given date (excluding cooking staff).
- * Includes part-timers with time ranges set.
+ * Includes time-range staff with time ranges set.
  */
 export function countWorkingStaff(
     staff: Staff[],
@@ -108,8 +108,8 @@ export function countWorkingStaff(
     staff.forEach(s => {
         if (s.shiftType === 'cooking') return;
 
-        // Part-time: check if they have a time range
-        if (s.shiftType === 'part_time') {
+        // Time-range staff: check if they have a time range
+        if (isTimeRangeStaff(s)) {
             if (timeRangeSchedule[dateStr]?.[s.id]) {
                 count++;
             }
