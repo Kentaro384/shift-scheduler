@@ -108,6 +108,7 @@ export const storage = {
             settings: storage.getSettings(),
             holidays: storage.getHolidays(),
             patterns: storage.getPatterns(),
+            manualShifts: {},
         };
     },
 

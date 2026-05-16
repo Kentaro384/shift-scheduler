@@ -32,7 +32,7 @@ export class ShiftGenerator {
     private daysInMonth: number;
     private warnings: string[] = [];
 
-    constructor(staff: Staff[], holidays: Holiday[], year: number, month: number, settings: Settings, currentSchedule: ShiftSchedule = {}, timeRangeSchedule: TimeRangeSchedule = {}, patterns: ShiftPatternDefinition[] = SHIFT_PATTERNS) {
+    constructor(staff: Staff[], holidays: Holiday[], year: number, month: number, settings: Settings, currentSchedule: ShiftSchedule = {}, timeRangeSchedule: TimeRangeSchedule = {}, patterns: ShiftPatternDefinition[] = SHIFT_PATTERNS, manualShifts: ShiftSchedule = {}) {
         this.staff = staff;
         this.holidays = holidays;
         this.settings = settings;
@@ -57,8 +57,13 @@ export class ShiftGenerator {
                     // Manual-only staff: preserve ALL manual entries
                     this.schedule[dateStr][s.id] = existingShift ?? '';
                 } else {
-                    // Regular/Chief/Director: preserve fixed plans only.
-                    if (isProtectedShiftId(existingShift)) {
+                    const manualDay = (manualShifts[dateStr] || {}) as Record<string | number, ShiftPatternId>;
+                    const manualShift = manualDay[s.id] || manualDay[String(s.id)];
+                    const isManualProtectedShift = existingShift && existingShift === manualShift && isProtectedShiftId(existingShift);
+                    const shouldPreserveProtectedShift = isManualProtectedShift || (isProtectedShiftId(existingShift) && existingShift !== '振');
+
+                    // Regular/Chief/Director: preserve fixed plans, but auto-generated transfer offs are cleared.
+                    if (shouldPreserveProtectedShift) {
                         this.schedule[dateStr][s.id] = existingShift;
                     } else {
                         this.schedule[dateStr][s.id] = '';

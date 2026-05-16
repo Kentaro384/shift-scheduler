@@ -35,6 +35,7 @@ function App() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [staff, setStaff] = useState<Staff[]>([]);
   const [schedule, setSchedule] = useState<ShiftSchedule>({});
+  const [manualShifts, setManualShifts] = useState<ShiftSchedule>({});
   const [settings, setSettings] = useState<Settings>(firestoreStorage.getDefaultSettings());
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [patterns, setPatterns] = useState<ShiftPatternDefinition[]>([]);
@@ -94,6 +95,7 @@ function App() {
       if (data) {
         setStaff(data.staff || []);
         setSchedule(data.schedule || {});
+        setManualShifts(data.manualShifts || {});
         setSettings(firestoreStorage.normalizeSettings(data.settings));
         setHolidays(data.holidays || []);
         setPatterns(firestoreStorage.normalizePatterns(data.patterns));
@@ -118,12 +120,43 @@ function App() {
     setCurrentDate(new Date(year, month - 1 + offset, 1));
   };
 
+  const saveManualShiftMarker = (dateStr: string, staffId: number, shiftId: ShiftPatternId) => {
+    const newManualShifts: ShiftSchedule = { ...manualShifts };
+    if (isProtectedShiftId(shiftId)) {
+      newManualShifts[dateStr] = { ...(newManualShifts[dateStr] || {}), [staffId]: shiftId };
+    } else if (newManualShifts[dateStr]?.[staffId]) {
+      newManualShifts[dateStr] = { ...newManualShifts[dateStr] };
+      delete newManualShifts[dateStr][staffId];
+      if (Object.keys(newManualShifts[dateStr]).length === 0) {
+        delete newManualShifts[dateStr];
+      }
+    } else {
+      return;
+    }
+
+    setManualShifts(newManualShifts);
+    firestoreStorage.saveManualShifts(newManualShifts);
+  };
+
+  const removeManualShiftMarker = (dateStr: string, staffId: number) => {
+    if (!manualShifts[dateStr]?.[staffId]) return;
+
+    const newManualShifts: ShiftSchedule = { ...manualShifts, [dateStr]: { ...manualShifts[dateStr] } };
+    delete newManualShifts[dateStr][staffId];
+    if (Object.keys(newManualShifts[dateStr]).length === 0) {
+      delete newManualShifts[dateStr];
+    }
+
+    setManualShifts(newManualShifts);
+    firestoreStorage.saveManualShifts(newManualShifts);
+  };
+
   const handleGenerate = async () => {
     setIsGenerating(true);
     // Small delay to show loading animation (Doherty threshold - 0.4s)
     await new Promise(resolve => setTimeout(resolve, 400));
 
-    const generator = new ShiftGenerator(staff, holidays, year, month, settings, schedule, timeRangeSchedule, patterns);
+    const generator = new ShiftGenerator(staff, holidays, year, month, settings, schedule, timeRangeSchedule, patterns, manualShifts);
     const newSchedule = generator.generate();
     const generationWarnings = generator.getWarnings();
     setSchedule(newSchedule);
@@ -156,7 +189,10 @@ function App() {
           // Keep ALL manual-only staff shifts
           return;
         } else if (s.shiftType === 'regular' || s.position === '主任') {
-          if (isProtectedShiftId(currentShift)) {
+          const manualDay = (manualShifts[dateStr] || {}) as Record<string | number, ShiftPatternId>;
+          const manualShift = manualDay[s.id] || manualDay[String(s.id)];
+          const isManualProtectedShift = currentShift === manualShift && isProtectedShiftId(currentShift);
+          if (isProtectedShiftId(currentShift) && (currentShift !== '振' || isManualProtectedShift)) {
             return;
           }
           // Clear others
@@ -275,6 +311,7 @@ function App() {
 
     // Save previous state for undo
     const prevSchedule = JSON.parse(JSON.stringify(schedule));
+    const prevManualShifts = JSON.parse(JSON.stringify(manualShifts));
     const prevShift = schedule[dateStr]?.[staffId] || '休';
 
     // Create new schedule
@@ -290,6 +327,7 @@ function App() {
     // Apply changes
     setSchedule(newSchedule);
     firestoreStorage.saveSchedule(newSchedule);
+    saveManualShiftMarker(dateStr, staffId, shiftId);
     setEditingCell(null);
 
     // Show toast with undo option if there are violations
@@ -301,6 +339,8 @@ function App() {
         () => {
           setSchedule(prevSchedule);
           firestoreStorage.saveSchedule(prevSchedule);
+          setManualShifts(prevManualShifts);
+          firestoreStorage.saveManualShifts(prevManualShifts);
         }
       );
     } else if (violations.length > 0) {
@@ -319,6 +359,7 @@ function App() {
 
     // Save previous state for undo
     const prevSchedule = JSON.parse(JSON.stringify(schedule));
+    const prevManualShifts = JSON.parse(JSON.stringify(manualShifts));
 
     // Create new schedule
     const newSchedule = { ...schedule };
@@ -333,6 +374,7 @@ function App() {
     // Apply changes
     setSchedule(newSchedule);
     firestoreStorage.saveSchedule(newSchedule);
+    saveManualShiftMarker(dateStr, targetStaffId, shiftId);
     setEditingCell(null);
 
     // Show toast
@@ -344,6 +386,8 @@ function App() {
         () => {
           setSchedule(prevSchedule);
           firestoreStorage.saveSchedule(prevSchedule);
+          setManualShifts(prevManualShifts);
+          firestoreStorage.saveManualShifts(prevManualShifts);
         }
       );
     } else {
@@ -619,6 +663,7 @@ function App() {
                           await firestoreStorage.saveAll(data);
                           setStaff(data.staff);
                           setSchedule(data.schedule);
+                          setManualShifts(data.manualShifts || {});
                           setSettings(firestoreStorage.normalizeSettings(data.settings));
                           setHolidays(data.holidays);
                           setPatterns(data.patterns);
@@ -957,6 +1002,7 @@ function App() {
 
             setSchedule(newSchedule);
             firestoreStorage.saveSchedule(newSchedule);
+            saveManualShiftMarker(dateStr, staffId, shiftPattern);
             setCandidateSearch(null);
 
             // Show toast
@@ -1010,6 +1056,7 @@ function App() {
               newSchedule[dateStr][editingPartTime.staffId] = '' as ShiftPatternId;
               setSchedule(newSchedule);
               firestoreStorage.saveSchedule(newSchedule);
+              removeManualShiftMarker(dateStr, editingPartTime.staffId);
 
               setEditingPartTime(null);
               toast.success(`${staffMember?.name}`, `${timeRange.start}-${timeRange.end} に設定しました`);
@@ -1025,6 +1072,7 @@ function App() {
               newSchedule[dateStr][editingPartTime.staffId] = shiftId;
               setSchedule(newSchedule);
               firestoreStorage.saveSchedule(newSchedule);
+              saveManualShiftMarker(dateStr, editingPartTime.staffId, shiftId);
 
               // Clear any existing time range
               const newTimeRangeSchedule = { ...timeRangeSchedule };
@@ -1056,6 +1104,7 @@ function App() {
                 delete newSchedule[dateStr][editingPartTime.staffId];
                 setSchedule(newSchedule);
                 firestoreStorage.saveSchedule(newSchedule);
+                removeManualShiftMarker(dateStr, editingPartTime.staffId);
               }
               const newTimeRangeSchedule = { ...timeRangeSchedule };
               if (newTimeRangeSchedule[dateStr]?.[editingPartTime.staffId]) {
