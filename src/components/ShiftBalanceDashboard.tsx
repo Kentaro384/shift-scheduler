@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart3, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, RefreshCcw, Heart } from 'lucide-react';
-import type { Staff, ShiftSchedule, ShiftPatternId } from '../types';
+import type { Staff, ShiftSchedule, ShiftPatternId, ShiftPatternDefinition } from '../types';
+import { isWorkShiftId } from '../types';
 
 interface ShiftBalanceDashboardProps {
     staff: Staff[];
@@ -8,6 +9,7 @@ interface ShiftBalanceDashboardProps {
     days: number[];
     year: number;
     month: number;
+    patterns: ShiftPatternDefinition[];
 }
 
 // Rev.5 Time-flow Colors
@@ -20,7 +22,7 @@ const SHIFT_COLORS: Record<string, string> = {
     'J': '#DC2626', // Night Crimson
 };
 
-const SHIFT_ORDER: ShiftPatternId[] = ['A', 'B', 'C', 'D', 'E', 'J'];
+const FALLBACK_COLORS = ['#F59E0B', '#38BDF8', '#3B82F6', '#F97316', '#A855F7', '#DC2626', '#10B981', '#64748B'];
 
 export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
     staff,
@@ -28,8 +30,12 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
     days,
     year,
     month,
+    patterns,
 }) => {
     const [isExpanded, setIsExpanded] = useState(true);
+    const shiftOrder = patterns.map(pattern => pattern.id).filter(isWorkShiftId);
+    const getShiftColor = (shift: ShiftPatternId, index = 0) =>
+        SHIFT_COLORS[shift] || FALLBACK_COLORS[index % FALLBACK_COLORS.length];
 
     // Filter to only regular/backup staff (not cooking, not no_shift)
     const targetStaff = staff.filter(s =>
@@ -39,7 +45,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
     // Calculate shift counts for each staff member (including leave types)
     const getStaffShiftCounts = (staffMember: Staff): Record<string, number> => {
         const counts: Record<string, number> = {};
-        SHIFT_ORDER.forEach(shift => counts[shift] = 0);
+        shiftOrder.forEach(shift => counts[shift] = 0);
         counts['振'] = 0;
         counts['有'] = 0;
 
@@ -47,7 +53,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
             const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const shift = schedule[dateStr]?.[staffMember.id];
             if (shift) {
-                if (SHIFT_ORDER.includes(shift as ShiftPatternId)) {
+                if (shiftOrder.includes(shift as ShiftPatternId)) {
                     counts[shift] = (counts[shift] || 0) + 1;
                 } else if (shift === '振') {
                     counts['振'] = (counts['振'] || 0) + 1;
@@ -63,7 +69,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
     // Calculate maximum count for scaling bars
     const allCounts = targetStaff.map(s => getStaffShiftCounts(s));
     const maxTotal = Math.max(...allCounts.map(counts =>
-        SHIFT_ORDER.reduce((sum, shift) => sum + (counts[shift] || 0), 0)
+        shiftOrder.reduce((sum, shift) => sum + (counts[shift] || 0), 0)
     ), 1);
 
     // Calculate fairness scores (standard deviation)
@@ -90,6 +96,8 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
 
     const earlyFairness = calculateFairnessScore('A');
     const lateFairness = calculateFairnessScore('J');
+    const showEarlyFairness = shiftOrder.includes('A');
+    const showLateFairness = shiftOrder.includes('J');
 
     return (
         <div className="mt-6 bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
@@ -109,8 +117,10 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
             {isExpanded && (
                 <div className="p-6 space-y-6">
                     {/* Fairness Scores */}
+                    {(showEarlyFairness || showLateFairness) && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Early Shift (A) Fairness */}
+                        {showEarlyFairness && (
                         <div className={`p-4 rounded-xl border-2 ${earlyFairness.isGood ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
                             <div className="flex items-center gap-2 mb-2">
                                 {earlyFairness.isGood ? (
@@ -132,8 +142,10 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                 )}
                             </div>
                         </div>
+                        )}
 
                         {/* Late Shift (J) Fairness */}
+                        {showLateFairness && (
                         <div className={`p-4 rounded-xl border-2 ${lateFairness.isGood ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
                             <div className="flex items-center gap-2 mb-2">
                                 {lateFairness.isGood ? (
@@ -155,7 +167,9 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                 )}
                             </div>
                         </div>
+                        )}
                     </div>
+                    )}
 
                     {/* Staff Distribution Chart */}
                     <div>
@@ -163,7 +177,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                         <div className="space-y-2">
                             {targetStaff.map(s => {
                                 const counts = getStaffShiftCounts(s);
-                                const total = SHIFT_ORDER.reduce((sum, shift) => sum + (counts[shift] || 0), 0);
+                                const total = shiftOrder.reduce((sum, shift) => sum + (counts[shift] || 0), 0);
                                 const furikyu = counts['振'] || 0;
                                 const yukyu = counts['有'] || 0;
 
@@ -173,7 +187,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                             {s.name}
                                         </div>
                                         <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden flex">
-                                            {SHIFT_ORDER.map(shift => {
+                                            {shiftOrder.map((shift, shiftIndex) => {
                                                 const count = counts[shift] || 0;
                                                 if (count === 0) return null;
                                                 const width = (count / maxTotal) * 100;
@@ -183,7 +197,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                                         className="h-full flex items-center justify-center text-xs font-bold text-white"
                                                         style={{
                                                             width: `${width}%`,
-                                                            backgroundColor: SHIFT_COLORS[shift],
+                                                            backgroundColor: getShiftColor(shift, shiftIndex),
                                                             minWidth: count > 0 ? '20px' : '0'
                                                         }}
                                                         title={`${shift}: ${count}回`}
@@ -218,11 +232,11 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
 
                         {/* Legend */}
                         <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-gray-200">
-                            {SHIFT_ORDER.map(shift => (
+                            {shiftOrder.map((shift, shiftIndex) => (
                                 <div key={shift} className="flex items-center gap-1">
                                     <div
                                         className="w-4 h-4 rounded"
-                                        style={{ backgroundColor: SHIFT_COLORS[shift] }}
+                                        style={{ backgroundColor: getShiftColor(shift, shiftIndex) }}
                                     />
                                     <span className="text-xs text-gray-600">{shift}</span>
                                 </div>

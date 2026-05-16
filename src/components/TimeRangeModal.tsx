@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { X, Clock, Star } from 'lucide-react';
-import type { TimeRange, ShiftPatternId } from '../types';
-import { SHIFT_PATTERNS } from '../types';
+import type { ShiftPatternDefinition, TimeRange, ShiftPatternId } from '../types';
 
 interface TimeRangeModalProps {
     staffId: number;
@@ -11,6 +10,7 @@ interface TimeRangeModalProps {
     month: number;
     currentTimeRange: TimeRange | null;
     currentShift: ShiftPatternId;
+    patterns: ShiftPatternDefinition[];
     defaultTimeRange?: TimeRange;  // Staff's default work hours (includes countAsShifts)
     onSaveTimeRange: (timeRange: TimeRange) => void;
     onSaveShift: (shift: ShiftPatternId) => void;
@@ -48,8 +48,7 @@ function parseTime(t: string): number {
 }
 
 // Check if time range overlaps with shift pattern (for auto-suggestion)
-function doesOverlap(start: string, end: string, shiftPatternId: string): boolean {
-    const pattern = SHIFT_PATTERNS.find(p => p.id === shiftPatternId);
+function doesOverlap(start: string, end: string, pattern: ShiftPatternDefinition): boolean {
     if (!pattern) return false;
 
     const [shiftStart, shiftEnd] = pattern.timeRange.split('-');
@@ -72,6 +71,7 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
     month,
     currentTimeRange,
     currentShift,
+    patterns,
     defaultTimeRange,
     onSaveTimeRange,
     onSaveShift,
@@ -98,10 +98,8 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
 
     // Auto-suggest overlapping shifts when time changes (only if no selection yet)
     const suggestedShifts = useMemo(() => {
-        return (['A', 'B', 'C', 'D', 'E', 'J'] as ShiftPatternId[]).filter(id =>
-            doesOverlap(startTime, endTime, id)
-        );
-    }, [startTime, endTime]);
+        return patterns.filter(pattern => doesOverlap(startTime, endTime, pattern)).map(pattern => pattern.id);
+    }, [patterns, startTime, endTime]);
 
     // Check if current selection matches the default
     const isDefaultTime = defaultTimeRange &&
@@ -256,15 +254,19 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
                                     シフト割当（集計にカウント）
                                 </p>
                                 <div className="flex justify-center gap-2">
-                                    {(['A', 'B', 'C', 'D', 'E', 'J'] as ShiftPatternId[]).map(shiftId => (
+                                    {patterns.map(pattern => {
+                                        const shiftId = pattern.id;
+                                        return (
                                         <button
                                             key={shiftId}
                                             onClick={() => toggleShift(shiftId)}
+                                            title={pattern.name}
                                             className={`w-9 h-9 rounded-lg border-2 font-bold text-sm transition-all ${getShiftButtonClass(shiftId)}`}
                                         >
                                             {shiftId}
                                         </button>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                                 {suggestedShifts.length > 0 && selectedShifts.length === 0 && (
                                     <p className="text-[10px] text-amber-500 text-center mt-1">

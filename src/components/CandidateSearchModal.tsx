@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { X, Users } from 'lucide-react';
-import type { ShiftPatternId, Staff, ShiftSchedule, Holiday, Settings } from '../types';
+import type { ShiftPatternId, Staff, ShiftSchedule, Holiday, Settings, ShiftPatternDefinition } from '../types';
 import {
     evaluateCandidates,
     createConstraintContext,
@@ -16,6 +16,7 @@ interface CandidateSearchModalProps {
     staff: Staff[];
     holidays: Holiday[];
     settings: Settings;
+    patterns: ShiftPatternDefinition[];
     onSelectCandidate: (staffId: number, shift: ShiftPatternId) => void;
     onClose: () => void;
 }
@@ -56,7 +57,10 @@ function getDayName(year: number, month: number, day: number): string {
 }
 
 // Get shift label
-function getShiftLabel(shiftId: ShiftPatternId): string {
+function getShiftLabel(shiftId: ShiftPatternId, patterns: ShiftPatternDefinition[]): string {
+    const pattern = patterns.find(p => p.id === shiftId);
+    if (pattern) return pattern.name || pattern.id;
+
     const labels: Record<string, string> = {
         'A': '早番', 'B': '標準', 'C': '標準+', 'D': '遅番', 'E': '遅番+', 'J': '最遅番',
         '振': '振休', '有': '有給', '休': '休み'
@@ -73,6 +77,7 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
     staff,
     holidays,
     settings,
+    patterns,
     onSelectCandidate,
     onClose
 }) => {
@@ -120,7 +125,7 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
                         <span className={`mx-1 px-2 py-0.5 rounded ${getShiftColor(shiftPattern)} font-bold`}>
                             {shiftPattern}
                         </span>
-                        ({getShiftLabel(shiftPattern)})を配置できる職員:
+                        ({getShiftLabel(shiftPattern, patterns)})を配置できる職員:
                     </p>
                 </div>
 

@@ -408,7 +408,7 @@ function App() {
   // Calculate daily qualified staff counts per shift pattern
   const qualifiedCounts = days.map(day => {
     const dateStr = getFormattedDate(year, month, day);
-    return countAllPatterns(staff, schedule, timeRangeSchedule, dateStr, true);
+    return countAllPatterns(staff, schedule, timeRangeSchedule, dateStr, true, patterns.map(p => p.id));
   });
 
   const handleDownloadExcel = () => {
@@ -725,9 +725,9 @@ function App() {
 
                 </tr>
                 {/* Qualified Staff Counts */}
-                {['A', 'B', 'C', 'D', 'E', 'J'].map(patternId => {
-                  const pattern = patterns.find(p => p.id === patternId);
-                  const minCount = pattern?.minCount || 0;
+                {patterns.map(pattern => {
+                  const patternId = pattern.id;
+                  const minCount = pattern.minCount || 0;
 
                   return (
                     <tr key={`qual-${patternId}`} className="bg-white border-t border-gray-100">
@@ -756,7 +756,7 @@ function App() {
                           <td
                             key={idx}
                             className={`px-1 py-1 text-center text-xs border-r cursor-pointer hover:ring-2 hover:ring-[#FF6B6B] hover:ring-inset transition-all ${cellClass}`}
-                            onClick={() => setCandidateSearch({ day, shiftPattern: patternId as ShiftPatternId })}
+                            onClick={() => setCandidateSearch({ day, shiftPattern: patternId })}
                             title={`${patternId}シフトの候補者を検索`}
                           >
                             {count > 0 ? count : '-'}
@@ -779,12 +779,14 @@ function App() {
           days={days}
           year={year}
           month={month}
+          patterns={patterns}
         />
       </main>
 
       {showStaffList && (
         <StaffList
           staff={staff}
+          patterns={patterns}
           onUpdate={handleUpdateStaff}
           onClose={() => setShowStaffList(false)}
         />
@@ -822,6 +824,7 @@ function App() {
           staff={staff}
           holidays={holidays}
           settings={settings}
+          patterns={patterns}
           onSelect={handleShiftUpdate}
           onSelectStaff={handleSelectStaff}
           onSwap={handleSwap}
@@ -840,6 +843,7 @@ function App() {
           staff={staff}
           holidays={holidays}
           settings={settings}
+          patterns={patterns}
           onSelectCandidate={(staffId, shiftPattern) => {
             const dateStr = getFormattedDate(year, month, candidateSearch.day);
 
@@ -880,6 +884,7 @@ function App() {
             currentTimeRange={currentTimeRange}
             currentShift={currentShift}
             defaultTimeRange={staffMember?.defaultTimeRange}
+            patterns={patterns}
             onSaveTimeRange={(timeRange: TimeRange) => {
               // Save time range to timeRangeSchedule with deep copy
               const newTimeRangeSchedule = { ...timeRangeSchedule };

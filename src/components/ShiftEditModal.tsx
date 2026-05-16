@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { X, Palette, AlertTriangle, CheckCircle, Users, ArrowLeftRight } from 'lucide-react';
-import type { ShiftPatternId, Staff, ShiftSchedule, Holiday, Settings } from '../types';
+import type { ShiftPatternDefinition, ShiftPatternId, Staff, ShiftSchedule, Holiday, Settings } from '../types';
 import {
     checkConstraints,
     evaluateCandidates,
@@ -20,6 +20,7 @@ interface ShiftEditModalProps {
     staff: Staff[];
     holidays: Holiday[];
     settings: Settings;
+    patterns: ShiftPatternDefinition[];
     onSelect: (shift: ShiftPatternId) => void;
     onSelectStaff: (staffId: number, shift: ShiftPatternId) => void;
     onSwap: (staffAId: number, staffBId: number) => void;
@@ -37,6 +38,31 @@ function ConstraintBadge({ violation }: { violation: ConstraintViolation }) {
     );
 }
 
+function getPatternColor(id: ShiftPatternId, index: number): string {
+    const colors: Record<string, string> = {
+        A: 'bg-[#F59E0B] text-white',
+        B: 'bg-[#38BDF8] text-white',
+        C: 'bg-[#3B82F6] text-white',
+        D: 'bg-[#F97316] text-white',
+        E: 'bg-[#A855F7] text-white',
+        J: 'bg-[#DC2626] text-white',
+    };
+    const fallback = [
+        'bg-[#14B8A6] text-white',
+        'bg-[#64748B] text-white',
+        'bg-[#84CC16] text-white',
+        'bg-[#EC4899] text-white',
+        'bg-[#6366F1] text-white',
+    ];
+    return colors[id] || fallback[index % fallback.length];
+}
+
+function getPatternMarker(id: ShiftPatternId, index: number): string {
+    const markers: Record<string, string> = { A: '●', B: '■', C: '◆', D: '▲', E: '▼', J: '★' };
+    const fallback = ['⬟', '⬢', '⬣', '◆', '■'];
+    return markers[id] || fallback[index % fallback.length];
+}
+
 export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
     staffId,
     staffName,
@@ -48,13 +74,14 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
     staff,
     holidays,
     settings,
+    patterns,
     onSelect,
     onSelectStaff,
     onSwap,
     onClose
 }) => {
     const [activeTab, setActiveTab] = useState<'select' | 'candidates' | 'swap'>('select');
-    const [selectedShiftForCandidates, setSelectedShiftForCandidates] = useState<ShiftPatternId>('A');
+    const [selectedShiftForCandidates, setSelectedShiftForCandidates] = useState<ShiftPatternId>(patterns[0]?.id || 'A');
 
     // Create constraint context
     const ctx = useMemo(() =>
@@ -64,14 +91,15 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
 
     const dateStr = `${month}/${day}`;
 
-    // Rev.5 Time-flow Colors
+    const workShiftOptions: { id: ShiftPatternId; label: string; color: string; marker: string }[] = patterns.map((pattern, index) => ({
+        id: pattern.id,
+        label: pattern.name || pattern.id,
+        color: getPatternColor(pattern.id, index),
+        marker: getPatternMarker(pattern.id, index),
+    }));
+
     const shiftOptions: { id: ShiftPatternId; label: string; color: string; marker: string }[] = [
-        { id: 'A', label: '早番', color: 'bg-[#F59E0B] text-white', marker: '●' },
-        { id: 'B', label: '標準', color: 'bg-[#38BDF8] text-white', marker: '■' },
-        { id: 'C', label: '標準+', color: 'bg-[#3B82F6] text-white', marker: '◆' },
-        { id: 'D', label: '遅番', color: 'bg-[#F97316] text-white', marker: '▲' },
-        { id: 'E', label: '遅番+', color: 'bg-[#A855F7] text-white', marker: '▼' },
-        { id: 'J', label: '最遅番', color: 'bg-[#DC2626] text-white', marker: '★' },
+        ...workShiftOptions,
         { id: '振', label: '振休', color: 'bg-[#F3F4F6] text-[#10B981] border-2 border-[#10B981]', marker: '○' },
         { id: '有', label: '有給', color: 'bg-[#F3F4F6] text-[#F472B6] border-2 border-[#F472B6]', marker: '◇' },
         { id: '休', label: '休み', color: 'bg-gray-100 text-gray-400', marker: '－' },
@@ -233,8 +261,8 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
 
                             {/* Shift selector for candidates */}
                             <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-                                {['A', 'B', 'C', 'D', 'E', 'J'].map((shift) => {
-                                    const opt = shiftOptions.find(o => o.id === shift)!;
+                                {workShiftOptions.map((opt) => {
+                                    const shift = opt.id;
                                     return (
                                         <button
                                             key={shift}

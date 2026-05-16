@@ -7,8 +7,7 @@
  */
 
 import type { Staff, ShiftSchedule, TimeRangeSchedule, ShiftPatternId } from '../types';
-
-const WORK_SHIFT_PATTERNS: ShiftPatternId[] = ['A', 'B', 'C', 'D', 'E', 'J'];
+import { SHIFT_PATTERNS, isWorkShiftId } from '../types';
 
 /**
  * Count effective staff for a specific shift pattern on a given date.
@@ -58,11 +57,12 @@ export function countAllPatterns(
     schedule: ShiftSchedule,
     timeRangeSchedule: TimeRangeSchedule,
     dateStr: string,
-    qualifiedOnly: boolean = false
+    qualifiedOnly: boolean = false,
+    patternIds: ShiftPatternId[] = SHIFT_PATTERNS.map(p => p.id)
 ): Record<string, number> {
-    const counts: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, E: 0, J: 0 };
+    const counts: Record<string, number> = {};
 
-    WORK_SHIFT_PATTERNS.forEach(pattern => {
+    patternIds.forEach(pattern => {
         counts[pattern] = countEffectiveShift(staff, schedule, timeRangeSchedule, dateStr, pattern, qualifiedOnly);
     });
 
@@ -118,7 +118,7 @@ export function countWorkingStaff(
 
         // Regular staff: check for work shift
         const shift = schedule[dateStr]?.[s.id];
-        if (shift && WORK_SHIFT_PATTERNS.includes(shift)) {
+        if (isWorkShiftId(shift)) {
             count++;
         }
     });

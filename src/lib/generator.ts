@@ -1,6 +1,6 @@
 import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
 import { getDaysInMonth, getDayOfWeek, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
-import { SHIFT_PATTERNS } from '../types';
+import { SHIFT_PATTERNS, isWorkShiftId } from '../types';
 import { countEffectiveShift, countWorkingStaff as countWorkingStaffUtil } from './shiftCountUtils';
 
 export class ShiftGenerator {
@@ -71,7 +71,7 @@ export class ShiftGenerator {
 
     // Helper: Get distance between two shift patterns (A=0, B=1, C=2, D=3, E=4, J=5)
     private getShiftDistance(a: ShiftPatternId, b: ShiftPatternId): number {
-        const order = ['A', 'B', 'C', 'D', 'E', 'J'];
+        const order = this.getWorkPatterns().map(p => p.id);
         const indexA = order.indexOf(a);
         const indexB = order.indexOf(b);
         if (indexA === -1 || indexB === -1) return 999; // Non-work shifts have no distance
@@ -249,11 +249,24 @@ export class ShiftGenerator {
     }
 
     private getWorkPatterns(): ShiftPatternDefinition[] {
-        return this.patterns.filter(p => ['A', 'B', 'C', 'D', 'E', 'J'].includes(p.id));
+        return this.patterns.filter(p => isWorkShiftId(p.id));
     }
 
     private isWorkShift(shift: ShiftPatternId | undefined): boolean {
-        return !!shift && ['A', 'B', 'C', 'D', 'E', 'J'].includes(shift);
+        return isWorkShiftId(shift);
+    }
+
+    private getFallbackWorkShift(): ShiftPatternId {
+        return this.patterns.find(p => p.id === 'B')?.id
+            ?? this.getWorkPatterns()[0]?.id
+            ?? '休';
+    }
+
+    private getNextFallbackShift(current: ShiftPatternId): ShiftPatternId {
+        const workIds = this.getWorkPatterns().map(p => p.id);
+        const currentIndex = workIds.indexOf(current);
+        if (currentIndex >= 0 && currentIndex < workIds.length - 1) return workIds[currentIndex + 1];
+        return this.getFallbackWorkShift();
     }
 
     private isWeekdayAutoAssignable(s: Staff): boolean {
@@ -591,15 +604,13 @@ export class ShiftGenerator {
             for (const s of remaining) {
                 // Assign B (or C/D/E fallback) to ALL remaining regular staff
                 // Do NOT assign 休 automatically - regular staff should work weekdays
-                let shift: ShiftPatternId = 'B';
+                let shift: ShiftPatternId = this.getFallbackWorkShift();
                 if (this.isEarlyShiftLimitExceeded(s.id)) {
-                    shift = 'C'; // Fallback to C
+                    shift = this.patterns.find(p => p.id === 'C')?.id ?? this.getNextFallbackShift(shift);
                 }
 
                 if (this.hasIncompatibleConflict(d, s.id, shift)) {
-                    if (shift === 'B') shift = 'C';
-                    else if (shift === 'C') shift = 'D';
-                    else if (shift === 'D') shift = 'E';
+                    shift = this.getNextFallbackShift(shift);
                 }
 
                 this.setShift(d, s.id, shift);
@@ -671,7 +682,7 @@ export class ShiftGenerator {
                 if (currentCount < minCount) {
                     const candidates = this.staff.filter(s => {
                         const shift = this.getShift(d, s.id);
-                        return shift !== '' && shift !== '休' && shift !== '振' && shift !== '有' && shift !== pattern.id && s.shiftType !== 'cooking' && s.shiftType !== 'part_time' && s.position !== '園長' && !s.saturdayOnly;
+                        return this.isWorkShift(shift) && shift !== pattern.id && s.shiftType !== 'cooking' && s.shiftType !== 'part_time' && s.position !== '園長' && !s.saturdayOnly;
                     });
 
                     // Sort candidates by shift count of target pattern
@@ -724,13 +735,14 @@ export class ShiftGenerator {
                 const candidate = availableStaff[0];
 
                 // Assign B (or C if constrained)
-                let shift: ShiftPatternId = 'B';
-                if (this.isEarlyShiftLimitExceeded(candidate.id)) shift = 'C';
+                let shift: ShiftPatternId = this.getFallbackWorkShift();
+                if (this.isEarlyShiftLimitExceeded(candidate.id)) {
+                    shift = this.patterns.find(p => p.id === 'C')?.id ?? this.getNextFallbackShift(shift);
+                }
 
                 // Check conflicts
                 if (this.hasIncompatibleConflict(d, candidate.id, shift)) {
-                    if (shift === 'B') shift = 'C';
-                    else if (shift === 'C') shift = 'D';
+                    shift = this.getNextFallbackShift(shift);
                 }
 
                 this.setShift(d, candidate.id, shift);
@@ -747,7 +759,7 @@ export class ShiftGenerator {
         const LIMIT = this.settings.chiefBackupLimit;
         for (let d = 1; d <= this.daysInMonth; d++) {
             const shift = this.getShift(d, chief.id);
-            if (['A', 'B', 'C', 'D', 'E', 'J'].includes(shift)) {
+            if (this.isWorkShift(shift)) {
                 backupCount++;
             }
         }
@@ -847,7 +859,7 @@ export class ShiftGenerator {
             // 6. Check Total shortage
             const total = this.countWorkingStaff(d);
             if (total < this.settings.weekdayStaffCount) {
-                this.setShift(d, chief.id, 'B');
+                this.setShift(d, chief.id, this.getFallbackWorkShift());
                 backupCount++;
                 continue;
             }
@@ -903,19 +915,19 @@ export class ShiftGenerator {
 
                 // 1. J -> A violation
                 if (prevShift === 'J' && currShift === 'A') {
-                    this.setShift(d, s.id, 'B');
+                    this.setShift(d, s.id, this.getFallbackWorkShift());
                     fixCount++;
                 }
 
                 // 2. A -> A violation
                 if (prevShift === 'A' && currShift === 'A') {
-                    this.setShift(d, s.id, 'B');
+                    this.setShift(d, s.id, this.getFallbackWorkShift());
                     fixCount++;
                 }
 
                 // 3. J -> J violation
                 if (prevShift === 'J' && currShift === 'J') {
-                    this.setShift(d, s.id, 'B'); // Or D/E?
+                    this.setShift(d, s.id, this.getFallbackWorkShift());
                     fixCount++;
                 }
             });

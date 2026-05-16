@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, Bell, Calendar, Users, Clock, X } from 'lucide-react';
-import type { Staff, ShiftSchedule, ShiftPatternId, Holiday, TimeRangeSchedule } from '../types';
+import type { Staff, ShiftSchedule, Holiday, TimeRangeSchedule } from '../types';
+import { isWorkShiftId } from '../types';
 import { countWorkingStaff } from '../lib/shiftCountUtils';
 
 interface AlertBadgeProps {
@@ -24,8 +25,6 @@ interface Alert {
     description: string;
     icon: React.ReactNode;
 }
-
-const WORK_SHIFTS: ShiftPatternId[] = ['A', 'B', 'C', 'D', 'E', 'J'];
 
 // Thresholds
 const CONSECUTIVE_DAYS_THRESHOLD = 6; // 6日以上連勤でアラート
@@ -71,7 +70,7 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
             for (let i = 0; i < days.length; i++) {
                 const day = days[i];
                 const shift = schedule[getDateStr(day)]?.[s.id];
-                const isWorking = shift && WORK_SHIFTS.includes(shift as ShiftPatternId);
+                const isWorking = isWorkShiftId(shift);
 
                 if (isWorking) {
                     if (consecutiveDays === 0) startDay = day;

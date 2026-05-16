@@ -1,4 +1,4 @@
-export type ShiftPatternId = 'A' | 'B' | 'C' | 'D' | 'E' | 'J' | '振' | '有' | '休' | '';
+export type ShiftPatternId = string;
 
 export interface ShiftPatternDefinition {
     id: ShiftPatternId;
@@ -36,7 +36,7 @@ export interface Settings {
     fiscalYear: number; // 年度
     weekdayStaffCount: number; // 平日最低出勤人数
     saturdayStaffCount: number;
-    saturdayShiftPattern: 'A' | 'B' | 'C' | 'D' | 'E' | 'J'; // 土曜日のシフトパターン
+    saturdayShiftPattern: ShiftPatternId; // 土曜日のシフトパターン
     chiefBackupLimit: number; // 主任バックアップの月間上限
 }
 
@@ -72,3 +72,9 @@ export const HOLIDAY_PATTERNS = [
     { id: '有', name: '有給', color: 'bg-pink-200' },
     { id: '休', name: '公休', color: 'bg-gray-100' },
 ];
+
+export const HOLIDAY_SHIFT_IDS: ShiftPatternId[] = ['振', '有', '休', ''];
+
+export function isWorkShiftId(shift: ShiftPatternId | undefined | null): shift is ShiftPatternId {
+    return !!shift && !HOLIDAY_SHIFT_IDS.includes(shift);
+}

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { ArrowLeftRight, AlertTriangle, CheckCircle, XCircle, ArrowRightLeft } from 'lucide-react';
 import type { ShiftSchedule, Staff, ShiftPatternId } from '../types';
+import { isWorkShiftId } from '../types';
 import { getSwapCandidates, type SwapViolation } from '../lib/swapConstraintChecker';
 
 interface SwapSuggestionsProps {
@@ -58,8 +59,7 @@ export const SwapSuggestions: React.FC<SwapSuggestionsProps> = ({
         }
     };
 
-    const workShifts = ['A', 'B', 'C', 'D', 'E', 'J'];
-    const isWorkShift = workShifts.includes(currentShift);
+    const isWorkShift = isWorkShiftId(currentShift);
 
     if (!isWorkShift) {
         return (

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import type { Staff, StaffPosition, StaffShiftType, StaffRole, ShiftPatternId, FloorType } from '../types';
+import type { Staff, StaffPosition, StaffShiftType, StaffRole, ShiftPatternDefinition, ShiftPatternId, FloorType } from '../types';
 import { X, Plus, Edit2, Trash2, Save, Users } from 'lucide-react';
 
 interface StaffListProps {
     staff: Staff[];
+    patterns: ShiftPatternDefinition[];
     onUpdate: (staff: Staff[]) => void;
     onClose: () => void;
 }
@@ -11,10 +12,9 @@ interface StaffListProps {
 const POSITIONS: StaffPosition[] = ['園長', '主任', '保育士', 'パート', '調理'];
 const SHIFT_TYPES: StaffShiftType[] = ['no_shift', 'backup', 'regular', 'part_time', 'cooking'];
 const ROLES: (StaffRole | 'null')[] = ['infant', 'toddler', 'free', 'cooking', 'null'];
-const SHIFT_PATTERNS: ShiftPatternId[] = ['A', 'B', 'C', 'D', 'E', 'J'];
 const FLOORS: FloorType[] = ['1F', '2F', '3F', 'free', 'none'];
 
-export const StaffList: React.FC<StaffListProps> = ({ staff, onUpdate, onClose }) => {
+export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate, onClose }) => {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editForm, setEditForm] = useState<Partial<Staff>>({});
 
@@ -144,10 +144,13 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, onUpdate, onClose }
                                         <div>
                                             <label className="block text-xs text-gray-500 mb-2">希望シフト (選択したシフトのみ割り当てられます)</label>
                                             <div className="flex flex-wrap gap-2">
-                                                {SHIFT_PATTERNS.map(p => (
+                                                {patterns.map(pattern => {
+                                                    const p = pattern.id;
+                                                    return (
                                                     <button
                                                         key={p}
                                                         onClick={() => togglePreferredShift(p)}
+                                                        title={pattern.name}
                                                         className={`px-4 py-1.5 rounded-full text-sm font-semibold border-2 transition-all duration-300 hover:scale-105 ${(editForm.preferredShifts || []).includes(p)
                                                             ? 'bg-[#45B7D1] text-white border-[#45B7D1]'
                                                             : 'bg-white text-gray-600 border-gray-200 hover:border-[#FF6B6B] hover:text-[#FF6B6B]'
@@ -155,7 +158,8 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, onUpdate, onClose }
                                                     >
                                                         {p}
                                                     </button>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         </div>
 

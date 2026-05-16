@@ -1,7 +1,7 @@
 import React from 'react';
 import { CheckCircle, AlertTriangle, XCircle, User } from 'lucide-react';
 import type { CandidateEvaluation, ConstraintViolation } from '../lib/constraintChecker';
-import type { ShiftPatternId } from '../types';
+import type { ShiftPatternId, ShiftPatternDefinition } from '../types';
 import { SHIFT_PATTERNS, HOLIDAY_PATTERNS } from '../types';
 
 interface CandidatePopoverProps {
@@ -13,11 +13,12 @@ interface CandidatePopoverProps {
     onSelect: (staffId: number) => void;
     onClose: () => void;
     position: { x: number; y: number };
+    patterns?: ShiftPatternDefinition[];
 }
 
 // Get shift display info
-function getShiftInfo(shiftId: ShiftPatternId) {
-    const pattern = SHIFT_PATTERNS.find(p => p.id === shiftId);
+function getShiftInfo(shiftId: ShiftPatternId, patterns: ShiftPatternDefinition[] = SHIFT_PATTERNS) {
+    const pattern = patterns.find(p => p.id === shiftId);
     if (pattern) return { name: pattern.name, color: pattern.color };
 
     const holiday = HOLIDAY_PATTERNS.find(p => p.id === shiftId);
@@ -52,9 +53,10 @@ export const CandidatePopover: React.FC<CandidatePopoverProps> = ({
     candidates,
     onSelect,
     onClose,
-    position
+    position,
+    patterns = SHIFT_PATTERNS
 }) => {
-    const shiftInfo = getShiftInfo(targetShift);
+    const shiftInfo = getShiftInfo(targetShift, patterns);
     const dayName = getDayName(year, month, day);
 
     // Separate candidates by assignability
@@ -116,7 +118,7 @@ export const CandidatePopover: React.FC<CandidatePopoverProps> = ({
                 ) : (
                     <div className="divide-y divide-gray-50">
                         {candidates.map((candidate) => {
-                            const currentShiftInfo = getShiftInfo(candidate.currentShift);
+                            const currentShiftInfo = getShiftInfo(candidate.currentShift, patterns);
                             const hardViolations = candidate.violations.filter(v => v.type === 'hard');
                             const softViolationsList = candidate.violations.filter(v => v.type === 'soft');
 

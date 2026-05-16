@@ -1,4 +1,5 @@
 import type { Staff, ShiftSchedule, ShiftPatternId } from '../types';
+import { isWorkShiftId } from '../types';
 
 export interface SwapViolation {
     staffId: number;
@@ -64,14 +65,13 @@ function countEarlyShifts(schedule: ShiftSchedule, year: number, month: number, 
 
 // Count consecutive work days around a specific day
 function countConsecutiveWorkDays(schedule: ShiftSchedule, year: number, month: number, day: number, staffId: number): number {
-    const workShifts = ['A', 'B', 'C', 'D', 'E', 'J'];
     let count = 1;
 
     // Count backwards
     let d = day - 1;
     while (d >= 1) {
         const shift = getShift(schedule, year, month, d, staffId);
-        if (workShifts.includes(shift)) {
+        if (isWorkShiftId(shift)) {
             count++;
             d--;
         } else break;
@@ -82,7 +82,7 @@ function countConsecutiveWorkDays(schedule: ShiftSchedule, year: number, month: 
     d = day + 1;
     while (d <= daysInMonth) {
         const shift = getShift(schedule, year, month, d, staffId);
-        if (workShifts.includes(shift)) {
+        if (isWorkShiftId(shift)) {
             count++;
             d++;
         } else break;
@@ -304,14 +304,11 @@ export function getSwapCandidates(
     const dateStr = getFormattedDate(year, month, day);
     const sourceShift = (schedule[dateStr]?.[sourceStaff.id] || '') as ShiftPatternId;
 
-    // Only include staff who are working on this day (have a work shift)
-    const workShifts = ['A', 'B', 'C', 'D', 'E', 'J'];
-
     return allStaff
         .filter(s => {
             if (s.id === sourceStaff.id) return false; // Exclude self
             const shift = schedule[dateStr]?.[s.id];
-            if (!shift || !workShifts.includes(shift)) return false; // Only working staff
+            if (!isWorkShiftId(shift)) return false; // Only working staff
             if (shift === sourceShift) return false; // Same shift = no point swapping
             // Exclude part-time, cooking, and no_shift staff from swap
             if (s.shiftType === 'part_time' || s.shiftType === 'cooking' || s.shiftType === 'no_shift') return false;

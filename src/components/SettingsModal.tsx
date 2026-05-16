@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Settings, ShiftPatternDefinition } from '../types';
-import { X, Save, Settings2 } from 'lucide-react';
+import { X, Save, Settings2, Plus, Trash2 } from 'lucide-react';
+import { isWorkShiftId } from '../types';
 
 interface SettingsModalProps {
     settings: Settings;
@@ -15,11 +16,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, patterns
     const [patternsForm, setPatternsForm] = useState<ShiftPatternDefinition[]>([...patterns]);
 
     const handleSave = () => {
+        const cleanedPatterns = patternsForm
+            .map(p => ({ ...p, id: p.id.trim(), name: p.name.trim() || p.id.trim() }))
+            .filter(p => isWorkShiftId(p.id));
+
+        if (cleanedPatterns.length === 0) {
+            window.alert('勤務シフトパターンを1つ以上登録してください。');
+            return;
+        }
+
+        const duplicateId = cleanedPatterns
+            .map(p => p.id)
+            .find((id, index, ids) => ids.indexOf(id) !== index);
+        if (duplicateId) {
+            window.alert(`シフトID「${duplicateId}」が重複しています。別のIDにしてください。`);
+            return;
+        }
+
+        const saturdayShiftPattern = cleanedPatterns.some(p => p.id === form.saturdayShiftPattern)
+            ? form.saturdayShiftPattern
+            : cleanedPatterns[0]?.id || '';
+
         onSave({
             ...form,
             profileName: form.profileName.trim() || 'デフォルト園',
+            saturdayShiftPattern,
         });
-        onUpdatePatterns(patternsForm);
+        onUpdatePatterns(cleanedPatterns);
         onClose();
     };
 
@@ -28,10 +51,45 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, patterns
         setForm({ ...form, [field]: Number.isFinite(parsed) ? parsed : fallback });
     };
 
-    const handlePatternChange = (id: string, field: keyof ShiftPatternDefinition, value: any) => {
-        setPatternsForm(prev => prev.map(p =>
-            p.id === id ? { ...p, [field]: value } : p
+    const handlePatternChange = (index: number, field: keyof ShiftPatternDefinition, value: any) => {
+        setPatternsForm(prev => prev.map((p, currentIndex) =>
+            currentIndex === index ? { ...p, [field]: value } : p
         ));
+    };
+
+    const handlePatternIdChange = (index: number, nextId: string) => {
+        const currentId = patternsForm[index]?.id;
+        const normalized = nextId.trim().toUpperCase();
+        setPatternsForm(prev => prev.map((p, currentIndex) =>
+            currentIndex === index ? { ...p, id: normalized } : p
+        ));
+        if (currentId && form.saturdayShiftPattern === currentId) {
+            setForm({ ...form, saturdayShiftPattern: normalized });
+        }
+    };
+
+    const handleAddPattern = () => {
+        let index = patternsForm.length + 1;
+        let id = `S${index}`;
+        while (patternsForm.some(p => p.id === id)) {
+            index++;
+            id = `S${index}`;
+        }
+        setPatternsForm(prev => [
+            ...prev,
+            { id, name: '新規シフト', timeRange: '9:00-17:00', minCount: 0, breakTime: '1:00', workTime: '7:00', color: 'bg-gray-200' }
+        ]);
+    };
+
+    const handleDeletePattern = (index: number) => {
+        const id = patternsForm[index]?.id;
+        if (!id) return;
+        if (!window.confirm(`${id} を削除しますか？\n既存のシフト表に入っている ${id} は自動では消えません。`)) return;
+        const nextPatterns = patternsForm.filter((_, currentIndex) => currentIndex !== index);
+        setPatternsForm(nextPatterns);
+        if (form.saturdayShiftPattern === id) {
+            setForm({ ...form, saturdayShiftPattern: nextPatterns[0]?.id || '' });
+        }
     };
 
     return (
@@ -115,13 +173,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, patterns
                                 <select
                                     className="w-full border rounded p-2"
                                     value={form.saturdayShiftPattern}
-                                    onChange={e => setForm({ ...form, saturdayShiftPattern: e.target.value as 'A' | 'B' | 'C' | 'D' | 'E' | 'J' })}
+                                    onChange={e => setForm({ ...form, saturdayShiftPattern: e.target.value })}
                                 >
-                                    {['A', 'B', 'C', 'D', 'E', 'J'].map(id => {
-                                        const pattern = patterns.find(p => p.id === id);
+                                    {patternsForm.filter(pattern => isWorkShiftId(pattern.id)).map(pattern => {
                                         return (
-                                            <option key={id} value={id}>
-                                                {id}: {pattern?.name || ''} ({pattern?.timeRange || ''})
+                                            <option key={pattern.id} value={pattern.id}>
+                                                {pattern.id}: {pattern.name || ''} ({pattern.timeRange || ''})
                                             </option>
                                         );
                                     })}
@@ -133,19 +190,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, patterns
 
                     {/* Shift Pattern Settings */}
                     <section>
-                        <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">シフトパターン設定</h3>
+                        <div className="flex items-center justify-between mb-4 border-b pb-2">
+                            <h3 className="text-lg font-bold text-gray-800">シフトパターン設定</h3>
+                            <button
+                                onClick={handleAddPattern}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg bg-[#FF6B6B] text-white hover:bg-[#FF5252] transition-colors"
+                            >
+                                <Plus size={16} />
+                                追加
+                            </button>
+                        </div>
                         <div className="space-y-4">
-                            {patternsForm.map(p => (
-                                <div key={p.id} className="grid grid-cols-12 gap-4 items-center bg-gray-50 p-3 rounded-lg">
-                                    <div className="col-span-1 font-bold text-center bg-white border rounded py-1">
-                                        {p.id}
+                            {patternsForm.map((p, index) => (
+                                <div key={index} className="grid grid-cols-12 gap-3 items-center bg-gray-50 p-3 rounded-lg">
+                                    <div className="col-span-2">
+                                        <label className="block text-xs text-gray-500">ID</label>
+                                        <input
+                                            className="w-full border rounded p-1 text-sm font-bold text-center"
+                                            value={p.id}
+                                            onChange={e => handlePatternIdChange(index, e.target.value)}
+                                        />
                                     </div>
                                     <div className="col-span-3">
                                         <label className="block text-xs text-gray-500">名称</label>
                                         <input
                                             className="w-full border rounded p-1 text-sm"
                                             value={p.name}
-                                            onChange={e => handlePatternChange(p.id, 'name', e.target.value)}
+                                            onChange={e => handlePatternChange(index, 'name', e.target.value)}
                                         />
                                     </div>
                                     <div className="col-span-4">
@@ -153,18 +224,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, patterns
                                         <input
                                             className="w-full border rounded p-1 text-sm"
                                             value={p.timeRange}
-                                            onChange={e => handlePatternChange(p.id, 'timeRange', e.target.value)}
+                                            onChange={e => handlePatternChange(index, 'timeRange', e.target.value)}
                                         />
                                     </div>
-                                    <div className="col-span-4">
+                                    <div className="col-span-2">
                                         <label className="block text-xs text-gray-500">平日最低人数</label>
                                         <input
                                             type="number"
                                             className="w-full border rounded p-1 text-sm"
                                             value={p.minCount}
-                                            onChange={e => handlePatternChange(p.id, 'minCount', parseInt(e.target.value))}
+                                            onChange={e => handlePatternChange(index, 'minCount', parseInt(e.target.value, 10) || 0)}
                                             min={0}
                                         />
+                                    </div>
+                                    <div className="col-span-1 flex justify-end pt-4">
+                                        <button
+                                            onClick={() => handleDeletePattern(index)}
+                                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                            title="削除"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
                                     </div>
                                 </div>
                             ))}
