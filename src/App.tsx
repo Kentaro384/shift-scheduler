@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId, TimeRangeSchedule, TimeRange } from './types';
-import { HOLIDAY_PATTERNS, countsForStaffing, isCookingStaff, isProtectedShiftId, isTimeRangeStaff, isWorkShiftId } from './types';
+import { HOLIDAY_PATTERNS, countsForStaffing, isCookingStaff, isProtectedShiftId, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId } from './types';
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { countAllPatterns } from './lib/shiftCountUtils';
 import { exportToExcel } from './lib/excelExport';
-import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, DatabaseBackup } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, DatabaseBackup } from 'lucide-react';
 import { StaffList } from './components/StaffList';
 import { SettingsModal } from './components/SettingsModal';
 import { HolidayModal } from './components/HolidayModal';
@@ -138,7 +138,7 @@ function App() {
   };
 
   const handleReset = () => {
-    if (!window.confirm('自動生成されたシフトをリセットしますか？\n（手動入力された時間指定・有給・振休・出張などの固定予定は保持されます）')) {
+    if (!window.confirm('自動生成されたシフトをリセットしますか？\n（手動入力された時間指定・有給・振休・研修・出張などの固定予定は保持されます）')) {
       return;
     }
 
@@ -170,6 +170,69 @@ function App() {
 
     setSchedule(newSchedule);
     firestoreStorage.saveSchedule(newSchedule);
+  };
+
+  const handleApplyDefaultTimeRanges = () => {
+    const targetStaff = staff.filter(s => isTimeRangeStaff(s) && s.defaultTimeRange);
+    if (targetStaff.length === 0) {
+      toast.info('固定勤務を反映できません', 'デフォルト勤務時間が設定された時間指定職員がいません');
+      return;
+    }
+
+    if (!window.confirm(`${year}年${month}月に、時間指定職員のデフォルト勤務を反映しますか？\n既存の時間入力・休み・有給・研修などの予定は上書きしません。`)) {
+      return;
+    }
+
+    const newTimeRangeSchedule: TimeRangeSchedule = { ...timeRangeSchedule };
+    let appliedCount = 0;
+    let skippedCount = 0;
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, month - 1, d);
+      const weekday = date.getDay();
+      if (weekday === 0) continue;
+
+      const dateStr = getFormattedDate(year, month, d);
+      if (holidays.some(h => h.date === dateStr)) continue;
+
+      targetStaff.forEach(s => {
+        if (!isStaffAvailableOnWeekday(s, weekday)) return;
+
+        const existingShift = schedule[dateStr]?.[s.id];
+        if (existingShift) {
+          skippedCount++;
+          return;
+        }
+
+        const existingRanges = (newTimeRangeSchedule[dateStr] || {}) as Record<string | number, TimeRange>;
+        if (existingRanges[s.id] || existingRanges[String(s.id)]) {
+          skippedCount++;
+          return;
+        }
+
+        if (!newTimeRangeSchedule[dateStr]) {
+          newTimeRangeSchedule[dateStr] = {};
+        } else {
+          newTimeRangeSchedule[dateStr] = { ...newTimeRangeSchedule[dateStr] };
+        }
+
+        newTimeRangeSchedule[dateStr][s.id] = {
+          start: s.defaultTimeRange!.start,
+          end: s.defaultTimeRange!.end,
+          countAsShifts: [...(s.defaultTimeRange!.countAsShifts || [])],
+        };
+        appliedCount++;
+      });
+    }
+
+    if (appliedCount === 0) {
+      toast.info('固定勤務の反映はありませんでした', skippedCount > 0 ? `${skippedCount}件は既存入力があるため保持しました` : '対象曜日がありません');
+      return;
+    }
+
+    setTimeRangeSchedule(newTimeRangeSchedule);
+    firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule);
+    toast.success('固定勤務を反映しました', `${appliedCount}件を追加、${skippedCount}件を保持しました`);
   };
 
   const handleUpdateStaff = (newStaff: Staff[]) => {
@@ -343,6 +406,7 @@ function App() {
     // 有給 - グレー背景 + ピンクのアクセント（休み感を強調）
     if (shiftId === '有') return `${restBaseStyle} bg-[#F3F4F6] border border-[#F472B6] border-l-[5px] border-l-[#F472B6] opacity-75`;
     if (shiftId === '半有') return `${restBaseStyle} bg-[#FFF1F2] border border-[#FB7185] border-l-[5px] border-l-[#FB7185]`;
+    if (shiftId === '研') return `${restBaseStyle} bg-[#ECFDF5] border border-[#34D399] border-l-[5px] border-l-[#34D399]`;
     if (shiftId === '出') return `${restBaseStyle} bg-[#EFF6FF] border border-[#60A5FA] border-l-[5px] border-l-[#60A5FA]`;
     if (shiftId === '保') return `${restBaseStyle} bg-[#F1F5F9] border border-[#64748B] border-l-[5px] border-l-[#64748B]`;
     // 休日 - Cool Gray (最も目立たせない)
@@ -387,6 +451,7 @@ function App() {
       '振': '○', // 白丸
       '有': '◇', // 白菱形
       '半有': '◐',
+      '研': '✎',
       '出': '↗',
       '保': '□',
       '休': '－', // 横線
@@ -586,6 +651,13 @@ function App() {
               >
                 <RotateCcw size={16} className="md:w-[18px] md:h-[18px]" />
                 <span className="hidden sm:inline">リセット</span>
+              </button>
+              <button
+                onClick={handleApplyDefaultTimeRanges}
+                className="flex items-center space-x-1 md:space-x-2 px-2.5 landscape:px-2 md:px-4 py-1.5 landscape:py-1 md:py-2 bg-white text-gray-600 border border-gray-200 rounded-full hover:border-[#10B981] hover:text-[#059669] transition-all duration-200 font-medium active:scale-95 text-xs landscape:text-xs md:text-sm"
+              >
+                <CalendarCheck size={16} className="md:w-[18px] md:h-[18px]" />
+                <span className="hidden sm:inline">固定勤務</span>
               </button>
               <button
                 onClick={handleGenerate}

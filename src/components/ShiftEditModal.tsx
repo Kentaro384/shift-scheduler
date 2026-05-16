@@ -112,12 +112,14 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
                     ? 'bg-[#F3F4F6] text-[#F472B6] border-2 border-[#F472B6]'
                     : pattern.id === '半有'
                         ? 'bg-[#FFF1F2] text-[#BE123C] border-2 border-[#FB7185]'
-                        : pattern.id === '出'
-                            ? 'bg-[#EFF6FF] text-[#1D4ED8] border-2 border-[#60A5FA]'
-                            : pattern.id === '保'
-                                ? 'bg-[#F1F5F9] text-[#475569] border-2 border-[#64748B]'
-                                : 'bg-gray-100 text-gray-400',
-            marker: pattern.id === '振' ? '○' : pattern.id === '有' ? '◇' : pattern.id === '半有' ? '◐' : pattern.id === '出' ? '↗' : pattern.id === '保' ? '□' : '－',
+                        : pattern.id === '研'
+                            ? 'bg-[#ECFDF5] text-[#047857] border-2 border-[#34D399]'
+                            : pattern.id === '出'
+                                ? 'bg-[#EFF6FF] text-[#1D4ED8] border-2 border-[#60A5FA]'
+                                : pattern.id === '保'
+                                    ? 'bg-[#F1F5F9] text-[#475569] border-2 border-[#64748B]'
+                                    : 'bg-gray-100 text-gray-400',
+            marker: pattern.id === '振' ? '○' : pattern.id === '有' ? '◇' : pattern.id === '半有' ? '◐' : pattern.id === '研' ? '✎' : pattern.id === '出' ? '↗' : pattern.id === '保' ? '□' : '－',
         })),
     ];
 

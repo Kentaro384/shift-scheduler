@@ -51,6 +51,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
         counts['振'] = 0;
         counts['有'] = 0;
         counts['半有'] = 0;
+        counts['研'] = 0;
         counts['出'] = 0;
         counts['保'] = 0;
 
@@ -64,7 +65,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                     counts['振'] = (counts['振'] || 0) + 1;
                 } else if (shift === '有') {
                     counts['有'] = (counts['有'] || 0) + 1;
-                } else if (shift === '半有' || shift === '出' || shift === '保') {
+                } else if (shift === '半有' || shift === '研' || shift === '出' || shift === '保') {
                     counts[shift] = (counts[shift] || 0) + 1;
                 }
             }
@@ -189,7 +190,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                 const total = shiftOrder.reduce((sum, shift) => sum + (counts[shift] || 0), 0);
                                 const furikyu = counts['振'] || 0;
                                 const yukyu = counts['有'] || 0;
-                                const fixedPlans = (counts['半有'] || 0) + (counts['出'] || 0) + (counts['保'] || 0);
+                                const fixedPlans = (counts['半有'] || 0) + (counts['研'] || 0) + (counts['出'] || 0) + (counts['保'] || 0);
 
                                 return (
                                     <div key={s.id} className="flex items-center gap-2">

@@ -123,12 +123,13 @@ export const HOLIDAY_PATTERNS = [
     { id: '振', name: '振休', color: 'bg-purple-200' },
     { id: '有', name: '有給', color: 'bg-pink-200' },
     { id: '半有', name: '半日有給', color: 'bg-rose-100' },
+    { id: '研', name: '研修', color: 'bg-emerald-100' },
     { id: '出', name: '出張・外出', color: 'bg-sky-100' },
     { id: '保', name: '保留・その他', color: 'bg-slate-100' },
     { id: '休', name: '公休', color: 'bg-gray-100' },
 ];
 
-export const PROTECTED_SHIFT_IDS: ShiftPatternId[] = ['振', '有', '半有', '出', '保'];
+export const PROTECTED_SHIFT_IDS: ShiftPatternId[] = ['振', '有', '半有', '研', '出', '保'];
 export const HOLIDAY_SHIFT_IDS: ShiftPatternId[] = [...PROTECTED_SHIFT_IDS, '休', ''];
 
 export function isProtectedShiftId(shift: ShiftPatternId | undefined | null): boolean {

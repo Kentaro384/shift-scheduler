@@ -37,6 +37,7 @@ const TAILWIND_BG_COLORS: Record<string, string> = {
     'bg-orange-200': 'FED7AA',
     'bg-purple-200': 'E9D5FF',
     'bg-teal-200': '99F6E4',
+    'bg-emerald-100': 'D1FAE5',
     'bg-pink-200': 'FBCFE8',
     'bg-rose-100': 'FFE4E6',
     'bg-sky-100': 'E0F2FE',
