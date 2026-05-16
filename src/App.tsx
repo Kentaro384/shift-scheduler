@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId, TimeRangeSchedule, TimeRange } from './types';
+import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId, TimeRangeSchedule, TimeRange, DailyNotes } from './types';
 import { HOLIDAY_PATTERNS, countsForStaffing, getStaffTimeRangeForWeekday, isCookingStaff, isProtectedShiftId, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId } from './types';
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
@@ -39,6 +39,7 @@ function App() {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [patterns, setPatterns] = useState<ShiftPatternDefinition[]>([]);
   const [timeRangeSchedule, setTimeRangeSchedule] = useState<TimeRangeSchedule>({});
+  const [notes, setNotes] = useState<DailyNotes>({});
 
   // Modal States
   const [showStaffList, setShowStaffList] = useState(false);
@@ -99,6 +100,7 @@ function App() {
         setHolidays(data.holidays || []);
         setPatterns(firestoreStorage.normalizePatterns(data.patterns));
         setTimeRangeSchedule(data.timeRangeSchedule || {});
+        setNotes(data.notes || {});
       } else {
         // Initialize with defaults if no data exists
         setPatterns(firestoreStorage.normalizePatterns());
@@ -217,17 +219,20 @@ function App() {
     const newSchedule = { ...schedule };
     const newTimeRangeSchedule = { ...timeRangeSchedule };
     const newManualShifts = { ...manualShifts };
+    const newNotes = { ...notes };
 
     const dateStrings = days.map(day => getFormattedDate(year, month, day));
     for (const dateStr of dateStrings) {
       delete newSchedule[dateStr];
       delete newTimeRangeSchedule[dateStr];
       delete newManualShifts[dateStr];
+      delete newNotes[dateStr];
     }
 
     setSchedule(newSchedule);
     setTimeRangeSchedule(newTimeRangeSchedule);
     setManualShifts(newManualShifts);
+    setNotes(newNotes);
     setShowSettingsMenu(false);
 
     try {
@@ -575,7 +580,20 @@ function App() {
       timeRangeSchedule,
       patterns,
       holidays,
+      notes,
     });
+  };
+
+  const handleNoteEdit = (day: number) => {
+    const dateStr = getFormattedDate(year, month, day);
+    const holidayName = holidays.find(h => h.date === dateStr)?.name || '';
+    const currentNote = notes[dateStr] || '';
+    const input = window.prompt(`${month}/${day} の備考を入力してください`, currentNote || holidayName);
+    if (input === null) return;
+
+    const newNotes = { ...notes, [dateStr]: input.trim() };
+    setNotes(newNotes);
+    void firestoreStorage.saveNotes(newNotes);
   };
 
   const monthDateStrings = days.map(day => getFormattedDate(year, month, day));
@@ -747,6 +765,7 @@ function App() {
                           setSettings(firestoreStorage.normalizeSettings(data.settings));
                           setHolidays(data.holidays);
                           setPatterns(data.patterns);
+                          setNotes(data.notes || {});
                           setShowSettingsMenu(false);
                           alert('データを移行しました！');
                         }}
@@ -878,6 +897,26 @@ function App() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
+                <tr className="bg-amber-50/70 border-b border-amber-100">
+                  <td className="border-r border-amber-100 p-1.5 md:p-2 sticky left-0 z-10 bg-amber-50 font-bold text-amber-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
+                    備考
+                  </td>
+                  {days.map(day => {
+                    const dateStr = getFormattedDate(year, month, day);
+                    const holidayName = holidays.find(h => h.date === dateStr)?.name || '';
+                    const note = notes[dateStr] || '';
+                    return (
+                      <td
+                        key={day}
+                        className="h-10 max-w-[45px] border-r border-amber-100 px-1 py-1 text-center text-[10px] leading-tight text-amber-900 cursor-pointer hover:bg-amber-100 transition-colors"
+                        onClick={() => handleNoteEdit(day)}
+                        title={note || holidayName || 'クリックして備考を入力'}
+                      >
+                        <div className="line-clamp-2 break-words">{note || holidayName || ''}</div>
+                      </td>
+                    );
+                  })}
+                </tr>
                 {staff.map(s => {
                   return (
                     <tr key={s.id} className="hover:bg-gradient-to-r hover:from-pink-50 hover:via-white hover:to-yellow-50 transition-all duration-200">

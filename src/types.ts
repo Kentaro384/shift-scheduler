@@ -103,6 +103,9 @@ export interface Holiday {
 // Map of YYYY-MM-DD -> StaffId -> ShiftPatternId
 export type ShiftSchedule = Record<string, Record<number, ShiftPatternId>>;
 
+// Map of YYYY-MM-DD -> note text for the printed monthly schedule
+export type DailyNotes = Record<string, string>;
+
 // Time range for part-time workers
 export interface TimeRange {
     start: string;  // "HH:MM" format (e.g., "09:00")

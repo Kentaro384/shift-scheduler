@@ -8,7 +8,7 @@ import {
 } from 'firebase/firestore';
 import type { FirestoreError, Unsubscribe } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, TimeRangeSchedule } from '../types';
+import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, TimeRangeSchedule, DailyNotes } from '../types';
 import { SHIFT_PATTERNS, normalizeShiftPatterns } from '../types';
 
 // Collection paths
@@ -24,6 +24,7 @@ interface OrganizationData {
     patterns: ShiftPatternDefinition[];
     manualShifts: ShiftSchedule;
     timeRangeSchedule: TimeRangeSchedule;  // Part-time worker time ranges
+    notes: DailyNotes;
     updatedAt: number;
 }
 
@@ -112,6 +113,10 @@ export const firestoreStorage = {
         await this.saveAll({ timeRangeSchedule });
     },
 
+    async saveNotes(notes: DailyNotes): Promise<void> {
+        await this.saveAll({ notes });
+    },
+
     async clearMonthData(dateStrings: string[], currentStaff: Staff[]): Promise<void> {
         const updates: Record<string, unknown> = {
             staff: currentStaff,
@@ -122,6 +127,7 @@ export const firestoreStorage = {
             updates[`schedule.${dateStr}`] = deleteField();
             updates[`timeRangeSchedule.${dateStr}`] = deleteField();
             updates[`manualShifts.${dateStr}`] = deleteField();
+            updates[`notes.${dateStr}`] = deleteField();
         });
 
         await updateDoc(getDocRef(), updates);

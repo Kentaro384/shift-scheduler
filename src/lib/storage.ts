@@ -109,6 +109,7 @@ export const storage = {
             holidays: storage.getHolidays(),
             patterns: storage.getPatterns(),
             manualShifts: {},
+            notes: {},
         };
     },
 

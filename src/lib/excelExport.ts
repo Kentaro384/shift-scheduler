@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
-import type { Staff, ShiftSchedule, ShiftPatternDefinition, Holiday, TimeRangeSchedule, TimeRange } from '../types';
+import type { Staff, ShiftSchedule, ShiftPatternDefinition, Holiday, TimeRangeSchedule, TimeRange, DailyNotes } from '../types';
 import { HOLIDAY_PATTERNS, isTimeRangeStaff, isWorkShiftId } from '../types';
 import { getDaysInMonth, getFormattedDate } from './utils';
 
@@ -12,6 +12,7 @@ interface ExportOptions {
     timeRangeSchedule: TimeRangeSchedule;
     patterns: ShiftPatternDefinition[];
     holidays: Holiday[];
+    notes: DailyNotes;
 }
 
 // 曜日名
@@ -23,10 +24,13 @@ const COLORS = {
     sundayBg: 'FFCCCC',     // 薄いピンク
     headerBg: 'E8E8E8',     // グレー
     legendBg: 'F5F5F5',     // 薄いグレー
-    border: 'D9DEE7',
+    border: '000000',
     staffBg: 'F8FAFC',
     fixedBg: 'FDF2F8',
     timeRangeBg: 'F1F5F9',
+    titleBg: 'FFD966',
+    titleAccentBg: 'F4B183',
+    noteBg: 'FFF2CC',
 };
 
 const TAILWIND_BG_COLORS: Record<string, string> = {
@@ -84,266 +88,305 @@ function applyThinBorder(cell: ExcelJS.Cell): void {
     };
 }
 
+function applyMediumBorder(cell: ExcelJS.Cell): void {
+    cell.border = {
+        top: { style: 'medium', color: { argb: COLORS.border } },
+        left: { style: 'medium', color: { argb: COLORS.border } },
+        bottom: { style: 'medium', color: { argb: COLORS.border } },
+        right: { style: 'medium', color: { argb: COLORS.border } },
+    };
+}
+
+function setSolidFill(cell: ExcelJS.Cell, color: string): void {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+}
+
+function getNoteText(dateStr: string, notes: DailyNotes, holidays: Holiday[]): string {
+    const note = (notes[dateStr] || '').trim();
+    const holidayName = holidays.find(h => h.date === dateStr)?.name || '';
+    if (note && holidayName && note !== holidayName) return `${holidayName}\n${note}`;
+    return note || holidayName;
+}
+
+function getColumnLetter(col: number): string {
+    let letter = '';
+    let current = col;
+    while (current > 0) {
+        const rem = (current - 1) % 26;
+        letter = String.fromCharCode(65 + rem) + letter;
+        current = Math.floor((current - 1) / 26);
+    }
+    return letter;
+}
+
 export async function exportToExcel(options: ExportOptions): Promise<void> {
-    const { year, month, staff, schedule, timeRangeSchedule, patterns, holidays } = options;
+    const { year, month, staff, schedule, timeRangeSchedule, patterns, holidays, notes } = options;
     const daysInMonth = getDaysInMonth(year, month);
     const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-
-    // ワークブック作成
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet(`${year}年${month}月`);
-
-    // 列幅設定
-    const columns: Partial<ExcelJS.Column>[] = [];
-    columns.push({ width: 18 }); // 職員名列
-    for (let i = 0; i < daysInMonth; i++) {
-        columns.push({ width: 5 }); // 日付列
-    }
-    // 集計列
     const summaryPatternIds = patterns.filter(p => isWorkShiftId(p.id)).map(p => p.id);
     const summaryFixedIds = HOLIDAY_PATTERNS.map(p => p.id);
-    for (let i = 0; i < summaryPatternIds.length + summaryFixedIds.length + 1; i++) {
-        columns.push({ width: 4 });
-    }
-    worksheet.columns = columns;
-    worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 11 }];
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(`${year}年${month}月`);
+    const printLastCol = daysInMonth + 1;
+    const summaryStartCol = printLastCol + 2;
+    const legendPatterns = patterns.filter(p => isWorkShiftId(p.id));
+
+    worksheet.columns = [
+        { width: 18 },
+        ...Array.from({ length: daysInMonth }, () => ({ width: 4.8 })),
+        { width: 2 },
+        ...Array.from({ length: summaryPatternIds.length + summaryFixedIds.length + 1 }, () => ({ width: 4 })),
+    ];
+    worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 5 }];
     worksheet.pageSetup = {
         orientation: 'landscape',
+        paperSize: 9,
         fitToPage: true,
         fitToWidth: 1,
-        fitToHeight: 0,
+        fitToHeight: 1,
         horizontalCentered: true,
+        verticalCentered: false,
         margins: {
-            left: 0.25,
-            right: 0.25,
-            top: 0.5,
-            bottom: 0.5,
-            header: 0.2,
-            footer: 0.2,
+            left: 0.15,
+            right: 0.15,
+            top: 0.25,
+            bottom: 0.25,
+            header: 0.1,
+            footer: 0.1,
         },
     };
 
-    // ========== 行1-7: 凡例テーブル（右上、26日列から開始） ==========
-    const legendStartCol = 26; // 26日の列 = 1(職員名) + 25 = 26
-    const legendPatterns = patterns.filter(p => isWorkShiftId(p.id));
+    worksheet.mergeCells(1, 1, 1, 2);
+    const yearCell = worksheet.getCell(1, 1);
+    yearCell.value = year;
+    yearCell.font = { bold: true, size: 22 };
+    yearCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    setSolidFill(yearCell, COLORS.titleBg);
 
-    // 凡例ヘッダー（行1）
-    const legendHeaders = ['シフト', '開始時間', '終了時間', '休憩時間', '勤務時間', '必要人数'];
-    legendHeaders.forEach((header, idx) => {
-        const cell = worksheet.getCell(1, legendStartCol + idx);
-        cell.value = header;
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.headerBg } };
-        cell.font = { bold: true, size: 9 };
-        cell.alignment = { horizontal: 'center' };
-        applyThinBorder(cell);
-    });
+    worksheet.getCell(1, 3).value = '年';
+    worksheet.getCell(1, 3).font = { bold: true, size: 18 };
+    worksheet.getCell(1, 3).alignment = { horizontal: 'center', vertical: 'middle' };
 
-    // 凡例データ（行2-7）
-    legendPatterns.forEach((p, idx) => {
-        const rowNum = 2 + idx;
-        const [start, end] = p.timeRange.split('-');
-        const values = [p.id, start, end, p.breakTime, p.workTime, p.minCount];
-        values.forEach((val, colIdx) => {
-            const cell = worksheet.getCell(rowNum, legendStartCol + colIdx);
-            cell.value = val;
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colIdx === 0 ? getTailwindFill(p.color, COLORS.legendBg) : COLORS.legendBg } };
-            cell.font = { size: 9 };
-            cell.alignment = { horizontal: 'center' };
-            applyThinBorder(cell);
-        });
-    });
+    worksheet.mergeCells(1, 4, 1, 5);
+    const monthCell = worksheet.getCell(1, 4);
+    monthCell.value = month;
+    monthCell.font = { bold: true, size: 22 };
+    monthCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    setSolidFill(monthCell, COLORS.titleAccentBg);
 
-    // 休暇系凡例（行7以降）
-    const holidayLegend = HOLIDAY_PATTERNS;
-    holidayLegend.forEach((h, idx) => {
-        const rowNum = 2 + legendPatterns.length + idx;
-        const values = [h.id, h.name, '', '', '', ''];
-        values.forEach((val, colIdx) => {
-            const cell = worksheet.getCell(rowNum, legendStartCol + colIdx);
-            cell.value = val;
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colIdx === 0 ? getTailwindFill(h.color, COLORS.legendBg) : COLORS.legendBg } };
-            cell.font = { size: 9 };
-            cell.alignment = { horizontal: 'center' };
-            applyThinBorder(cell);
-        });
-    });
+    worksheet.getCell(1, 6).value = '月';
+    worksheet.getCell(1, 6).font = { bold: true, size: 18 };
+    worksheet.getCell(1, 6).alignment = { horizontal: 'center', vertical: 'middle' };
 
-    // ========== 行8: タイトル行 ==========
-    const titleRow = 8;
-    worksheet.getCell(titleRow, 1).value = year;
-    worksheet.getCell(titleRow, 2).value = '年';
-    worksheet.getCell(titleRow, 3).value = month;
-    worksheet.getCell(titleRow, 4).value = '月';
-    worksheet.getCell(titleRow, 5).value = '勤務表';
-    for (let i = 1; i <= 5; i++) {
-        worksheet.getCell(titleRow, i).font = { bold: true, size: 12 };
+    worksheet.mergeCells(1, 7, 1, Math.min(printLastCol, 11));
+    const titleCell = worksheet.getCell(1, 7);
+    titleCell.value = '勤務表';
+    titleCell.font = { bold: true, size: 20 };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    setSolidFill(titleCell, COLORS.titleBg);
+    worksheet.getRow(1).height = 28;
+
+    for (let col = 1; col <= printLastCol; col++) {
+        applyMediumBorder(worksheet.getCell(1, col));
     }
 
-    // ========== 行9: 日付行 ==========
-    const dateRow = 9;
-    worksheet.getCell(dateRow, 1).value = '日付';
-    worksheet.getCell(dateRow, 1).font = { bold: true };
-    days.forEach((day, idx) => {
-        const cell = worksheet.getCell(dateRow, 2 + idx);
-        cell.value = day;
-        cell.alignment = { horizontal: 'center' };
-        cell.font = { bold: true };
+    const dateRow = 3;
+    const weekdayRow = 4;
+    const noteRow = 5;
 
-        const fill = getDayFill(year, month, day, holidays);
-        if (fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+    [
+        { row: dateRow, label: '日付', height: 22 },
+        { row: weekdayRow, label: '曜日', height: 22 },
+        { row: noteRow, label: '備考', height: 82 },
+    ].forEach(({ row, label, height }) => {
+        const labelCell = worksheet.getCell(row, 1);
+        labelCell.value = label;
+        labelCell.font = { bold: true, size: 11 };
+        labelCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        setSolidFill(labelCell, row === noteRow ? COLORS.noteBg : COLORS.headerBg);
+        applyMediumBorder(labelCell);
+        worksheet.getRow(row).height = height;
+    });
+
+    const summaryHeaders = [...summaryPatternIds, ...summaryFixedIds, '合計'];
+    worksheet.getCell(dateRow, summaryStartCol - 1).value = '集計';
+    worksheet.getCell(dateRow, summaryStartCol - 1).font = { bold: true, size: 10 };
+    worksheet.getCell(dateRow, summaryStartCol - 1).alignment = { horizontal: 'center', vertical: 'middle' };
+    setSolidFill(worksheet.getCell(dateRow, summaryStartCol - 1), COLORS.headerBg);
+    applyThinBorder(worksheet.getCell(dateRow, summaryStartCol - 1));
+    summaryHeaders.forEach((label, idx) => {
+        const cell = worksheet.getCell(dateRow, summaryStartCol + idx);
+        cell.value = label;
+        cell.font = { bold: true, size: 9 };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        setSolidFill(cell, getShiftFill(label, patterns) || COLORS.headerBg);
         applyThinBorder(cell);
     });
-    // 集計ヘッダー
-    let summaryCol = 2 + daysInMonth;
-    summaryPatternIds.forEach(id => {
-        worksheet.getCell(dateRow, summaryCol).value = id;
-        worksheet.getCell(dateRow, summaryCol).alignment = { horizontal: 'center' };
-        worksheet.getCell(dateRow, summaryCol).font = { bold: true };
-        worksheet.getCell(dateRow, summaryCol).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: getShiftFill(id, patterns) || COLORS.headerBg } };
-        applyThinBorder(worksheet.getCell(dateRow, summaryCol));
-        summaryCol++;
-    });
-    [...summaryFixedIds, '合計'].forEach(label => {
-        worksheet.getCell(dateRow, summaryCol).value = label;
-        worksheet.getCell(dateRow, summaryCol).alignment = { horizontal: 'center' };
-        worksheet.getCell(dateRow, summaryCol).font = { bold: true };
-        const fill = getShiftFill(label, patterns);
-        if (fill) worksheet.getCell(dateRow, summaryCol).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
-        applyThinBorder(worksheet.getCell(dateRow, summaryCol));
-        summaryCol++;
-    });
 
-    // ========== 行10: 曜日行 ==========
-    const dowRow = 10;
-    worksheet.getCell(dowRow, 1).value = '曜日';
-    worksheet.getCell(dowRow, 1).font = { bold: true };
     days.forEach((day, idx) => {
+        const col = 2 + idx;
         const date = new Date(year, month - 1, day);
         const dow = date.getDay();
-        const cell = worksheet.getCell(dowRow, 2 + idx);
-        cell.value = DAY_NAMES[dow];
-        cell.alignment = { horizontal: 'center' };
-
-        const fill = getDayFill(year, month, day, holidays);
-        if (fill) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
-        }
-        if (dow === 0 || holidays.some(h => h.date === getFormattedDate(year, month, day))) {
-            cell.font = { color: { argb: 'FF0000' } };
-        } else if (dow === 6) {
-            cell.font = { color: { argb: '0000FF' } };
-        }
-        applyThinBorder(cell);
-    });
-
-    // ========== 行11: 備考行 ==========
-    const noteRow = 11;
-    worksheet.getCell(noteRow, 1).value = '備考';
-    worksheet.getCell(noteRow, 1).font = { bold: true };
-    applyThinBorder(worksheet.getCell(noteRow, 1));
-    days.forEach((day, idx) => {
         const dateStr = getFormattedDate(year, month, day);
         const holidayName = holidays.find(h => h.date === dateStr)?.name || '';
-        const cell = worksheet.getCell(noteRow, 2 + idx);
-        cell.value = holidayName;
-        cell.font = { size: 8, color: { argb: '475569' } };
-        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-        const fill = getDayFill(year, month, day, holidays);
-        if (fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
-        applyThinBorder(cell);
+        const dayFill = getDayFill(year, month, day, holidays);
+        const dayFontColor = dow === 0 || holidayName ? 'C00000' : dow === 6 ? '0070C0' : '000000';
+
+        const dateCell = worksheet.getCell(dateRow, col);
+        dateCell.value = day;
+        dateCell.font = { bold: true, size: 12, color: { argb: dayFontColor } };
+        dateCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+        const weekdayCell = worksheet.getCell(weekdayRow, col);
+        weekdayCell.value = DAY_NAMES[dow];
+        weekdayCell.font = { bold: true, size: 11, color: { argb: dayFontColor } };
+        weekdayCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+        const noteCell = worksheet.getCell(noteRow, col);
+        noteCell.value = getNoteText(dateStr, notes, holidays);
+        noteCell.font = { size: 8, color: { argb: '000000' } };
+        noteCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true, textRotation: 255 };
+
+        [dateCell, weekdayCell, noteCell].forEach(cell => {
+            setSolidFill(cell, dayFill || (cell === noteCell ? COLORS.noteBg : 'FFFFFF'));
+            applyMediumBorder(cell);
+        });
     });
 
-    // ========== 行12以降: 職員データ ==========
-    let currentRow = 12;
+    let currentRow = 6;
     staff.forEach(s => {
-        const staffCell = worksheet.getCell(currentRow, 1);
-        staffCell.value = `${s.name}\n${s.position}`;
-        staffCell.font = { size: 10, bold: true };
-        staffCell.alignment = { vertical: 'middle', wrapText: true };
-        staffCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.staffBg } };
-        applyThinBorder(staffCell);
-        worksheet.getRow(currentRow).height = 32;
+        const row = worksheet.getRow(currentRow);
+        row.height = 30;
 
-        // 各日のシフト
+        const staffCell = worksheet.getCell(currentRow, 1);
+        staffCell.value = s.name;
+        staffCell.font = { bold: true, size: 11 };
+        staffCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        setSolidFill(staffCell, 'FFFFFF');
+        applyMediumBorder(staffCell);
+
         days.forEach((day, idx) => {
+            const col = 2 + idx;
             const dateStr = getFormattedDate(year, month, day);
             let shift = schedule[dateStr]?.[s.id] || '';
             const timeRange = getTimeRangeForStaff(timeRangeSchedule, dateStr, s.id);
-
-            // 「休」は空欄で出力
-            if (shift === '休') {
-                shift = '';
-            }
-
-            const cell = worksheet.getCell(currentRow, 2 + idx);
-            if (!shift && isTimeRangeStaff(s) && timeRange) {
-                cell.value = `${timeRange.start}\n↓\n${timeRange.end}`;
-                cell.font = { size: 8 };
-                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.timeRangeBg } };
-            } else {
-                cell.value = shift;
-                const shiftFill = getShiftFill(shift, patterns);
-                if (shiftFill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: shiftFill } };
-            }
-            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-
+            const cell = worksheet.getCell(currentRow, col);
             const dayFill = getDayFill(year, month, day, holidays);
-            if (!cell.value && dayFill) {
-                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: dayFill } };
+
+            if (shift === '休') shift = '';
+
+            if (!shift && isTimeRangeStaff(s) && timeRange) {
+                cell.value = `${timeRange.start}\n${timeRange.end}`;
+                cell.font = { size: 8 };
+                setSolidFill(cell, COLORS.timeRangeBg);
+            } else if (shift) {
+                cell.value = shift;
+                cell.font = { bold: true, size: shift.length > 1 ? 9 : 11 };
+                setSolidFill(cell, getShiftFill(shift, patterns) || 'FFFFFF');
+            } else {
+                cell.value = '';
+                setSolidFill(cell, dayFill || 'FFFFFF');
             }
-            applyThinBorder(cell);
+
+            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            applyMediumBorder(cell);
         });
 
-        // シフト別集計
         const counts: Record<string, number> = {};
-        summaryPatternIds.forEach(id => counts[id] = 0);
-        counts['休'] = 0;
-        summaryFixedIds.forEach(id => counts[id] = 0);
-
+        summaryHeaders.forEach(id => counts[id] = 0);
         let totalWorkDays = 0;
         days.forEach(day => {
             const dateStr = getFormattedDate(year, month, day);
             const shift = schedule[dateStr]?.[s.id];
             const timeRange = getTimeRangeForStaff(timeRangeSchedule, dateStr, s.id);
             if (shift) {
-                if (counts[shift] !== undefined) {
-                    counts[shift]++;
-                }
-                if (isWorkShiftId(shift)) {
-                    totalWorkDays++;
-                }
+                if (counts[shift] !== undefined) counts[shift]++;
+                if (isWorkShiftId(shift)) totalWorkDays++;
             } else if (timeRange) {
                 totalWorkDays++;
             }
         });
 
-        // 集計列
-        let colIdx = 2 + daysInMonth;
-        summaryPatternIds.forEach(id => {
-            const cell = worksheet.getCell(currentRow, colIdx);
-            cell.value = counts[id] || 0;
-            cell.alignment = { horizontal: 'center' };
+        [...summaryPatternIds, ...summaryFixedIds].forEach((id, idx) => {
+            const cell = worksheet.getCell(currentRow, summaryStartCol + idx);
+            cell.value = counts[id] || '';
+            cell.font = { size: 9 };
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
             applyThinBorder(cell);
-            colIdx++;
         });
-        summaryFixedIds.forEach(id => {
-            worksheet.getCell(currentRow, colIdx).value = counts[id] || 0;
-            worksheet.getCell(currentRow, colIdx).alignment = { horizontal: 'center' };
-            applyThinBorder(worksheet.getCell(currentRow, colIdx));
-            colIdx++;
-        });
-        worksheet.getCell(currentRow, colIdx).value = totalWorkDays;
-        worksheet.getCell(currentRow, colIdx).alignment = { horizontal: 'center' };
-        applyThinBorder(worksheet.getCell(currentRow, colIdx));
+        const totalCell = worksheet.getCell(currentRow, summaryStartCol + summaryPatternIds.length + summaryFixedIds.length);
+        totalCell.value = totalWorkDays || '';
+        totalCell.font = { bold: true, size: 9 };
+        totalCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        applyThinBorder(totalCell);
 
         currentRow++;
     });
 
-    // ========== 空行とフッター ==========
-    currentRow += 2;
-    worksheet.getCell(currentRow, 1).value = '※ 備考欄は手動で入力してください';
+    currentRow += 1;
+    const patternTitleRow = currentRow;
+    worksheet.getCell(patternTitleRow, 1).value = 'シフトパターン';
+    worksheet.getCell(patternTitleRow, 1).font = { bold: true, size: 11 };
+    worksheet.getCell(patternTitleRow, 1).alignment = { horizontal: 'center', vertical: 'middle' };
+    setSolidFill(worksheet.getCell(patternTitleRow, 1), COLORS.headerBg);
+    applyMediumBorder(worksheet.getCell(patternTitleRow, 1));
 
-    // ファイル出力
+    let legendCol = 2;
+    legendPatterns.forEach(pattern => {
+        if (legendCol > printLastCol) return;
+        const mergeEnd = Math.min(legendCol + 3, printLastCol);
+        worksheet.mergeCells(patternTitleRow, legendCol, patternTitleRow, mergeEnd);
+        const cell = worksheet.getCell(patternTitleRow, legendCol);
+        cell.value = `${pattern.id} ${pattern.timeRange}`;
+        cell.font = { bold: true, size: 9 };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        setSolidFill(cell, getTailwindFill(pattern.color, COLORS.legendBg));
+        for (let col = legendCol; col <= mergeEnd; col++) {
+            applyMediumBorder(worksheet.getCell(patternTitleRow, col));
+        }
+        legendCol = mergeEnd + 1;
+    });
+    worksheet.getRow(patternTitleRow).height = 24;
+
+    currentRow++;
+    worksheet.mergeCells(currentRow, 1, currentRow, printLastCol);
+    const messageCell = worksheet.getCell(currentRow, 1);
+    messageCell.value = 'お互いにサポートし合いながら保育していきましょうね！！';
+    messageCell.font = { bold: true, size: 11 };
+    messageCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    setSolidFill(messageCell, COLORS.noteBg);
+    for (let col = 1; col <= printLastCol; col++) {
+        applyMediumBorder(worksheet.getCell(currentRow, col));
+    }
+    worksheet.getRow(currentRow).height = 24;
+
+    currentRow++;
+    const holidayLegend = HOLIDAY_PATTERNS.filter(pattern => pattern.id !== '休');
+    worksheet.getCell(currentRow, 1).value = '固定予定';
+    worksheet.getCell(currentRow, 1).font = { bold: true, size: 10 };
+    worksheet.getCell(currentRow, 1).alignment = { horizontal: 'center', vertical: 'middle' };
+    setSolidFill(worksheet.getCell(currentRow, 1), COLORS.headerBg);
+    applyMediumBorder(worksheet.getCell(currentRow, 1));
+
+    legendCol = 2;
+    holidayLegend.forEach(pattern => {
+        if (legendCol > printLastCol) return;
+        const mergeEnd = Math.min(legendCol + 2, printLastCol);
+        worksheet.mergeCells(currentRow, legendCol, currentRow, mergeEnd);
+        const cell = worksheet.getCell(currentRow, legendCol);
+        cell.value = `${pattern.id}: ${pattern.name}`;
+        cell.font = { size: 9 };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        setSolidFill(cell, getTailwindFill(pattern.color, COLORS.legendBg));
+        for (let col = legendCol; col <= mergeEnd; col++) {
+            applyMediumBorder(worksheet.getCell(currentRow, col));
+        }
+        legendCol = mergeEnd + 1;
+    });
+    worksheet.getRow(currentRow).height = 22;
+    worksheet.pageSetup.printArea = `A1:${getColumnLetter(printLastCol)}${currentRow}`;
+
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     saveAs(blob, `勤務表_${year}年${month}月.xlsx`);
