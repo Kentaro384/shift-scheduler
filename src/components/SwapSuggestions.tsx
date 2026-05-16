@@ -25,6 +25,8 @@ const getShiftColor = (shift: ShiftPatternId): string => {
         'C': 'bg-teal-100 text-teal-700 border-teal-300',
         'D': 'bg-orange-100 text-orange-700 border-orange-300',
         'E': 'bg-purple-100 text-purple-700 border-purple-300',
+        'F': 'bg-emerald-100 text-emerald-700 border-emerald-300',
+        "C'": 'bg-indigo-100 text-indigo-700 border-indigo-300',
         'J': 'bg-pink-100 text-pink-700 border-pink-300',
     };
     return colors[shift] || 'bg-gray-100 text-gray-700 border-gray-300';

@@ -41,6 +41,8 @@ function getShiftColor(shiftId: ShiftPatternId): string {
         'C': 'bg-[rgba(59,130,246,0.15)] text-[#1F2937] border-l-4 border-l-[#3B82F6]',   // Midday Blue
         'D': 'bg-[rgba(249,115,22,0.20)] text-[#1F2937] border-l-4 border-l-[#F97316]',   // Sunset Orange ← Fixed!
         'E': 'bg-[rgba(168,85,247,0.15)] text-[#1F2937] border-l-4 border-l-[#A855F7]',   // Twilight Purple
+        'F': 'bg-[rgba(20,184,166,0.15)] text-[#1F2937] border-l-4 border-l-[#14B8A6]',
+        "C'": 'bg-[rgba(99,102,241,0.15)] text-[#1F2937] border-l-4 border-l-[#6366F1]',
         'J': 'bg-[rgba(220,38,38,0.15)] text-[#1F2937] border-l-4 border-l-[#DC2626]',    // Night Crimson
         '振': 'bg-[#F3F4F6] text-[#10B981] border border-[#10B981]',
         '有': 'bg-[#F3F4F6] text-[#F472B6] border border-[#F472B6]',

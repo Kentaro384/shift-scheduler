@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, Bell, Calendar, Users, Clock, X } from 'lucide-react';
 import type { Staff, ShiftSchedule, Holiday, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
-import { getShiftPatternKind, isTimeRangeStaff, isWorkShiftId } from '../types';
+import { countsForStaffing, getShiftPatternKind, isTimeRangeStaff, isWorkShiftId } from '../types';
 import { countWorkingStaff } from '../lib/shiftCountUtils';
 
 interface AlertBadgeProps {
@@ -61,7 +61,7 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
         const getDateStr = (day: number) => `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
         const targetStaff = staff.filter(s =>
-            s.shiftType === 'regular' || s.shiftType === 'backup' || isTimeRangeStaff(s)
+            countsForStaffing(s) && (s.shiftType === 'regular' || s.shiftType === 'backup' || isTimeRangeStaff(s))
         );
 
         // 1. Check consecutive working days (6+)

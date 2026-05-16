@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { X, Clock } from 'lucide-react';
 import type { Staff, ShiftSchedule, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
-import { isTimeRangeStaff } from '../types';
+import { countsForStaffing, isCookingStaff, isTimeRangeStaff } from '../types';
 import { getFormattedDate } from '../lib/utils';
 
 interface HourlyStaffChartProps {
@@ -61,7 +61,7 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
         const result: StaffWorkTime[] = [];
 
         staff.forEach((s, index) => {
-            if (s.shiftType === 'cooking' || s.shiftType === 'no_shift') return;
+            if (isCookingStaff(s) || s.shiftType === 'no_shift') return;
 
             // Time-range workers with time range
             if (isTimeRangeStaff(s)) {
@@ -70,7 +70,7 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                     result.push({
                         staffId: s.id,
                         name: s.name,
-                        isQualified: s.hasQualification,
+                        isQualified: countsForStaffing(s) && s.hasQualification,
                         startMinutes: parseTimeToMinutes(timeRange.start),
                         endMinutes: parseTimeToMinutes(timeRange.end),
                         label: `${timeRange.start}-${timeRange.end}`,
@@ -91,7 +91,7 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
             result.push({
                 staffId: s.id,
                 name: s.name,
-                isQualified: s.hasQualification,
+                isQualified: countsForStaffing(s) && s.hasQualification,
                 startMinutes: parseTimeToMinutes(startStr),
                 endMinutes: parseTimeToMinutes(endStr),
                 label: shiftId,

@@ -55,7 +55,15 @@ export interface Staff {
 }
 
 export function isTimeRangeStaff(staff: Staff): boolean {
-    return staff.shiftType === 'part_time' || staff.position === '看護師';
+    return staff.shiftType === 'part_time' || staff.position === '看護師' || staff.position === '園長';
+}
+
+export function isCookingStaff(staff: Staff): boolean {
+    return staff.shiftType === 'cooking' || staff.position === '調理' || staff.role === 'cooking';
+}
+
+export function countsForStaffing(staff: Staff): boolean {
+    return staff.position !== '園長' && !isCookingStaff(staff);
 }
 
 export function getStaffAvailableWeekdays(staff: Staff): StaffWeekday[] {

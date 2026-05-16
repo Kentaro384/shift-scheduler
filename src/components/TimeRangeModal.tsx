@@ -12,6 +12,7 @@ interface TimeRangeModalProps {
     currentShift: ShiftPatternId;
     patterns: ShiftPatternDefinition[];
     defaultTimeRange?: TimeRange;  // Staff's default work hours (includes countAsShifts)
+    disableShiftCounting?: boolean;
     onSaveTimeRange: (timeRange: TimeRange) => void;
     onSaveShift: (shift: ShiftPatternId) => void;
     onSaveAsDefault: (timeRange: TimeRange) => void;
@@ -73,6 +74,7 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
     currentShift,
     patterns,
     defaultTimeRange,
+    disableShiftCounting = false,
     onSaveTimeRange,
     onSaveShift,
     onSaveAsDefault,
@@ -82,7 +84,7 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
     // Determine initial values: current > default > fallback
     const initialStart = currentTimeRange?.start || defaultTimeRange?.start || '09:00';
     const initialEnd = currentTimeRange?.end || defaultTimeRange?.end || '17:00';
-    const initialShifts = currentTimeRange?.countAsShifts || defaultTimeRange?.countAsShifts || [];
+    const initialShifts = disableShiftCounting ? [] : currentTimeRange?.countAsShifts || defaultTimeRange?.countAsShifts || [];
 
     const [mode, setMode] = useState<'time' | 'holiday'>(
         currentTimeRange ? 'time' : (currentShift === '振' || currentShift === '有' || currentShift === '休') ? 'holiday' : 'time'
@@ -98,8 +100,9 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
 
     // Auto-suggest overlapping shifts when time changes (only if no selection yet)
     const suggestedShifts = useMemo(() => {
+        if (disableShiftCounting) return [];
         return patterns.filter(pattern => doesOverlap(startTime, endTime, pattern)).map(pattern => pattern.id);
-    }, [patterns, startTime, endTime]);
+    }, [disableShiftCounting, patterns, startTime, endTime]);
 
     // Check if current selection matches the default
     const isDefaultTime = defaultTimeRange &&
@@ -112,7 +115,7 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
             onSaveTimeRange({
                 start: startTime,
                 end: endTime,
-                countAsShifts: selectedShifts.length > 0 ? selectedShifts : undefined
+                countAsShifts: !disableShiftCounting && selectedShifts.length > 0 ? selectedShifts : undefined
             });
         } else {
             onSaveShift(selectedHoliday);
@@ -123,7 +126,7 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
         onSaveAsDefault({
             start: startTime,
             end: endTime,
-            countAsShifts: selectedShifts.length > 0 ? selectedShifts : undefined
+            countAsShifts: !disableShiftCounting && selectedShifts.length > 0 ? selectedShifts : undefined
         });
     };
 
@@ -248,32 +251,37 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
                                 </div>
                             </div>
 
-                            {/* Shift Assignment Selection */}
-                            <div className="pt-2">
-                                <p className="text-xs text-gray-500 mb-2 text-center">
-                                    シフト割当（集計にカウント）
-                                </p>
-                                <div className="flex justify-center gap-2">
-                                    {patterns.map(pattern => {
-                                        const shiftId = pattern.id;
-                                        return (
-                                        <button
-                                            key={shiftId}
-                                            onClick={() => toggleShift(shiftId)}
-                                            title={pattern.name}
-                                            className={`w-9 h-9 rounded-lg border-2 font-bold text-sm transition-all ${getShiftButtonClass(shiftId)}`}
-                                        >
-                                            {shiftId}
-                                        </button>
-                                        );
-                                    })}
+                            {disableShiftCounting ? (
+                                <div className="rounded-xl bg-gray-50 px-3 py-2 text-center text-xs text-gray-500">
+                                    この職員は人員・有資格者数にはカウントしません
                                 </div>
-                                {suggestedShifts.length > 0 && selectedShifts.length === 0 && (
-                                    <p className="text-[10px] text-amber-500 text-center mt-1">
-                                        推奨: {suggestedShifts.join(', ')}（時間帯が重複）
+                            ) : (
+                                <div className="pt-2">
+                                    <p className="text-xs text-gray-500 mb-2 text-center">
+                                        シフト割当（集計にカウント）
                                     </p>
-                                )}
-                            </div>
+                                    <div className="flex justify-center gap-2">
+                                        {patterns.map(pattern => {
+                                            const shiftId = pattern.id;
+                                            return (
+                                            <button
+                                                key={shiftId}
+                                                onClick={() => toggleShift(shiftId)}
+                                                title={pattern.name}
+                                                className={`w-9 h-9 rounded-lg border-2 font-bold text-sm transition-all ${getShiftButtonClass(shiftId)}`}
+                                            >
+                                                {shiftId}
+                                            </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {suggestedShifts.length > 0 && selectedShifts.length === 0 && (
+                                        <p className="text-[10px] text-amber-500 text-center mt-1">
+                                            推奨: {suggestedShifts.join(', ')}（時間帯が重複）
+                                        </p>
+                                    )}
+                                </div>
+                            )}
 
                             {/* Preview */}
                             <div className="text-center py-3 bg-gray-50 rounded-xl">

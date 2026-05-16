@@ -1,5 +1,5 @@
 import type { Holiday, Settings, Staff, ShiftPatternDefinition, ShiftPatternId, ShiftSchedule } from '../types';
-import { isTimeRangeStaff, isWorkShiftId, SHIFT_PATTERNS } from '../types';
+import { isCookingStaff, isTimeRangeStaff, isWorkShiftId, SHIFT_PATTERNS } from '../types';
 import { checkConstraints, createConstraintContext, type ConstraintViolation } from './constraintChecker';
 
 export interface SwapViolation {
@@ -85,7 +85,7 @@ export function getSwapCandidates(
             const shift = schedule[dateStr]?.[s.id];
             if (!isWorkShiftId(shift)) return false;
             if (shift === sourceShift) return false;
-            if (isTimeRangeStaff(s) || s.shiftType === 'cooking' || s.shiftType === 'no_shift') return false;
+            if (isTimeRangeStaff(s) || isCookingStaff(s) || s.shiftType === 'no_shift') return false;
             return true;
         })
         .map(targetStaff => ({

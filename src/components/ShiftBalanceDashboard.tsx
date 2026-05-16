@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart3, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, RefreshCcw, Heart } from 'lucide-react';
 import type { Staff, ShiftSchedule, ShiftPatternId, ShiftPatternDefinition } from '../types';
-import { getShiftPatternKind, isTimeRangeStaff, isWorkShiftId } from '../types';
+import { countsForStaffing, getShiftPatternKind, isTimeRangeStaff, isWorkShiftId } from '../types';
 
 interface ShiftBalanceDashboardProps {
     staff: Staff[];
@@ -19,6 +19,8 @@ const SHIFT_COLORS: Record<string, string> = {
     'C': '#3B82F6', // Midday Blue
     'D': '#F97316', // Sunset Orange
     'E': '#A855F7', // Twilight Purple
+    'F': '#14B8A6',
+    "C'": '#6366F1',
     'J': '#DC2626', // Night Crimson
 };
 
@@ -39,7 +41,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
 
     // Filter to only regular/backup staff (not cooking, not no_shift)
     const targetStaff = staff.filter(s =>
-        s.shiftType === 'regular' || s.shiftType === 'backup' || isTimeRangeStaff(s)
+        countsForStaffing(s) && (s.shiftType === 'regular' || s.shiftType === 'backup' || isTimeRangeStaff(s))
     );
 
     // Calculate shift counts for each staff member (including leave types)

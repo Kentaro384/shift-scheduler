@@ -45,6 +45,8 @@ function getPatternColor(id: ShiftPatternId, index: number): string {
         C: 'bg-[#3B82F6] text-white',
         D: 'bg-[#F97316] text-white',
         E: 'bg-[#A855F7] text-white',
+        F: 'bg-[#14B8A6] text-white',
+        "C'": 'bg-[#6366F1] text-white',
         J: 'bg-[#DC2626] text-white',
     };
     const fallback = [
@@ -58,7 +60,7 @@ function getPatternColor(id: ShiftPatternId, index: number): string {
 }
 
 function getPatternMarker(id: ShiftPatternId, index: number): string {
-    const markers: Record<string, string> = { A: '●', B: '■', C: '◆', D: '▲', E: '▼', J: '★' };
+    const markers: Record<string, string> = { A: '●', B: '■', C: '◆', D: '▲', E: '▼', F: '⬟', "C'": '⬢', J: '★' };
     const fallback = ['⬟', '⬢', '⬣', '◆', '■'];
     return markers[id] || fallback[index % fallback.length];
 }

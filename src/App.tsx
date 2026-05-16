@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId, TimeRangeSchedule, TimeRange } from './types';
-import { isTimeRangeStaff } from './types';
+import { countsForStaffing, isCookingStaff, isTimeRangeStaff } from './types';
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { countAllPatterns } from './lib/shiftCountUtils';
@@ -152,8 +152,8 @@ function App() {
         const currentShift = newSchedule[dateStr][s.id];
         if (!currentShift) return;
 
-        if (isTimeRangeStaff(s)) {
-          // Keep ALL time-range staff shifts (assume manual)
+        if (isTimeRangeStaff(s) || isCookingStaff(s)) {
+          // Keep ALL manual-only staff shifts
           return;
         } else if (s.shiftType === 'regular' || s.position === '主任') {
           // Keep Paid Leave ONLY (Compensatory Off '振' is now auto-generated, so clear it)
@@ -163,7 +163,7 @@ function App() {
           // Clear others
           newSchedule[dateStr][s.id] = '';
         } else {
-          // Clear Cooking/Director (will be regenerated or are fixed)
+          // Clear Director and other generated roles
           newSchedule[dateStr][s.id] = '';
         }
       });
@@ -196,7 +196,7 @@ function App() {
 
   const handleCellClick = (staffId: number, day: number) => {
     const staffMember = staff.find(s => s.id === staffId);
-    // Part-time/nurse workers use TimeRangeModal instead of ShiftEditModal
+    // Time-range workers use TimeRangeModal instead of ShiftEditModal
     if (staffMember && isTimeRangeStaff(staffMember)) {
       setEditingPartTime({ staffId, day });
     } else {
@@ -359,6 +359,10 @@ function App() {
       if (shiftId === 'D') return `${baseStyle} bg-[rgba(249,115,22,0.12)] border-l-[5px] border-l-[#F97316]`;
       // E - 🌆 Twilight Purple (夕方・紫)
       if (shiftId === 'E') return `${baseStyle} bg-[rgba(168,85,247,0.10)] border-l-[5px] border-l-[#A855F7]`;
+      // F - Neutral White (追加標準枠)
+      if (shiftId === 'F') return `${baseStyle} bg-[rgba(20,184,166,0.10)] border-l-[5px] border-l-[#14B8A6]`;
+      // C' - Deep Blue Variant
+      if (shiftId === "C'") return `${baseStyle} bg-[rgba(99,102,241,0.10)] border-l-[5px] border-l-[#6366F1]`;
       // J - 🌙 Night Crimson (夜・深い赤)
       if (shiftId === 'J') return `${baseStyle} bg-[rgba(220,38,38,0.10)] border-l-[5px] border-l-[#DC2626]`;
       return `${baseStyle} bg-[#FDFDFD]`;
@@ -375,6 +379,8 @@ function App() {
       'C': '◆', // 塘り菱形
       'D': '▲', // 三角上
       'E': '▼', // 三角下
+      'F': '⬟', // 五角形
+      "C'": '⬢', // 六角形
       'J': '★', // 星
       '振': '○', // 白丸
       '有': '◇', // 白菱形
@@ -388,7 +394,7 @@ function App() {
     const dateStr = getFormattedDate(year, month, day);
     let count = 0;
     staff.forEach(s => {
-      if (s.shiftType === 'cooking') return;
+      if (!countsForStaffing(s)) return;
 
       // For time-range workers, check if they have a time range entry
       if (isTimeRangeStaff(s)) {
@@ -644,7 +650,7 @@ function App() {
                             <div className="text-sm md:text-base font-semibold truncate">{s.name}</div>
                             <div className="text-[10px] md:text-xs text-gray-400 hidden sm:block">{s.position}</div>
                           </div>
-                          {s.shiftType === 'cooking' && <span className="text-[10px] md:text-xs bg-[#FFE66D] text-[#7C5800] px-1.5 md:px-2 py-0.5 rounded-full font-medium ml-1">調</span>}
+                          {isCookingStaff(s) && <span className="text-[10px] md:text-xs bg-[#FFE66D] text-[#7C5800] px-1.5 md:px-2 py-0.5 rounded-full font-medium ml-1">調</span>}
                         </div>
                       </td>
                       {days.map(day => {
@@ -676,7 +682,7 @@ function App() {
                                 </div>
                               )
                             ) : isPartTime && partTimeRange ? (
-                              /* Part-time worker with time range - only if no holiday set */
+                              /* Time-range worker with time range - only if no holiday set */
                               <div className="w-7 h-8 md:w-9 md:h-10 mx-auto flex flex-col items-center justify-center rounded-md text-[7px] md:text-[8px] shadow-sm transition-all duration-150 hover:scale-105 hover:shadow-md bg-gray-100 border border-gray-300 text-gray-700 font-medium leading-tight">
                                 <span>{partTimeRange.start}</span>
                                 <span className="text-gray-400">↓</span>
@@ -887,6 +893,7 @@ function App() {
             currentTimeRange={currentTimeRange}
             currentShift={currentShift}
             defaultTimeRange={staffMember?.defaultTimeRange}
+            disableShiftCounting={staffMember ? !countsForStaffing(staffMember) : false}
             patterns={patterns}
             onSaveTimeRange={(timeRange: TimeRange) => {
               // Save time range to timeRangeSchedule with deep copy
