@@ -5,7 +5,7 @@ import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { countAllPatterns } from './lib/shiftCountUtils';
 import { exportToExcel } from './lib/excelExport';
-import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, DatabaseBackup } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, DatabaseBackup, Trash2 } from 'lucide-react';
 import { StaffList } from './components/StaffList';
 import { SettingsModal } from './components/SettingsModal';
 import { HolidayModal } from './components/HolidayModal';
@@ -206,6 +206,34 @@ function App() {
 
     setSchedule(newSchedule);
     firestoreStorage.saveSchedule(newSchedule);
+  };
+
+  const handleForceClearMonth = () => {
+    const confirmText = `${year}-${String(month).padStart(2, '0')}`;
+    const input = window.prompt(
+      `${year}年${month}月のシフト・時間指定・手動固定予定をすべて削除します。\n職員設定、シフトパターン、祝日は残ります。\n\n実行するには ${confirmText} と入力してください。`
+    );
+    if (input !== confirmText) return;
+
+    const newSchedule = { ...schedule };
+    const newTimeRangeSchedule = { ...timeRangeSchedule };
+    const newManualShifts = { ...manualShifts };
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = getFormattedDate(year, month, d);
+      delete newSchedule[dateStr];
+      delete newTimeRangeSchedule[dateStr];
+      delete newManualShifts[dateStr];
+    }
+
+    setSchedule(newSchedule);
+    setTimeRangeSchedule(newTimeRangeSchedule);
+    setManualShifts(newManualShifts);
+    firestoreStorage.saveSchedule(newSchedule);
+    firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule);
+    firestoreStorage.saveManualShifts(newManualShifts);
+    setShowSettingsMenu(false);
+    toast.success('当月を白紙に戻しました', `${year}年${month}月の入力を削除しました`);
   };
 
   const handleApplyDefaultTimeRanges = () => {
@@ -676,6 +704,14 @@ function App() {
                         <span className="font-medium">LocalStorageから復元</span>
                       </button>
                     )}
+                    <div className="border-t border-gray-100 my-1" />
+                    <button
+                      onClick={handleForceClearMonth}
+                      className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-red-50 transition-colors text-red-600"
+                    >
+                      <Trash2 size={18} />
+                      <span className="font-medium">当月を白紙に戻す</span>
+                    </button>
                     <div className="border-t border-gray-100 my-1" />
                     <button
                       onClick={async () => {
