@@ -5,7 +5,7 @@ import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { countAllPatterns } from './lib/shiftCountUtils';
 import { exportToExcel } from './lib/excelExport';
-import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, DatabaseBackup, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, DatabaseBackup, Trash2, CheckCircle2, Circle, AlertTriangle } from 'lucide-react';
 import { StaffList } from './components/StaffList';
 import { SettingsModal } from './components/SettingsModal';
 import { HolidayModal } from './components/HolidayModal';
@@ -578,6 +578,63 @@ function App() {
     });
   };
 
+  const monthDateStrings = days.map(day => getFormattedDate(year, month, day));
+  const hasScheduleInput = monthDateStrings.some(dateStr => Object.values(schedule[dateStr] || {}).some(Boolean));
+  const hasTimeRangeInput = monthDateStrings.some(dateStr => Object.keys(timeRangeSchedule[dateStr] || {}).length > 0);
+  const hasManualFixedInput = monthDateStrings.some(dateStr => Object.keys(manualShifts[dateStr] || {}).length > 0);
+  const isMonthBlank = !hasScheduleInput && !hasTimeRangeInput && !hasManualFixedInput;
+  const hasGeneratedShift = monthDateStrings.some(dateStr =>
+    staff.some(s => {
+      if (isTimeRangeStaff(s) || isCookingStaff(s)) return false;
+      const shift = schedule[dateStr]?.[s.id];
+      return isWorkShiftId(shift);
+    })
+  );
+  const fixedDefaultStaffCount = staff.filter(s =>
+    isTimeRangeStaff(s) && (s.defaultTimeRange || Object.keys(s.weeklyTimeRanges || {}).length > 0)
+  ).length;
+  const manualFixedCount = monthDateStrings.reduce((total, dateStr) =>
+    total + Object.keys(manualShifts[dateStr] || {}).length
+  , 0);
+  const shortageDayNumbers = dailyCounts.flatMap((count, index) => {
+    const day = index + 1;
+    const date = new Date(year, month - 1, day);
+    const isSat = date.getDay() === 6;
+    const isSun = date.getDay() === 0;
+    const isHol = isHoliday(day);
+    if (isSun || isHol) return [];
+    const isShort = isSat ? count < settings.saturdayStaffCount : count < settings.weekdayStaffCount;
+    return isShort ? [day] : [];
+  });
+  const shortageDays = shortageDayNumbers.length;
+  const unassignedTimeRanges = monthDateStrings.flatMap(dateStr => {
+    const dateRanges = (timeRangeSchedule[dateStr] || {}) as Record<string | number, TimeRange>;
+    return Object.entries(dateRanges).flatMap(([staffId, timeRange]) => {
+      const staffMember = staff.find(s => String(s.id) === String(staffId));
+      if (!staffMember || !isTimeRangeStaff(staffMember) || !countsForStaffing(staffMember)) return [];
+      if (timeRange.countAsShifts?.length) return [];
+      return [{ dateStr, staffId: staffMember.id, timeRange }];
+    });
+  });
+  const firstUnassignedTimeRange = unassignedTimeRanges[0];
+  const setupSteps = [
+    { label: '初期化', done: true, note: isMonthBlank ? '白紙' : '入力中' },
+    { label: '固定勤務', done: hasTimeRangeInput, note: hasTimeRangeInput ? '反映済み' : `${fixedDefaultStaffCount}人対象` },
+    { label: '固定予定', done: manualFixedCount > 0, note: manualFixedCount > 0 ? `${manualFixedCount}件` : '必要時' },
+    { label: '自動生成', done: hasGeneratedShift, note: hasGeneratedShift ? '生成済み' : '未生成' },
+    { label: '不足確認', done: hasGeneratedShift && shortageDays === 0 && unassignedTimeRanges.length === 0, note: `${shortageDays + unassignedTimeRanges.length}件` },
+    { label: 'Excel', done: false, note: '出力' },
+  ];
+  const nextAction = isMonthBlank
+    ? { label: '固定勤務を反映', description: 'パートさんの曜日別勤務を今月へ入れます', onClick: handleApplyDefaultTimeRanges, icon: CalendarCheck }
+    : !hasTimeRangeInput && fixedDefaultStaffCount > 0
+      ? { label: '固定勤務を反映', description: '未入力日に固定勤務を追加します', onClick: handleApplyDefaultTimeRanges, icon: CalendarCheck }
+      : !hasGeneratedShift
+        ? { label: '自動生成する', description: '固定勤務と手動予定を残して作成します', onClick: handleGenerate, icon: RefreshCw }
+        : shortageDays > 0 || unassignedTimeRanges.length > 0
+          ? { label: '不足を確認', description: `出勤不足${shortageDays}日、未割当${unassignedTimeRanges.length}件`, onClick: () => firstUnassignedTimeRange ? setEditingPartTime({ staffId: firstUnassignedTimeRange.staffId, day: Number(firstUnassignedTimeRange.dateStr.slice(-2)) }) : setHourlyChartDay(shortageDayNumbers[0] || null), icon: AlertTriangle }
+          : { label: 'Excel出力', description: '調整済みの勤務表を書き出します', onClick: handleDownloadExcel, icon: Download };
+  const NextActionIcon = nextAction.icon;
 
   // Show loading screen while checking auth
   if (authLoading) {
@@ -767,6 +824,63 @@ function App() {
       </header>
 
       <main className="flex-1 overflow-auto p-1.5 landscape:p-1 md:p-4">
+        <div className="max-w-[1920px] mx-auto mb-2 md:mb-3 rounded-xl border border-[#E5E7EB] bg-[#FDFDFD] shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-3 md:p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <CalendarCheck size={18} className="text-[#10B981]" />
+                <h2 className="text-sm md:text-base font-bold text-gray-800">今月の準備</h2>
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] md:text-xs font-semibold text-gray-500">
+                  {year}年{month}月
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+                {setupSteps.map(step => (
+                  <div
+                    key={step.label}
+                    className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 ${step.done ? 'border-emerald-100 bg-emerald-50 text-emerald-800' : 'border-gray-200 bg-white text-gray-600'}`}
+                  >
+                    {step.done ? (
+                      <CheckCircle2 size={15} className="shrink-0 text-emerald-600" />
+                    ) : (
+                      <Circle size={15} className="shrink-0 text-gray-300" />
+                    )}
+                    <div className="min-w-0">
+                      <div className="truncate text-xs font-bold">{step.label}</div>
+                      <div className="truncate text-[10px] opacity-75">{step.note}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row lg:items-center">
+              {unassignedTimeRanges.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => firstUnassignedTimeRange && setEditingPartTime({ staffId: firstUnassignedTimeRange.staffId, day: Number(firstUnassignedTimeRange.dateStr.slice(-2)) })}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-left text-amber-800 hover:bg-amber-100 transition-colors"
+                >
+                  <span className="flex items-center gap-2 text-xs font-bold">
+                    <AlertTriangle size={16} />
+                    未割当 {unassignedTimeRanges.length}件
+                  </span>
+                  <span className="text-[10px] font-medium">確認</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={nextAction.onClick}
+                disabled={isGenerating}
+                className="flex min-w-[210px] items-center justify-center gap-2 rounded-lg bg-[#FF6B6B] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-[#ff5a5a] active:scale-95 disabled:cursor-wait disabled:opacity-75"
+              >
+                <NextActionIcon size={17} className={isGenerating ? 'animate-spin' : ''} />
+                <span>{isGenerating ? '生成中...' : nextAction.label}</span>
+              </button>
+              <p className="text-[11px] text-gray-500 sm:max-w-[190px]">{nextAction.description}</p>
+            </div>
+          </div>
+        </div>
         <div className="max-w-[1920px] mx-auto bg-[#FDFDFD] rounded-xl landscape:rounded-lg md:rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.08)] overflow-hidden border border-[#E5E7EB]">
           <div className="overflow-x-auto max-h-[calc(100vh-160px)] landscape:max-h-[calc(100vh-60px)] md:max-h-[calc(100vh-140px)]">
             <table className="w-full border-collapse text-xs md:text-sm relative">
@@ -821,7 +935,6 @@ function App() {
                         const dateStr = getFormattedDate(year, month, day);
                         const shiftId = schedule[dateStr]?.[s.id] || '';
                         // Handle potential Firestore key type inconsistency (number vs string)
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const dateRanges = (timeRangeSchedule[dateStr] || {}) as Record<string | number, TimeRange>;
                         const partTimeRange = dateRanges[s.id] || dateRanges[String(s.id)];
                         const isPartTime = isTimeRangeStaff(s);
