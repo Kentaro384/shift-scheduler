@@ -6,6 +6,7 @@ import { countEffectiveShift, countWorkingStaff as countWorkingStaffUtil } from 
 export class ShiftGenerator {
     private staff: Staff[];
     private schedule: ShiftSchedule;
+    private initialSchedule: ShiftSchedule;
     private timeRangeSchedule: TimeRangeSchedule;  // Part-timer time ranges with countAsShifts
     private holidays: Holiday[];
     private settings: Settings;
@@ -13,6 +14,7 @@ export class ShiftGenerator {
     private year: number;
     private month: number;
     private daysInMonth: number;
+    private warnings: string[] = [];
 
     constructor(staff: Staff[], holidays: Holiday[], year: number, month: number, settings: Settings, currentSchedule: ShiftSchedule = {}, timeRangeSchedule: TimeRangeSchedule = {}, patterns: ShiftPatternDefinition[] = SHIFT_PATTERNS) {
         this.staff = staff;
@@ -23,6 +25,7 @@ export class ShiftGenerator {
         this.month = month;
         this.daysInMonth = getDaysInMonth(year, month);
         this.schedule = {};
+        this.initialSchedule = currentSchedule;
         this.timeRangeSchedule = timeRangeSchedule;
 
         // Initialize schedule structure with current schedule
@@ -47,6 +50,10 @@ export class ShiftGenerator {
                 }
             }
         }
+    }
+
+    public getWarnings(): string[] {
+        return this.warnings;
     }
 
     // Helper: Check if incompatible staff has conflict
@@ -245,6 +252,14 @@ export class ShiftGenerator {
         return this.patterns.filter(p => ['A', 'B', 'C', 'D', 'E', 'J'].includes(p.id));
     }
 
+    private isWorkShift(shift: ShiftPatternId | undefined): boolean {
+        return !!shift && ['A', 'B', 'C', 'D', 'E', 'J'].includes(shift);
+    }
+
+    private isWeekdayAutoAssignable(s: Staff): boolean {
+        return s.shiftType === 'regular' && !s.saturdayOnly;
+    }
+
     // Phase 1: Director (always off)
     private phase1_Director() {
         const director = this.staff.find(s => s.position === '園長');
@@ -300,7 +315,6 @@ export class ShiftGenerator {
         }
 
         // Filter qualified Regular staff (excluding Director and Cooking)
-        // Note: Chief (主任) is included if they have qualification (usually yes)
         const qualifiedRegulars = this.staff.filter(s =>
             s.hasQualification &&
             s.shiftType === 'regular' && // Only Regulars for auto-assignment
@@ -309,6 +323,14 @@ export class ShiftGenerator {
 
         const satCounts: Record<number, number> = {};
         this.staff.forEach(s => satCounts[s.id] = 0);
+        saturdays.forEach(day => {
+            const dateStr = getFormattedDate(this.year, this.month, day);
+            qualifiedRegulars.forEach(s => {
+                if (this.isWorkShift(this.initialSchedule[dateStr]?.[s.id])) {
+                    satCounts[s.id]++;
+                }
+            });
+        });
 
         saturdays.forEach(day => {
             const dateStr = getFormattedDate(this.year, this.month, day);
@@ -336,11 +358,14 @@ export class ShiftGenerator {
             const targetRegularCount = Math.max(0, targetTotal - partTimeCount);
 
             // 3. Select Regulars
-            // Sort qualified regulars by Saturday count (ascending)
+            // Sort qualified regulars by Saturday count, with saturdayOnly staff first.
             // Shuffle first for fairness
             const candidates = [...qualifiedRegulars]
                 .sort(() => Math.random() - 0.5)
-                .sort((a, b) => satCounts[a.id] - satCounts[b.id]);
+                .sort((a, b) => {
+                    if (a.saturdayOnly !== b.saturdayOnly) return a.saturdayOnly ? -1 : 1;
+                    return satCounts[a.id] - satCounts[b.id];
+                });
 
             // Pick top N
             const selected = candidates.slice(0, targetRegularCount);
@@ -379,6 +404,8 @@ export class ShiftGenerator {
 
                 if (bestDay !== -1) {
                     this.setShift(bestDay, s.id, '振');
+                } else {
+                    this.warnings.push(`${this.month}/${day} ${s.name}さんの振休を同一週内に配置できませんでした`);
                 }
             });
 
@@ -428,7 +455,7 @@ export class ShiftGenerator {
 
     // Phase 4: Regular Staff Weekday
     private phase4_RegularWeekday() {
-        const regulars = this.staff.filter(s => s.shiftType === 'regular');
+        const regulars = this.staff.filter(s => this.isWeekdayAutoAssignable(s));
 
         for (let d = 1; d <= this.daysInMonth; d++) {
             if (this.isHoliday(d) || this.isSaturday(d)) continue;
@@ -603,6 +630,7 @@ export class ShiftGenerator {
             if (!hasInfant) {
                 // Find an infant staff currently in B or C and swap to D
                 const candidate = this.staff.find(s =>
+                    !s.saturdayOnly &&
                     s.role === 'infant' &&
                     ['B', 'C'].includes(this.getShift(d, s.id)) &&
                     !this.hasIncompatibleConflict(d, s.id, 'D')
@@ -613,6 +641,7 @@ export class ShiftGenerator {
             if (!hasToddler) {
                 // Find a toddler staff currently in B or C and swap to D
                 const candidate = this.staff.find(s =>
+                    !s.saturdayOnly &&
                     s.role === 'toddler' &&
                     ['B', 'C'].includes(this.getShift(d, s.id)) &&
                     !this.hasIncompatibleConflict(d, s.id, 'D')
@@ -642,7 +671,7 @@ export class ShiftGenerator {
                 if (currentCount < minCount) {
                     const candidates = this.staff.filter(s => {
                         const shift = this.getShift(d, s.id);
-                        return shift !== '' && shift !== '休' && shift !== '振' && shift !== '有' && shift !== pattern.id && s.shiftType !== 'cooking' && s.shiftType !== 'part_time' && s.position !== '園長';
+                        return shift !== '' && shift !== '休' && shift !== '振' && shift !== '有' && shift !== pattern.id && s.shiftType !== 'cooking' && s.shiftType !== 'part_time' && s.position !== '園長' && !s.saturdayOnly;
                     });
 
                     // Sort candidates by shift count of target pattern
@@ -679,7 +708,8 @@ export class ShiftGenerator {
                     this.getShift(d, s.id) === '' &&
                     s.shiftType !== 'cooking' &&
                     s.shiftType !== 'part_time' && // Exclude Part-time from auto-fill
-                    s.position !== '園長'
+                    s.position !== '園長' &&
+                    !s.saturdayOnly
                 );
 
                 if (availableStaff.length === 0) break;
@@ -747,6 +777,7 @@ export class ShiftGenerator {
                 const bStaff = this.staff.filter(s => {
                     if (s.position === '園長' || s.position === '主任') return false;
                     if (s.shiftType !== 'regular') return false;
+                    if (s.saturdayOnly) return false;
                     const shift = this.schedule[dateStr]?.[s.id];
                     return shift === 'B'; // Only consider B staff
                 });

@@ -124,9 +124,16 @@ function App() {
 
     const generator = new ShiftGenerator(staff, holidays, year, month, settings, schedule, timeRangeSchedule, patterns);
     const newSchedule = generator.generate();
+    const generationWarnings = generator.getWarnings();
     setSchedule(newSchedule);
     firestoreStorage.saveSchedule(newSchedule);
     setIsGenerating(false);
+    if (generationWarnings.length > 0) {
+      toast.warning(
+        `振休未配置が${generationWarnings.length}件あります`,
+        generationWarnings.slice(0, 3).join('、') + (generationWarnings.length > 3 ? ' ほか' : '')
+      );
+    }
   };
 
   const handleReset = () => {
