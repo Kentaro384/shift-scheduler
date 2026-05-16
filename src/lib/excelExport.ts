@@ -20,17 +20,14 @@ const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
 // 色定義
 const COLORS = {
-    saturdayBg: 'CCE5FF',   // 薄い青
-    sundayBg: 'FFCCCC',     // 薄いピンク
-    headerBg: 'E8E8E8',     // グレー
-    legendBg: 'F5F5F5',     // 薄いグレー
-    border: '000000',
-    staffBg: 'F8FAFC',
-    fixedBg: 'FDF2F8',
-    timeRangeBg: 'F1F5F9',
-    titleBg: 'FFD966',
-    titleAccentBg: 'F4B183',
-    noteBg: 'FFF2CC',
+    saturdayBg: 'FFCCE5FF',   // 薄い青
+    sundayBg: 'FFFFCCCC',     // 薄いピンク
+    headerBg: 'FFE8E8E8',     // グレー
+    legendBg: 'FFF5F5F5',     // 薄いグレー
+    fixedBg: 'FFFDF2F8',
+    border: 'FF000000',
+    titleBg: 'FFFFC000',
+    white: 'FFFFFFFF',
 };
 
 const TAILWIND_BG_COLORS: Record<string, string> = {
@@ -88,17 +85,16 @@ function applyThinBorder(cell: ExcelJS.Cell): void {
     };
 }
 
-function applyMediumBorder(cell: ExcelJS.Cell): void {
-    cell.border = {
-        top: { style: 'medium', color: { argb: COLORS.border } },
-        left: { style: 'medium', color: { argb: COLORS.border } },
-        bottom: { style: 'medium', color: { argb: COLORS.border } },
-        right: { style: 'medium', color: { argb: COLORS.border } },
-    };
-}
-
 function setSolidFill(cell: ExcelJS.Cell, color: string): void {
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+}
+
+function setNoFill(cell: ExcelJS.Cell): void {
+    cell.fill = { type: 'pattern', pattern: 'none' };
+}
+
+function font(size: number, bold = false, color = 'FF000000'): Partial<ExcelJS.Font> {
+    return { name: 'メイリオ', family: 2, charset: 128, size, bold: bold || undefined, color: { argb: color } };
 }
 
 function getNoteText(dateStr: string, notes: DailyNotes, holidays: Holiday[]): string {
@@ -134,11 +130,11 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
 
     worksheet.columns = [
         { width: 18 },
-        ...Array.from({ length: daysInMonth }, () => ({ width: 4.8 })),
+        ...Array.from({ length: daysInMonth }, () => ({ width: 6.33203125 })),
         { width: 2 },
         ...Array.from({ length: summaryPatternIds.length + summaryFixedIds.length + 1 }, () => ({ width: 4 })),
     ];
-    worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 5 }];
+    worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 4, topLeftCell: 'B5', showGridLines: false }];
     worksheet.pageSetup = {
         orientation: 'landscape',
         paperSize: 9,
@@ -157,43 +153,38 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         },
     };
 
-    worksheet.mergeCells(1, 1, 1, 2);
     const yearCell = worksheet.getCell(1, 1);
     yearCell.value = year;
-    yearCell.font = { bold: true, size: 22 };
+    yearCell.font = font(24, true);
     yearCell.alignment = { horizontal: 'center', vertical: 'middle' };
     setSolidFill(yearCell, COLORS.titleBg);
 
-    worksheet.getCell(1, 3).value = '年';
-    worksheet.getCell(1, 3).font = { bold: true, size: 18 };
-    worksheet.getCell(1, 3).alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getCell(1, 2).value = '年';
+    worksheet.getCell(1, 2).font = font(16);
+    worksheet.getCell(1, 2).alignment = { horizontal: 'center', vertical: 'middle' };
+    setNoFill(worksheet.getCell(1, 2));
 
-    worksheet.mergeCells(1, 4, 1, 5);
-    const monthCell = worksheet.getCell(1, 4);
+    const monthCell = worksheet.getCell(1, 3);
     monthCell.value = month;
-    monthCell.font = { bold: true, size: 22 };
+    monthCell.font = font(24, true);
     monthCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    setSolidFill(monthCell, COLORS.titleAccentBg);
+    setSolidFill(monthCell, COLORS.titleBg);
 
-    worksheet.getCell(1, 6).value = '月';
-    worksheet.getCell(1, 6).font = { bold: true, size: 18 };
-    worksheet.getCell(1, 6).alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getCell(1, 4).value = '月';
+    worksheet.getCell(1, 4).font = font(16);
+    worksheet.getCell(1, 4).alignment = { horizontal: 'center', vertical: 'middle' };
+    setNoFill(worksheet.getCell(1, 4));
 
-    worksheet.mergeCells(1, 7, 1, Math.min(printLastCol, 11));
-    const titleCell = worksheet.getCell(1, 7);
+    const titleCell = worksheet.getCell(1, 5);
     titleCell.value = '勤務表';
-    titleCell.font = { bold: true, size: 20 };
-    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    setSolidFill(titleCell, COLORS.titleBg);
-    worksheet.getRow(1).height = 28;
+    titleCell.font = font(16);
+    titleCell.alignment = { vertical: 'middle' };
+    setNoFill(titleCell);
+    worksheet.getRow(1).height = 38;
 
-    for (let col = 1; col <= printLastCol; col++) {
-        applyMediumBorder(worksheet.getCell(1, col));
-    }
-
-    const dateRow = 3;
-    const weekdayRow = 4;
-    const noteRow = 5;
+    const dateRow = 2;
+    const weekdayRow = 3;
+    const noteRow = 4;
 
     [
         { row: dateRow, label: '日付', height: 22 },
@@ -202,10 +193,10 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
     ].forEach(({ row, label, height }) => {
         const labelCell = worksheet.getCell(row, 1);
         labelCell.value = label;
-        labelCell.font = { bold: true, size: 11 };
+        labelCell.font = font(11);
         labelCell.alignment = { horizontal: 'center', vertical: 'middle' };
-        setSolidFill(labelCell, row === noteRow ? COLORS.noteBg : COLORS.headerBg);
-        applyMediumBorder(labelCell);
+        setSolidFill(labelCell, COLORS.headerBg);
+        applyThinBorder(labelCell);
         worksheet.getRow(row).height = height;
     });
 
@@ -218,7 +209,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
     summaryHeaders.forEach((label, idx) => {
         const cell = worksheet.getCell(dateRow, summaryStartCol + idx);
         cell.value = label;
-        cell.font = { bold: true, size: 9 };
+        cell.font = font(9, true);
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
         setSolidFill(cell, getShiftFill(label, patterns) || COLORS.headerBg);
         applyThinBorder(cell);
@@ -231,40 +222,42 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         const dateStr = getFormattedDate(year, month, day);
         const holidayName = holidays.find(h => h.date === dateStr)?.name || '';
         const dayFill = getDayFill(year, month, day, holidays);
-        const dayFontColor = dow === 0 || holidayName ? 'C00000' : dow === 6 ? '0070C0' : '000000';
+        const dayFontColor = dow === 0 || holidayName ? 'FFC00000' : dow === 6 ? 'FF0070C0' : 'FF000000';
 
         const dateCell = worksheet.getCell(dateRow, col);
         dateCell.value = day;
-        dateCell.font = { bold: true, size: 12, color: { argb: dayFontColor } };
+        dateCell.font = font(12, false, dayFontColor);
         dateCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
         const weekdayCell = worksheet.getCell(weekdayRow, col);
         weekdayCell.value = DAY_NAMES[dow];
-        weekdayCell.font = { bold: true, size: 11, color: { argb: dayFontColor } };
+        weekdayCell.font = font(11, false, dayFontColor);
         weekdayCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
         const noteCell = worksheet.getCell(noteRow, col);
         noteCell.value = getNoteText(dateStr, notes, holidays);
-        noteCell.font = { size: 8, color: { argb: '000000' } };
-        noteCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true, textRotation: 255 };
+        noteCell.font = font(8);
+        noteCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
 
         [dateCell, weekdayCell, noteCell].forEach(cell => {
-            setSolidFill(cell, dayFill || (cell === noteCell ? COLORS.noteBg : 'FFFFFF'));
-            applyMediumBorder(cell);
+            if (dayFill) setSolidFill(cell, dayFill);
+            else if (cell === noteCell) setNoFill(cell);
+            else setSolidFill(cell, COLORS.white);
+            applyThinBorder(cell);
         });
     });
 
-    let currentRow = 6;
+    let currentRow = 5;
     staff.forEach(s => {
         const row = worksheet.getRow(currentRow);
         row.height = 30;
 
         const staffCell = worksheet.getCell(currentRow, 1);
         staffCell.value = s.name;
-        staffCell.font = { bold: true, size: 11 };
+        staffCell.font = font(11);
         staffCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-        setSolidFill(staffCell, 'FFFFFF');
-        applyMediumBorder(staffCell);
+        setSolidFill(staffCell, COLORS.white);
+        applyThinBorder(staffCell);
 
         days.forEach((day, idx) => {
             const col = 2 + idx;
@@ -278,19 +271,20 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
 
             if (!shift && isTimeRangeStaff(s) && timeRange) {
                 cell.value = `${timeRange.start}\n${timeRange.end}`;
-                cell.font = { size: 8 };
-                setSolidFill(cell, COLORS.timeRangeBg);
+                cell.font = font(8);
+                setNoFill(cell);
             } else if (shift) {
                 cell.value = shift;
-                cell.font = { bold: true, size: shift.length > 1 ? 9 : 11 };
-                setSolidFill(cell, getShiftFill(shift, patterns) || 'FFFFFF');
+                cell.font = font(shift.length > 1 ? 9 : 11);
+                setNoFill(cell);
             } else {
                 cell.value = '';
-                setSolidFill(cell, dayFill || 'FFFFFF');
+                if (dayFill) setSolidFill(cell, dayFill);
+                else setNoFill(cell);
             }
 
             cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-            applyMediumBorder(cell);
+            applyThinBorder(cell);
         });
 
         const counts: Record<string, number> = {};
@@ -311,13 +305,13 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         [...summaryPatternIds, ...summaryFixedIds].forEach((id, idx) => {
             const cell = worksheet.getCell(currentRow, summaryStartCol + idx);
             cell.value = counts[id] || '';
-            cell.font = { size: 9 };
+            cell.font = font(9);
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
             applyThinBorder(cell);
         });
         const totalCell = worksheet.getCell(currentRow, summaryStartCol + summaryPatternIds.length + summaryFixedIds.length);
         totalCell.value = totalWorkDays || '';
-        totalCell.font = { bold: true, size: 9 };
+        totalCell.font = font(9, true);
         totalCell.alignment = { horizontal: 'center', vertical: 'middle' };
         applyThinBorder(totalCell);
 
@@ -327,64 +321,61 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
     currentRow += 1;
     const patternTitleRow = currentRow;
     worksheet.getCell(patternTitleRow, 1).value = 'シフトパターン';
-    worksheet.getCell(patternTitleRow, 1).font = { bold: true, size: 11 };
+    worksheet.getCell(patternTitleRow, 1).font = font(11);
     worksheet.getCell(patternTitleRow, 1).alignment = { horizontal: 'center', vertical: 'middle' };
     setSolidFill(worksheet.getCell(patternTitleRow, 1), COLORS.headerBg);
-    applyMediumBorder(worksheet.getCell(patternTitleRow, 1));
+    applyThinBorder(worksheet.getCell(patternTitleRow, 1));
 
+    const topLegendPatterns = legendPatterns.filter(pattern => pattern.id !== "C'");
     let legendCol = 2;
-    legendPatterns.forEach(pattern => {
+    topLegendPatterns.forEach(pattern => {
         if (legendCol > printLastCol) return;
-        const mergeEnd = Math.min(legendCol + 3, printLastCol);
-        worksheet.mergeCells(patternTitleRow, legendCol, patternTitleRow, mergeEnd);
+        const isLast = pattern === topLegendPatterns[topLegendPatterns.length - 1];
+        const mergeEnd = Math.min(legendCol + (isLast ? 5 : 4), printLastCol);
+        worksheet.mergeCells(patternTitleRow, legendCol, patternTitleRow + (isLast ? 1 : 0), mergeEnd);
         const cell = worksheet.getCell(patternTitleRow, legendCol);
-        cell.value = `${pattern.id} ${pattern.timeRange}`;
-        cell.font = { bold: true, size: 9 };
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        setSolidFill(cell, getTailwindFill(pattern.color, COLORS.legendBg));
-        for (let col = legendCol; col <= mergeEnd; col++) {
-            applyMediumBorder(worksheet.getCell(patternTitleRow, col));
+        cell.value = `${pattern.id} ${pattern.timeRange}${pattern.id === 'F' ? '\n（園長保育対応）' : ''}`;
+        cell.font = font(9);
+        cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: pattern.id === 'F' || undefined };
+        setNoFill(cell);
+        for (let row = patternTitleRow; row <= patternTitleRow + (isLast ? 1 : 0); row++) {
+            for (let col = legendCol; col <= mergeEnd; col++) {
+                applyThinBorder(worksheet.getCell(row, col));
+            }
         }
         legendCol = mergeEnd + 1;
     });
     worksheet.getRow(patternTitleRow).height = 24;
 
     currentRow++;
-    worksheet.mergeCells(currentRow, 1, currentRow, printLastCol);
+    worksheet.mergeCells(currentRow, 1, currentRow, Math.min(11, printLastCol));
     const messageCell = worksheet.getCell(currentRow, 1);
-    messageCell.value = 'お互いにサポートし合いながら保育していきましょうね！！';
-    messageCell.font = { bold: true, size: 11 };
-    messageCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    setSolidFill(messageCell, COLORS.noteBg);
-    for (let col = 1; col <= printLastCol; col++) {
-        applyMediumBorder(worksheet.getCell(currentRow, col));
+    messageCell.value = 'お互いにサポートし合いながら保育していきましょうね！';
+    messageCell.font = font(11);
+    messageCell.alignment = { horizontal: 'left', vertical: 'middle' };
+    setNoFill(messageCell);
+    for (let col = 1; col <= Math.min(11, printLastCol); col++) {
+        applyThinBorder(worksheet.getCell(currentRow, col));
     }
-    worksheet.getRow(currentRow).height = 24;
 
-    currentRow++;
-    const holidayLegend = HOLIDAY_PATTERNS.filter(pattern => pattern.id !== '休');
-    worksheet.getCell(currentRow, 1).value = '固定予定';
-    worksheet.getCell(currentRow, 1).font = { bold: true, size: 10 };
-    worksheet.getCell(currentRow, 1).alignment = { horizontal: 'center', vertical: 'middle' };
-    setSolidFill(worksheet.getCell(currentRow, 1), COLORS.headerBg);
-    applyMediumBorder(worksheet.getCell(currentRow, 1));
-
-    legendCol = 2;
-    holidayLegend.forEach(pattern => {
-        if (legendCol > printLastCol) return;
-        const mergeEnd = Math.min(legendCol + 2, printLastCol);
-        worksheet.mergeCells(currentRow, legendCol, currentRow, mergeEnd);
-        const cell = worksheet.getCell(currentRow, legendCol);
-        cell.value = `${pattern.id}: ${pattern.name}`;
-        cell.font = { size: 9 };
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        setSolidFill(cell, getTailwindFill(pattern.color, COLORS.legendBg));
-        for (let col = legendCol; col <= mergeEnd; col++) {
-            applyMediumBorder(worksheet.getCell(currentRow, col));
+    const standardPlus = legendPatterns.find(pattern => pattern.id === "C'");
+    if (standardPlus && printLastCol >= 12) {
+        worksheet.mergeCells(currentRow, 12, currentRow, Math.min(16, printLastCol));
+        const cell = worksheet.getCell(currentRow, 12);
+        cell.value = `${standardPlus.id}  ${standardPlus.timeRange}`;
+        cell.font = font(9);
+        cell.alignment = { horizontal: 'left', vertical: 'middle' };
+        setNoFill(cell);
+        for (let col = 12; col <= Math.min(16, printLastCol); col++) {
+            applyThinBorder(worksheet.getCell(currentRow, col));
         }
-        legendCol = mergeEnd + 1;
-    });
-    worksheet.getRow(currentRow).height = 22;
+    }
+
+    for (let col = 17; col <= Math.min(26, printLastCol); col++) {
+        applyThinBorder(worksheet.getCell(currentRow, col));
+    }
+
+    worksheet.getRow(currentRow).height = 24;
     worksheet.pageSetup.printArea = `A1:${getColumnLetter(printLastCol)}${currentRow}`;
 
     const buffer = await workbook.xlsx.writeBuffer();
