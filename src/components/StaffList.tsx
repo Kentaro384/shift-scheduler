@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { Staff, StaffPosition, StaffShiftType, StaffRole, ShiftPatternDefinition, ShiftPatternId, FloorType, StaffWeekday } from '../types';
 import { getStaffAvailableWeekdays, STAFF_WEEKDAY_LABELS, STAFF_WEEKDAYS } from '../types';
-import { X, Plus, Edit2, Trash2, Save, Users } from 'lucide-react';
+import { X, Plus, Edit2, Trash2, Save, Users, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface StaffListProps {
     staff: Staff[];
@@ -79,6 +79,16 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
         }
     };
 
+    const moveStaff = (id: number, direction: -1 | 1) => {
+        const currentIndex = staff.findIndex(s => s.id === id);
+        const nextIndex = currentIndex + direction;
+        if (currentIndex < 0 || nextIndex < 0 || nextIndex >= staff.length) return;
+
+        const reorderedStaff = [...staff];
+        [reorderedStaff[currentIndex], reorderedStaff[nextIndex]] = [reorderedStaff[nextIndex], reorderedStaff[currentIndex]];
+        onUpdate(reorderedStaff);
+    };
+
     const handleChange = (field: keyof Staff, value: any) => {
         if (field === 'position' && value === '看護師') {
             setEditForm(prev => ({ ...prev, position: value, shiftType: 'part_time', role: null, hasQualification: true }));
@@ -123,7 +133,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
 
                 <div className="flex-1 overflow-auto p-5 bg-gradient-to-br from-pink-50 via-white to-yellow-50">
                     <div className="space-y-4">
-                        {staff.map(s => (
+                        {staff.map((s, index) => (
                             <div key={s.id} className="bg-white p-4 rounded-2xl shadow-md border border-pink-100 hover:shadow-lg transition-all duration-300">
                                 {editingId === s.id ? (
                                     <div className="space-y-4">
@@ -256,9 +266,10 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="flex justify-between items-start">
-                                        <div className="space-y-1">
+                                    <div className="flex justify-between items-start gap-3">
+                                        <div className="flex-1 space-y-1">
                                             <div className="flex items-center space-x-3">
+                                                <span className="w-7 text-center text-xs font-bold text-gray-400 tabular-nums">{index + 1}</span>
                                                 <h3 className="font-bold text-lg">{s.name}</h3>
                                                 <span className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600">{s.position}</span>
                                                 {s.hasQualification && <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-100">資格有</span>}
@@ -287,9 +298,27 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                                 </div>
                                             )}
                                         </div>
-                                        <button onClick={() => handleEdit(s)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
-                                            <Edit2 size={20} />
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={() => moveStaff(s.id, -1)}
+                                                disabled={index === 0}
+                                                title="上へ移動"
+                                                className="p-2 text-gray-400 hover:text-[#45B7D1] hover:bg-blue-50 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                            >
+                                                <ArrowUp size={18} />
+                                            </button>
+                                            <button
+                                                onClick={() => moveStaff(s.id, 1)}
+                                                disabled={index === staff.length - 1}
+                                                title="下へ移動"
+                                                className="p-2 text-gray-400 hover:text-[#45B7D1] hover:bg-blue-50 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                            >
+                                                <ArrowDown size={18} />
+                                            </button>
+                                            <button onClick={() => handleEdit(s)} title="編集" className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
+                                                <Edit2 size={20} />
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
