@@ -698,11 +698,11 @@ export class ShiftGenerator {
                 }
             }
 
-            // 2. Check Total Count (Min 8)
-            // Loop until we reach 8 or run out of candidates
+            // 2. Check Total Count
+            // Loop until we reach the configured weekday minimum or run out of candidates.
             while (true) {
                 let totalWorking = this.countWorkingStaff(d);
-                if (totalWorking >= 8) break;
+                if (totalWorking >= this.settings.weekdayStaffCount) break;
 
                 const availableStaff = this.staff.filter(s =>
                     this.getShift(d, s.id) === '' &&
@@ -744,7 +744,7 @@ export class ShiftGenerator {
         if (!chief) return;
 
         let backupCount = 0;
-        const LIMIT = 8;
+        const LIMIT = this.settings.chiefBackupLimit;
         for (let d = 1; d <= this.daysInMonth; d++) {
             const shift = this.getShift(d, chief.id);
             if (['A', 'B', 'C', 'D', 'E', 'J'].includes(shift)) {
@@ -846,7 +846,7 @@ export class ShiftGenerator {
 
             // 6. Check Total shortage
             const total = this.countWorkingStaff(d);
-            if (total < 8) {
+            if (total < this.settings.weekdayStaffCount) {
                 this.setShift(d, chief.id, 'B');
                 backupCount++;
                 continue;

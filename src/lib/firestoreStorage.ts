@@ -27,8 +27,12 @@ interface OrganizationData {
 
 // Default values matching types.ts
 const defaultSettings: Settings = {
+    profileName: 'デフォルト園',
+    fiscalYear: new Date().getFullYear(),
+    weekdayStaffCount: 8,
     saturdayStaffCount: 3,
     saturdayShiftPattern: 'B',
+    chiefBackupLimit: 8,
 };
 
 // Get document reference
@@ -109,6 +113,10 @@ export const firestoreStorage = {
     // Get default values
     getDefaultSettings(): Settings {
         return defaultSettings;
+    },
+
+    normalizeSettings(settings?: Partial<Settings> | null): Settings {
+        return { ...defaultSettings, ...(settings || {}) };
     },
 
     getDefaultPatterns(): ShiftPatternDefinition[] {

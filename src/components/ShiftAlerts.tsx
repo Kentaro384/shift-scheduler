@@ -205,7 +205,7 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
         });
 
         return alertList;
-    }, [staff, schedule, days, year, month, holidays, minCount]);
+    }, [staff, schedule, timeRangeSchedule, days, year, month, holidays, minCount]);
 
     const errorCount = alerts.filter(a => a.severity === 'error').length;
     const warningCount = alerts.filter(a => a.severity === 'warning').length;

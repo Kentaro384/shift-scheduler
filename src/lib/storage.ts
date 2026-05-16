@@ -30,8 +30,12 @@ const DEFAULT_STAFF: Staff[] = [
 ];
 
 const DEFAULT_SETTINGS: Settings = {
+    profileName: 'デフォルト園',
+    fiscalYear: new Date().getFullYear(),
+    weekdayStaffCount: 8,
     saturdayStaffCount: 3,
     saturdayShiftPattern: 'B', // デフォルトは標準シフト
+    chiefBackupLimit: 8,
 };
 
 export const storage = {

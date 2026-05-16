@@ -93,7 +93,7 @@ function App() {
       if (data) {
         setStaff(data.staff || []);
         setSchedule(data.schedule || {});
-        setSettings(data.settings || firestoreStorage.getDefaultSettings());
+        setSettings(firestoreStorage.normalizeSettings(data.settings));
         setHolidays(data.holidays || []);
         setPatterns(data.patterns || firestoreStorage.getDefaultPatterns());
         setTimeRangeSchedule(data.timeRangeSchedule || {});
@@ -464,6 +464,10 @@ function App() {
                 <ShiftPaletteIcon className="w-6 h-6 landscape:w-5 landscape:h-5 md:w-9 md:h-9" />
                 <span className="logo-gradient text-sm landscape:text-xs md:text-xl font-bold">ShiftPalette</span>
               </h1>
+              <div className="hidden lg:flex flex-col leading-tight text-xs text-gray-500">
+                <span className="font-semibold text-gray-700">{settings.profileName}</span>
+                <span>{settings.fiscalYear}年度</span>
+              </div>
               <div className="flex items-center bg-gray-100 rounded-full p-0.5 landscape:p-0.5 md:p-1">
                 <button onClick={() => changeMonth(-1)} className="p-1.5 landscape:p-1 md:p-2 hover:bg-gray-200 rounded-full transition-all duration-200 text-gray-600">
                   <ChevronLeft size={18} className="landscape:w-4 landscape:h-4 md:w-5 md:h-5" />
@@ -484,7 +488,7 @@ function App() {
                 year={year}
                 month={month}
                 holidays={holidays}
-                minCount={8}
+                minCount={settings.weekdayStaffCount}
               />
             </div>
 
@@ -533,7 +537,7 @@ function App() {
                           await firestoreStorage.saveAll(data);
                           setStaff(data.staff);
                           setSchedule(data.schedule);
-                          setSettings(data.settings);
+                          setSettings(firestoreStorage.normalizeSettings(data.settings));
                           setHolidays(data.holidays);
                           setPatterns(data.patterns);
                           setShowSettingsMenu(false);
@@ -709,8 +713,8 @@ function App() {
                     const isSun = date.getDay() === 0;
                     const isHol = isHoliday(day);
 
-                    // Low count logic: < 8 for weekdays, < 3 for Saturdays (if configured)
-                    const isLow = !isSun && !isHol && ((!isSat && count < 8) || (isSat && count < settings.saturdayStaffCount));
+                    // Low count logic uses profile settings for weekdays and Saturdays.
+                    const isLow = !isSun && !isHol && ((!isSat && count < settings.weekdayStaffCount) || (isSat && count < settings.saturdayStaffCount));
 
                     return (
                       <td key={day} className={`px-1 py-2 text-center text-sm border-r ${isLow ? 'bg-red-200 text-red-800 font-bold' : 'text-gray-700'}`}>

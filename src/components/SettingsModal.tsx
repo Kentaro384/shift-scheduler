@@ -15,9 +15,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, patterns
     const [patternsForm, setPatternsForm] = useState<ShiftPatternDefinition[]>([...patterns]);
 
     const handleSave = () => {
-        onSave(form);
+        onSave({
+            ...form,
+            profileName: form.profileName.trim() || 'デフォルト園',
+        });
         onUpdatePatterns(patternsForm);
         onClose();
+    };
+
+    const handleNumberChange = (field: keyof Settings, value: string, fallback: number) => {
+        const parsed = parseInt(value, 10);
+        setForm({ ...form, [field]: Number.isFinite(parsed) ? parsed : fallback });
     };
 
     const handlePatternChange = (id: string, field: keyof ShiftPatternDefinition, value: any) => {
@@ -37,20 +45,70 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, patterns
                 </div>
 
                 <div className="flex-1 overflow-auto p-6 space-y-8">
+                    {/* Profile Settings */}
+                    <section>
+                        <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">園プロファイル</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">園名・プロファイル名</label>
+                                <input
+                                    className="w-full border rounded p-2"
+                                    value={form.profileName}
+                                    onChange={e => setForm({ ...form, profileName: e.target.value })}
+                                    placeholder="例: 〇〇保育園 2026年度"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">園や年度が変わったときの識別名です。</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">年度</label>
+                                <input
+                                    type="number"
+                                    className="w-full border rounded p-2"
+                                    value={form.fiscalYear}
+                                    onChange={e => handleNumberChange('fiscalYear', e.target.value, new Date().getFullYear())}
+                                    min={2000}
+                                />
+                                <p className="text-xs text-gray-500 mt-1">年度ごとの職員・園児数変更を管理するための基準です。</p>
+                            </div>
+                        </div>
+                    </section>
+
                     {/* General Settings */}
                     <section>
                         <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">基本設定</h3>
                         <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">平日の最低出勤人数</label>
+                                <input
+                                    type="number"
+                                    className="w-full border rounded p-2"
+                                    value={form.weekdayStaffCount}
+                                    onChange={e => handleNumberChange('weekdayStaffCount', e.target.value, 8)}
+                                    min={1}
+                                />
+                                <p className="text-xs text-gray-500 mt-1">平日に必要な出勤人数です。調理職員は人数集計から除外されます。</p>
+                            </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">土曜保育の必要人数</label>
                                 <input
                                     type="number"
                                     className="w-full border rounded p-2"
                                     value={form.saturdayStaffCount}
-                                    onChange={e => setForm({ ...form, saturdayStaffCount: parseInt(e.target.value) })}
+                                    onChange={e => handleNumberChange('saturdayStaffCount', e.target.value, 3)}
                                     min={1}
                                 />
                                 <p className="text-xs text-gray-500 mt-1">土曜日に出勤する必要がある職員の人数です。</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">主任バックアップ上限（月）</label>
+                                <input
+                                    type="number"
+                                    className="w-full border rounded p-2"
+                                    value={form.chiefBackupLimit}
+                                    onChange={e => handleNumberChange('chiefBackupLimit', e.target.value, 8)}
+                                    min={0}
+                                />
+                                <p className="text-xs text-gray-500 mt-1">不足時に主任が現場シフトへ入る月間上限です。0にすると自動バックアップを使いません。</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">土曜日のシフトパターン</label>

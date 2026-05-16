@@ -32,8 +32,12 @@ export interface Staff {
 }
 
 export interface Settings {
+    profileName: string; // 園プロファイル名
+    fiscalYear: number; // 年度
+    weekdayStaffCount: number; // 平日最低出勤人数
     saturdayStaffCount: number;
     saturdayShiftPattern: 'A' | 'B' | 'C' | 'D' | 'E' | 'J'; // 土曜日のシフトパターン
+    chiefBackupLimit: number; // 主任バックアップの月間上限
 }
 
 export interface Holiday {
