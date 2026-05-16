@@ -267,7 +267,7 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
                                     <p className="text-xs text-gray-500 mb-2 text-center">
                                         シフト割当（集計にカウント）
                                     </p>
-                                    <div className="flex justify-center gap-2">
+                                    <div className="flex flex-wrap justify-center gap-2">
                                         {patterns.map(pattern => {
                                             const shiftId = pattern.id;
                                             return (

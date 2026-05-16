@@ -67,13 +67,14 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
             if (isTimeRangeStaff(s)) {
                 const timeRange = timeRangeSchedule[dateStr]?.[s.id];
                 if (timeRange) {
+                    const assignedShifts = timeRange.countAsShifts?.length ? ` [${timeRange.countAsShifts.join(',')}]` : ' [未割当]';
                     result.push({
                         staffId: s.id,
                         name: s.name,
                         isQualified: countsForStaffing(s) && s.hasQualification,
                         startMinutes: parseTimeToMinutes(timeRange.start),
                         endMinutes: parseTimeToMinutes(timeRange.end),
-                        label: `${timeRange.start}-${timeRange.end}`,
+                        label: `${timeRange.start}-${timeRange.end}${assignedShifts}`,
                         originalIndex: index
                     });
                 }

@@ -761,10 +761,24 @@ function App() {
                               )
                             ) : isPartTime && partTimeRange ? (
                               /* Time-range worker with time range - only if no holiday set */
-                              <div className="w-7 h-8 md:w-9 md:h-10 mx-auto flex flex-col items-center justify-center rounded-md text-[7px] md:text-[8px] shadow-sm transition-all duration-150 hover:scale-105 hover:shadow-md bg-gray-100 border border-gray-300 text-gray-700 font-medium leading-tight">
+                              <div
+                                className="w-9 md:w-12 min-h-10 mx-auto flex flex-col items-center justify-center rounded-md text-[7px] md:text-[8px] shadow-sm transition-all duration-150 hover:scale-105 hover:shadow-md bg-gray-100 border border-gray-300 text-gray-700 font-medium leading-tight px-0.5 py-1"
+                                title={`${partTimeRange.start}-${partTimeRange.end}${partTimeRange.countAsShifts?.length ? ` / 集計: ${partTimeRange.countAsShifts.join(', ')}` : ' / 集計なし'}`}
+                              >
                                 <span>{partTimeRange.start}</span>
                                 <span className="text-gray-400">↓</span>
                                 <span>{partTimeRange.end}</span>
+                                {partTimeRange.countAsShifts?.length ? (
+                                  <span className="mt-0.5 flex flex-wrap justify-center gap-[1px] max-w-full">
+                                    {partTimeRange.countAsShifts.map(shift => (
+                                      <span key={shift} className="px-0.5 rounded-sm bg-white border border-emerald-300 text-emerald-700 font-bold leading-none">
+                                        {shift}
+                                      </span>
+                                    ))}
+                                  </span>
+                                ) : (
+                                  <span className="mt-0.5 text-[6px] md:text-[7px] text-amber-600 leading-none">未割当</span>
+                                )}
                               </div>
                             ) : shiftId ? (
                               <div className={`
