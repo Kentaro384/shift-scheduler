@@ -615,7 +615,7 @@ function App() {
   const manualFixedCount = monthDateStrings.reduce((total, dateStr) =>
     total + Object.keys(manualShifts[dateStr] || {}).length
   , 0);
-  type ShortageIssue = { day: number; label: string; shiftPattern?: ShiftPatternId };
+  type ShortageIssue = { day: number; label: string; missingCount: number };
   const staffingShortages: ShortageIssue[] = dailyCounts.flatMap((count, index) => {
     const day = index + 1;
     const date = new Date(year, month - 1, day);
@@ -623,8 +623,9 @@ function App() {
     const isSun = date.getDay() === 0;
     const isHol = isHoliday(day);
     if (isSun || isHol) return [];
-    const isShort = isSat ? count < settings.saturdayStaffCount : count < settings.weekdayStaffCount;
-    return isShort ? [{ day, label: '出勤人数' }] : [];
+    const requiredCount = isSat ? settings.saturdayStaffCount : settings.weekdayStaffCount;
+    const missingCount = requiredCount - count;
+    return missingCount > 0 ? [{ day, label: '出勤人数', missingCount }] : [];
   });
   const patternShortages: ShortageIssue[] = qualifiedCounts.flatMap((counts, index) => {
     const day = index + 1;
@@ -637,18 +638,23 @@ function App() {
       const minCount = pattern.minCount || 0;
       if (minCount <= 0) return [];
       const count = counts[pattern.id] || 0;
-      return count < minCount ? [{ day, label: `${pattern.id}不足`, shiftPattern: pattern.id }] : [];
+      const missingCount = minCount - count;
+      return missingCount > 0 ? [{ day, label: pattern.id, missingCount }] : [];
     });
   });
   const shortageIssues = [...staffingShortages, ...patternShortages];
   const shortageIssueCount = shortageIssues.length;
-  const firstShortageIssue = shortageIssues[0];
-  const openFirstIssue = () => {
-    if (firstShortageIssue?.shiftPattern) {
-      setCandidateSearch({ day: firstShortageIssue.day, shiftPattern: firstShortageIssue.shiftPattern });
-    } else {
-      setHourlyChartDay(firstShortageIssue?.day || null);
+  const showShortageList = () => {
+    if (!hasGeneratedShift) {
+      toast.info('不足確認は未実行です', '自動生成後に確認できます');
+      return;
     }
+    if (shortageIssueCount === 0) {
+      toast.success('不足はありません', '現在のシフトは必要人数を満たしています');
+      return;
+    }
+    const lines = shortageIssues.map(issue => `${month}月${issue.day}日 ${issue.label}:${issue.missingCount}名不足`);
+    window.alert(lines.join('\n'));
   };
   const setupSteps = [
     { label: '初期化', done: true, note: isMonthBlank ? '白紙' : '入力中', onClick: handleForceClearMonth, icon: Trash2, danger: true },
@@ -656,7 +662,7 @@ function App() {
     { label: '固定勤務', done: hasTimeRangeInput, note: hasTimeRangeInput ? '反映済み' : `${fixedDefaultStaffCount}人対象`, onClick: handleApplyDefaultTimeRanges, icon: CalendarCheck },
     { label: '固定予定', done: manualFixedCount > 0, note: manualFixedCount > 0 ? `${manualFixedCount}件` : '必要時', onClick: () => setShowHolidayModal(true), icon: Calendar },
     { label: '自動生成', done: hasGeneratedShift, note: hasGeneratedShift ? '生成済み' : '未生成', onClick: handleGenerate, icon: RefreshCw },
-    { label: '不足確認', done: hasGeneratedShift && shortageIssueCount === 0, note: !hasGeneratedShift ? '未生成' : shortageIssueCount > 0 ? `${shortageIssueCount}件 要修正` : 'OK', onClick: openFirstIssue, icon: AlertTriangle },
+    { label: '不足確認', done: hasGeneratedShift && shortageIssueCount === 0, note: !hasGeneratedShift ? '未生成' : shortageIssueCount > 0 ? `${shortageIssueCount}件 要修正` : 'OK', onClick: showShortageList, icon: AlertTriangle },
     { label: 'Excel', done: false, note: '出力', onClick: handleDownloadExcel, icon: Download },
   ];
 

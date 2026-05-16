@@ -112,6 +112,13 @@ function getNoteText(dateStr: string, notes: DailyNotes, holidays: Holiday[]): s
     return note || holidayName;
 }
 
+function toVerticalText(value: string): string {
+    return value
+        .split(/\r?\n/)
+        .map(line => Array.from(line).join('\n'))
+        .join('\n');
+}
+
 function getColumnLetter(col: number): string {
     let letter = '';
     let current = col;
@@ -126,8 +133,9 @@ function getColumnLetter(col: number): string {
 function getStaffPrintGroup(staff: Staff): string {
     const ageGroup = getStaffAgeGroup(staff);
     if (ageGroup) return ageGroup;
+    if (staff.position === '園長' || staff.position === '主任' || staff.position === '看護師') return 'management';
     if (isCookingStaff(staff)) return 'cooking';
-    if (staff.position === 'パート' || staff.position === '看護師' || isTimeRangeStaff(staff)) return 'part_time';
+    if (staff.position === 'パート' || isTimeRangeStaff(staff)) return 'part_time';
     return staff.position;
 }
 
@@ -208,9 +216,9 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         { row: noteRow, label: '備考', height: 82 },
     ].forEach(({ row, label, height }) => {
         const labelCell = worksheet.getCell(row, 1);
-        labelCell.value = label;
+        labelCell.value = row === noteRow ? toVerticalText(label) : label;
         labelCell.font = font(11);
-        labelCell.alignment = { horizontal: 'center', vertical: 'middle', textRotation: row === noteRow ? 255 : undefined };
+        labelCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: row === noteRow || undefined };
         setNoFill(labelCell);
         applyThinBorder(labelCell);
         worksheet.getRow(row).height = height;
@@ -251,9 +259,9 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         weekdayCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
         const noteCell = worksheet.getCell(noteRow, col);
-        noteCell.value = getNoteText(dateStr, notes, holidays);
+        noteCell.value = toVerticalText(getNoteText(dateStr, notes, holidays));
         noteCell.font = font(8);
-        noteCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true, textRotation: 255 };
+        noteCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
 
         [dateCell, weekdayCell, noteCell].forEach(cell => {
             if (dayFill) setSolidFill(cell, dayFill);
@@ -356,7 +364,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         const mergeEnd = Math.min(legendCol + (isLast ? 5 : 4), printLastCol);
         worksheet.mergeCells(patternTitleRow, legendCol, patternTitleRow + (isLast ? 1 : 0), mergeEnd);
         const cell = worksheet.getCell(patternTitleRow, legendCol);
-        cell.value = `${pattern.id} ${pattern.timeRange}${pattern.id === 'F' ? '\n（園長保育対応）' : ''}`;
+        cell.value = `${pattern.id} ${pattern.timeRange}${pattern.id === 'F' ? '\n（延長保育対応）' : ''}`;
         cell.font = font(11);
         cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: pattern.id === 'F' || undefined };
         setNoFill(cell);
