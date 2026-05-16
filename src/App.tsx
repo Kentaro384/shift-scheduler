@@ -95,11 +95,11 @@ function App() {
         setSchedule(data.schedule || {});
         setSettings(firestoreStorage.normalizeSettings(data.settings));
         setHolidays(data.holidays || []);
-        setPatterns(data.patterns || firestoreStorage.getDefaultPatterns());
+        setPatterns(firestoreStorage.normalizePatterns(data.patterns));
         setTimeRangeSchedule(data.timeRangeSchedule || {});
       } else {
         // Initialize with defaults if no data exists
-        setPatterns(firestoreStorage.getDefaultPatterns());
+        setPatterns(firestoreStorage.normalizePatterns());
         setSettings(firestoreStorage.getDefaultSettings());
       }
       setDataLoading(false);
@@ -188,8 +188,9 @@ function App() {
   };
 
   const handleUpdatePatterns = (newPatterns: ShiftPatternDefinition[]) => {
-    setPatterns(newPatterns);
-    firestoreStorage.savePatterns(newPatterns);
+    const normalizedPatterns = firestoreStorage.normalizePatterns(newPatterns);
+    setPatterns(normalizedPatterns);
+    firestoreStorage.savePatterns(normalizedPatterns);
   };
 
   const handleCellClick = (staffId: number, day: number) => {
@@ -217,7 +218,7 @@ function App() {
     newSchedule[dateStr][staffId] = shiftId;
 
     // Check for constraint violations
-    const ctx = createConstraintContext(newSchedule, staff, holidays, settings, year, month);
+    const ctx = createConstraintContext(newSchedule, staff, holidays, settings, year, month, patterns);
     const violations = checkConstraints(ctx, day, staffId, shiftId);
     const hardViolations = violations.filter(v => v.type === 'hard');
 
@@ -260,7 +261,7 @@ function App() {
     newSchedule[dateStr][targetStaffId] = shiftId;
 
     // Check for constraint violations
-    const ctx = createConstraintContext(newSchedule, staff, holidays, settings, year, month);
+    const ctx = createConstraintContext(newSchedule, staff, holidays, settings, year, month, patterns);
     const violations = checkConstraints(ctx, day, targetStaffId, shiftId);
     const hardViolations = violations.filter(v => v.type === 'hard');
 
@@ -489,6 +490,7 @@ function App() {
                 month={month}
                 holidays={holidays}
                 minCount={settings.weekdayStaffCount}
+                patterns={patterns}
               />
             </div>
 

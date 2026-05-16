@@ -1,5 +1,5 @@
 import type { Staff, Settings, Holiday, ShiftSchedule, ShiftPatternDefinition } from '../types';
-import { SHIFT_PATTERNS } from '../types';
+import { SHIFT_PATTERNS, normalizeShiftPatterns } from '../types';
 
 const KEYS = {
     STAFF: 'hoikuen_staff',
@@ -91,13 +91,13 @@ export const storage = {
         try {
             const data = localStorage.getItem(KEYS.PATTERNS);
             const parsed = data ? JSON.parse(data) : SHIFT_PATTERNS;
-            return Array.isArray(parsed) ? parsed : SHIFT_PATTERNS;
+            return Array.isArray(parsed) ? normalizeShiftPatterns(parsed) : SHIFT_PATTERNS;
         } catch {
             return SHIFT_PATTERNS;
         }
     },
     savePatterns: (patterns: ShiftPatternDefinition[]) => {
-        localStorage.setItem(KEYS.PATTERNS, JSON.stringify(patterns));
+        localStorage.setItem(KEYS.PATTERNS, JSON.stringify(normalizeShiftPatterns(patterns)));
     },
 
     // Get all data for migration to Firestore

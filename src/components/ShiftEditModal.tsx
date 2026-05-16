@@ -85,8 +85,8 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
 
     // Create constraint context
     const ctx = useMemo(() =>
-        createConstraintContext(schedule, staff, holidays, settings, year, month),
-        [schedule, staff, holidays, settings, year, month]
+        createConstraintContext(schedule, staff, holidays, settings, year, month, patterns),
+        [schedule, staff, holidays, settings, year, month, patterns]
     );
 
     const dateStr = `${month}/${day}`;
@@ -351,6 +351,7 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
                                 month={month}
                                 schedule={schedule}
                                 staff={staff}
+                                patterns={patterns}
                                 currentStaff={staff.find(s => s.id === staffId)!}
                                 onApplySwap={onSwap}
                                 onClose={onClose}

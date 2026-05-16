@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ArrowLeftRight, AlertTriangle, CheckCircle, XCircle, ArrowRightLeft } from 'lucide-react';
-import type { ShiftSchedule, Staff, ShiftPatternId } from '../types';
+import type { ShiftSchedule, Staff, ShiftPatternDefinition, ShiftPatternId } from '../types';
 import { isWorkShiftId } from '../types';
 import { getSwapCandidates, type SwapViolation } from '../lib/swapConstraintChecker';
 
@@ -10,6 +10,7 @@ interface SwapSuggestionsProps {
     month: number;
     schedule: ShiftSchedule;
     staff: Staff[];
+    patterns: ShiftPatternDefinition[];
     currentStaff: Staff; // The staff whose cell was clicked
     onApplySwap: (staffAId: number, staffBId: number) => void;
     onClose: () => void;
@@ -33,6 +34,7 @@ export const SwapSuggestions: React.FC<SwapSuggestionsProps> = ({
     month,
     schedule,
     staff,
+    patterns,
     currentStaff,
     onApplySwap,
 }) => {
@@ -42,8 +44,8 @@ export const SwapSuggestions: React.FC<SwapSuggestionsProps> = ({
 
     // Get all swap candidates with violations
     const candidates = useMemo(() =>
-        getSwapCandidates(currentStaff, day, schedule, staff, year, month),
-        [currentStaff, day, schedule, staff, year, month]
+        getSwapCandidates(currentStaff, day, schedule, staff, year, month, patterns),
+        [currentStaff, day, schedule, staff, year, month, patterns]
     );
 
     const getSeverityIcon = (violations: SwapViolation[]) => {

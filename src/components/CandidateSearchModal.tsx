@@ -82,8 +82,8 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
     onClose
 }) => {
     const ctx = useMemo(() =>
-        createConstraintContext(schedule, staff, holidays, settings, year, month),
-        [schedule, staff, holidays, settings, year, month]
+        createConstraintContext(schedule, staff, holidays, settings, year, month, patterns),
+        [schedule, staff, holidays, settings, year, month, patterns]
     );
 
     const candidates = useMemo(() =>

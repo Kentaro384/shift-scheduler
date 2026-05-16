@@ -1,6 +1,6 @@
 import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
 import { getDaysInMonth, getDayOfWeek, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
-import { SHIFT_PATTERNS, isWorkShiftId } from '../types';
+import { SHIFT_PATTERNS, getShiftPatternKind, isWorkShiftId, normalizeShiftPatterns } from '../types';
 import { countEffectiveShift, countWorkingStaff as countWorkingStaffUtil } from './shiftCountUtils';
 
 export class ShiftGenerator {
@@ -20,7 +20,7 @@ export class ShiftGenerator {
         this.staff = staff;
         this.holidays = holidays;
         this.settings = settings;
-        this.patterns = patterns.length > 0 ? patterns : SHIFT_PATTERNS;
+        this.patterns = normalizeShiftPatterns(patterns.length > 0 ? patterns : SHIFT_PATTERNS);
         this.year = year;
         this.month = month;
         this.daysInMonth = getDaysInMonth(year, month);
@@ -108,7 +108,7 @@ export class ShiftGenerator {
         let count = 0;
         for (let d = 1; d <= this.daysInMonth; d++) {
             const shift = this.getShift(d, staffId);
-            if (shift === 'A' || shift === 'B') count++;
+            if (this.isEarlyLimitedShift(shift)) count++;
         }
         return count >= staff.earlyShiftLimit;
     }
@@ -119,8 +119,8 @@ export class ShiftGenerator {
         if (prevDay === 0) return false;
 
         const prevShift = this.getShift(prevDay, staffId);
-        if (shift === 'A' && prevShift === 'A') return true;
-        if (shift === 'J' && prevShift === 'J') return true;
+        if (this.isOpeningShift(shift) && this.isOpeningShift(prevShift)) return true;
+        if (this.isClosingShift(shift) && this.isClosingShift(prevShift)) return true;
 
         return false;
     }
@@ -139,7 +139,7 @@ export class ShiftGenerator {
         this.phase9_FillEmpty();
         const fixCount = this.phase10_Validation();
 
-        // Phase 10 may convert A/J violations to B, which can re-open pattern
+        // Phase 10 may convert edge-shift violations to a fallback shift, which can re-open pattern
         // shortages or late-role coverage gaps. Re-run the adjustment phases once.
         if (fixCount > 0) {
             this.phase4_5_LateShiftCoverage();
@@ -242,12 +242,6 @@ export class ShiftGenerator {
         ), 0);
     }
 
-    private getPatternMinCount(pattern: ShiftPatternId): number {
-        return this.patterns.find(p => p.id === pattern)?.minCount
-            ?? SHIFT_PATTERNS.find(p => p.id === pattern)?.minCount
-            ?? 0;
-    }
-
     private getWorkPatterns(): ShiftPatternDefinition[] {
         return this.patterns.filter(p => isWorkShiftId(p.id));
     }
@@ -256,8 +250,35 @@ export class ShiftGenerator {
         return isWorkShiftId(shift);
     }
 
+    private getShiftKind(shift: ShiftPatternId | undefined): ReturnType<typeof getShiftPatternKind> {
+        return getShiftPatternKind(shift, this.patterns);
+    }
+
+    private isOpeningShift(shift: ShiftPatternId | undefined): boolean {
+        return this.getShiftKind(shift) === 'opening';
+    }
+
+    private isEarlyLimitedShift(shift: ShiftPatternId | undefined): boolean {
+        const kind = this.getShiftKind(shift);
+        return kind === 'opening' || kind === 'early';
+    }
+
+    private isLateCoverageShift(shift: ShiftPatternId | undefined): boolean {
+        const kind = this.getShiftKind(shift);
+        return kind === 'late' || kind === 'closing';
+    }
+
+    private isClosingShift(shift: ShiftPatternId | undefined): boolean {
+        return this.getShiftKind(shift) === 'closing';
+    }
+
+    private getFirstPatternByKind(kinds: ReturnType<typeof getShiftPatternKind>[]): ShiftPatternId | undefined {
+        return this.getWorkPatterns().find(p => kinds.includes(this.getShiftKind(p.id)))?.id;
+    }
+
     private getFallbackWorkShift(): ShiftPatternId {
-        return this.patterns.find(p => p.id === 'B')?.id
+        return this.getFirstPatternByKind(['standard', 'early'])
+            ?? this.patterns.find(p => p.id === 'B')?.id
             ?? this.getWorkPatterns()[0]?.id
             ?? '休';
     }
@@ -305,14 +326,14 @@ export class ShiftGenerator {
                 const workingCookIndex = saturdayIndex % cooks.length;
                 cooks.forEach((c, idx) => {
                     if (idx === workingCookIndex) {
-                        this.setShift(d, c.id, 'B');
+                        this.setShift(d, c.id, this.getFallbackWorkShift());
                     } else {
                         this.setShift(d, c.id, '休');
                     }
                 });
                 saturdayIndex++;
             } else {
-                cooks.forEach(c => this.setShift(d, c.id, 'B'));
+                cooks.forEach(c => this.setShift(d, c.id, this.getFallbackWorkShift()));
             }
         }
     }
@@ -443,7 +464,7 @@ export class ShiftGenerator {
         return count;
     }
 
-    // Helper: Check if staff has already worked A or J in the current week (Mon-Sat)
+    // Helper: Check if staff has already worked edge shifts in the current week (Mon-Sat)
     private hasWeeklyAJLimitConflict(day: number, staffId: number): boolean {
         const date = new Date(this.year, this.month - 1, day);
         const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
@@ -459,7 +480,7 @@ export class ShiftGenerator {
         for (let d = startOfWeek; d < day; d++) {
             if (d < 1) continue; // Previous month
             const shift = this.getShift(d, staffId);
-            if (shift === 'A' || shift === 'J') {
+            if (this.isOpeningShift(shift) || this.isClosingShift(shift)) {
                 count++;
             }
         }
@@ -509,17 +530,17 @@ export class ShiftGenerator {
                     if (count >= neededCount) break;
 
                     // Constraints
-                    if (pattern === 'A') {
+                    if (this.isOpeningShift(pattern)) {
                         if (this.isEarlyShiftLimitExceeded(s.id)) continue;
-                        if (this.checkConsecutiveShiftViolation(d, s.id, 'A')) continue;
-                        // Weekly A/J limit - skip if relaxConstraints is false, allow if true
+                        if (this.checkConsecutiveShiftViolation(d, s.id, pattern)) continue;
+                        // Weekly edge-shift limit - skip if relaxConstraints is false, allow if true
                         if (!relaxConstraints && this.hasWeeklyAJLimitConflict(d, s.id)) continue;
                         const prevDay = this.getPreviousWorkDay(d);
-                        if (prevDay > 0 && this.getShift(prevDay, s.id) === 'J') continue;
+                        if (prevDay > 0 && this.isClosingShift(this.getShift(prevDay, s.id))) continue;
                     }
-                    if (pattern === 'J') {
-                        if (this.checkConsecutiveShiftViolation(d, s.id, 'J')) continue;
-                        // Weekly A/J limit - skip if relaxConstraints is false, allow if true
+                    if (this.isClosingShift(pattern)) {
+                        if (this.checkConsecutiveShiftViolation(d, s.id, pattern)) continue;
+                        // Weekly edge-shift limit - skip if relaxConstraints is false, allow if true
                         if (!relaxConstraints && this.hasWeeklyAJLimitConflict(d, s.id)) continue;
                     }
                     if (this.hasIncompatibleConflict(d, s.id, pattern)) continue;
@@ -531,7 +552,7 @@ export class ShiftGenerator {
                     count++;
                 }
 
-                // If still not enough, try again with relaxed constraints (allow A/J twice per week)
+                // If still not enough, try again with relaxed constraints (allow edge shifts twice per week)
                 if (count < neededCount && !relaxConstraints) {
                     const moreCandidates = regulars.filter(s => !isAssigned(s.id));
                     moreCandidates.sort(sortFn || defaultSort);
@@ -540,14 +561,14 @@ export class ShiftGenerator {
                         if (count >= neededCount) break;
 
                         // Relaxed constraints - only hard constraints remain
-                        if (pattern === 'A') {
+                        if (this.isOpeningShift(pattern)) {
                             if (this.isEarlyShiftLimitExceeded(s.id)) continue;
-                            if (this.checkConsecutiveShiftViolation(d, s.id, 'A')) continue;
+                            if (this.checkConsecutiveShiftViolation(d, s.id, pattern)) continue;
                             const prevDay = this.getPreviousWorkDay(d);
-                            if (prevDay > 0 && this.getShift(prevDay, s.id) === 'J') continue;
+                            if (prevDay > 0 && this.isClosingShift(this.getShift(prevDay, s.id))) continue;
                         }
-                        if (pattern === 'J') {
-                            if (this.checkConsecutiveShiftViolation(d, s.id, 'J')) continue;
+                        if (this.isClosingShift(pattern)) {
+                            if (this.checkConsecutiveShiftViolation(d, s.id, pattern)) continue;
                         }
                         if (this.hasIncompatibleConflict(d, s.id, pattern)) continue;
 
@@ -562,32 +583,31 @@ export class ShiftGenerator {
             const sortByPatternCount = (pattern: ShiftPatternId) => (a: Staff, b: Staff) => {
                 const diff = this.countTotalShifts(a.id, pattern) - this.countTotalShifts(b.id, pattern);
                 if (diff !== 0) return diff;
-                return (this.countTotalShifts(a.id, 'A') + this.countTotalShifts(a.id, 'B') + this.countTotalShifts(a.id, 'J')) -
-                    (this.countTotalShifts(b.id, 'A') + this.countTotalShifts(b.id, 'B') + this.countTotalShifts(b.id, 'J'));
+                const balanceIds = this.getWorkPatterns()
+                    .filter(p => ['opening', 'early', 'closing'].includes(this.getShiftKind(p.id) || 'standard'))
+                    .map(p => p.id);
+                const countA = balanceIds.reduce((sum, id) => sum + this.countTotalShifts(a.id, id), 0);
+                const countB = balanceIds.reduce((sum, id) => sum + this.countTotalShifts(b.id, id), 0);
+                return countA - countB;
             };
 
-            const minA = this.getPatternMinCount('A');
-            const minJ = this.getPatternMinCount('J');
-
+            const openingPatterns = this.getWorkPatterns().filter(p => this.isOpeningShift(p.id));
+            const closingPatterns = this.getWorkPatterns().filter(p => this.isClosingShift(p.id));
+            const latePatterns = this.getWorkPatterns().filter(p => this.getShiftKind(p.id) === 'late');
+            const standardPatterns = this.getWorkPatterns().filter(p => this.getShiftKind(p.id) === 'standard');
 
             if (dayOfWeek >= 1 && dayOfWeek <= 3) {
-                // Mon-Wed: Prioritize A first to secure candidates before J→A conflict
-                assignPattern('A', minA, false, sortByPatternCount('A'));
-                assignPattern('J', minJ, false, sortByPatternCount('J'));
+                // Mon-Wed: Prioritize opening shifts first to secure candidates before closing→opening conflict
+                openingPatterns.forEach(pattern => assignPattern(pattern.id, pattern.minCount, false, sortByPatternCount(pattern.id)));
+                closingPatterns.forEach(pattern => assignPattern(pattern.id, pattern.minCount, false, sortByPatternCount(pattern.id)));
             } else {
-                // Thu-Fri: Prioritize J first (less impact on next week's A)
-                assignPattern('J', minJ, false, sortByPatternCount('J'));
-                assignPattern('A', minA, false, sortByPatternCount('A'));
+                // Thu-Fri: Prioritize closing shifts first (less impact on next week's opening shifts)
+                closingPatterns.forEach(pattern => assignPattern(pattern.id, pattern.minCount, false, sortByPatternCount(pattern.id)));
+                openingPatterns.forEach(pattern => assignPattern(pattern.id, pattern.minCount, false, sortByPatternCount(pattern.id)));
             }
 
-            // 3. Assign D (Late) - Min 1
-            assignPattern('D', this.getPatternMinCount('D'), false);
-
-            // 4. Assign E (Late+) - Min 1
-            assignPattern('E', this.getPatternMinCount('E'), false);
-
-            // 5. Assign C (Standard+) - Min 1
-            assignPattern('C', this.getPatternMinCount('C'), false);
+            latePatterns.forEach(pattern => assignPattern(pattern.id, pattern.minCount, false));
+            standardPatterns.forEach(pattern => assignPattern(pattern.id, pattern.minCount, false));
 
             // 6. Assign remaining regular staff to B (or C/D fallback)
             const remaining = regulars.filter(s => !isAssigned(s.id));
@@ -595,8 +615,11 @@ export class ShiftGenerator {
             // Sort remaining candidates to distribute burden
             // Sort by total shifts (A+B+J) ascending
             remaining.sort((a, b) => {
-                const countA = this.countTotalShifts(a.id, 'A') + this.countTotalShifts(a.id, 'B') + this.countTotalShifts(a.id, 'J');
-                const countB = this.countTotalShifts(b.id, 'A') + this.countTotalShifts(b.id, 'B') + this.countTotalShifts(b.id, 'J');
+                const balanceIds = this.getWorkPatterns()
+                    .filter(p => ['opening', 'early', 'closing'].includes(this.getShiftKind(p.id) || 'standard'))
+                    .map(p => p.id);
+                const countA = balanceIds.reduce((sum, id) => sum + this.countTotalShifts(a.id, id), 0);
+                const countB = balanceIds.reduce((sum, id) => sum + this.countTotalShifts(b.id, id), 0);
                 return countA - countB;
             });
 
@@ -606,7 +629,7 @@ export class ShiftGenerator {
                 // Do NOT assign 休 automatically - regular staff should work weekdays
                 let shift: ShiftPatternId = this.getFallbackWorkShift();
                 if (this.isEarlyShiftLimitExceeded(s.id)) {
-                    shift = this.patterns.find(p => p.id === 'C')?.id ?? this.getNextFallbackShift(shift);
+                    shift = this.getFirstPatternByKind(['standard', 'late']) ?? this.getNextFallbackShift(shift);
                 }
 
                 if (this.hasIncompatibleConflict(d, s.id, shift)) {
@@ -625,14 +648,18 @@ export class ShiftGenerator {
         for (let d = 1; d <= this.daysInMonth; d++) {
             if (this.isHoliday(d) || this.isSaturday(d)) continue;
 
-            // Check if we have at least one infant and one toddler role in D, E, J
-            const lateShifts = ['D', 'E', 'J'];
+            // Check if we have at least one infant and one toddler role in late/closing shifts
+            const lateShiftIds = this.getWorkPatterns()
+                .filter(p => this.isLateCoverageShift(p.id))
+                .map(p => p.id);
+            const lateFallback = lateShiftIds[0];
+            if (!lateFallback) continue;
             let hasInfant = false;
             let hasToddler = false;
 
             this.staff.forEach(s => {
                 const shift = this.getShift(d, s.id);
-                if (lateShifts.includes(shift)) {
+                if (lateShiftIds.includes(shift)) {
                     if (s.role === 'infant') hasInfant = true;
                     if (s.role === 'toddler') hasToddler = true;
                 }
@@ -643,10 +670,11 @@ export class ShiftGenerator {
                 const candidate = this.staff.find(s =>
                     !s.saturdayOnly &&
                     s.role === 'infant' &&
-                    ['B', 'C'].includes(this.getShift(d, s.id)) &&
-                    !this.hasIncompatibleConflict(d, s.id, 'D')
+                    !this.isLateCoverageShift(this.getShift(d, s.id)) &&
+                    this.isWorkShift(this.getShift(d, s.id)) &&
+                    !this.hasIncompatibleConflict(d, s.id, lateFallback)
                 );
-                if (candidate) this.setShift(d, candidate.id, 'D');
+                if (candidate) this.setShift(d, candidate.id, lateFallback);
             }
 
             if (!hasToddler) {
@@ -654,10 +682,11 @@ export class ShiftGenerator {
                 const candidate = this.staff.find(s =>
                     !s.saturdayOnly &&
                     s.role === 'toddler' &&
-                    ['B', 'C'].includes(this.getShift(d, s.id)) &&
-                    !this.hasIncompatibleConflict(d, s.id, 'D')
+                    !this.isLateCoverageShift(this.getShift(d, s.id)) &&
+                    this.isWorkShift(this.getShift(d, s.id)) &&
+                    !this.hasIncompatibleConflict(d, s.id, lateFallback)
                 );
-                if (candidate) this.setShift(d, candidate.id, 'D');
+                if (candidate) this.setShift(d, candidate.id, lateFallback);
             }
         }
     }
@@ -692,14 +721,14 @@ export class ShiftGenerator {
                         if (currentCount >= minCount) break;
 
                         // Check constraints
-                        if (pattern.id === 'A') {
+                        if (this.isOpeningShift(pattern.id)) {
                             if (this.isEarlyShiftLimitExceeded(s.id)) continue;
-                            if (this.checkConsecutiveShiftViolation(d, s.id, 'A')) continue;
+                            if (this.checkConsecutiveShiftViolation(d, s.id, pattern.id)) continue;
                             const prevDay = this.getPreviousWorkDay(d);
-                            if (prevDay > 0 && this.getShift(prevDay, s.id) === 'J') continue;
+                            if (prevDay > 0 && this.isClosingShift(this.getShift(prevDay, s.id))) continue;
                         }
-                        if (pattern.id === 'J') {
-                            if (this.checkConsecutiveShiftViolation(d, s.id, 'J')) continue;
+                        if (this.isClosingShift(pattern.id)) {
+                            if (this.checkConsecutiveShiftViolation(d, s.id, pattern.id)) continue;
                         }
                         if (this.hasIncompatibleConflict(d, s.id, pattern.id)) continue;
 
@@ -727,17 +756,20 @@ export class ShiftGenerator {
 
                 // Sort by total shifts to distribute burden
                 availableStaff.sort((a, b) => {
-                    const countA = this.countTotalShifts(a.id, 'A') + this.countTotalShifts(a.id, 'B') + this.countTotalShifts(a.id, 'J');
-                    const countB = this.countTotalShifts(b.id, 'A') + this.countTotalShifts(b.id, 'B') + this.countTotalShifts(b.id, 'J');
+                    const balanceIds = this.getWorkPatterns()
+                        .filter(p => ['opening', 'early', 'closing'].includes(this.getShiftKind(p.id) || 'standard'))
+                        .map(p => p.id);
+                    const countA = balanceIds.reduce((sum, id) => sum + this.countTotalShifts(a.id, id), 0);
+                    const countB = balanceIds.reduce((sum, id) => sum + this.countTotalShifts(b.id, id), 0);
                     return countA - countB;
                 });
 
                 const candidate = availableStaff[0];
 
-                // Assign B (or C if constrained)
+                // Assign fallback work shift (or standard/late if constrained)
                 let shift: ShiftPatternId = this.getFallbackWorkShift();
                 if (this.isEarlyShiftLimitExceeded(candidate.id)) {
-                    shift = this.patterns.find(p => p.id === 'C')?.id ?? this.getNextFallbackShift(shift);
+                    shift = this.getFirstPatternByKind(['standard', 'late']) ?? this.getNextFallbackShift(shift);
                 }
 
                 // Check conflicts
@@ -778,43 +810,43 @@ export class ShiftGenerator {
                 continue;
             }
 
-            // Helper: Try to reassign B staff to shortage pattern BEFORE using Chief
-            const tryReassignBStaff = (pattern: ShiftPatternId, minCount: number): boolean => {
+            // Helper: Try to reassign standard staff to shortage pattern BEFORE using Chief
+            const tryReassignStandardStaff = (pattern: ShiftPatternId, minCount: number): boolean => {
                 const currentCount = this.countPattern(d, pattern);
                 if (currentCount >= minCount) return false; // No shortage
 
                 const dateStr = getFormattedDate(this.year, this.month, d);
 
-                // Find B staff who could take this pattern
-                const bStaff = this.staff.filter(s => {
+                // Find standard/early staff who could take this pattern
+                const standardStaff = this.staff.filter(s => {
                     if (s.position === '園長' || s.position === '主任') return false;
                     if (s.shiftType !== 'regular') return false;
                     if (s.saturdayOnly) return false;
                     const shift = this.schedule[dateStr]?.[s.id];
-                    return shift === 'B'; // Only consider B staff
+                    return this.getShiftKind(shift) === 'standard' || this.getShiftKind(shift) === 'early';
                 });
 
                 // Sort by total shifts of target pattern (prefer those with fewer)
-                bStaff.sort((a, b) =>
+                standardStaff.sort((a, b) =>
                     this.countTotalShifts(a.id, pattern) - this.countTotalShifts(b.id, pattern)
                 );
 
-                for (const s of bStaff) {
+                for (const s of standardStaff) {
                     // Check constraints
-                    if (pattern === 'A') {
+                    if (this.isOpeningShift(pattern)) {
                         if (this.isEarlyShiftLimitExceeded(s.id)) continue;
-                        if (this.checkConsecutiveShiftViolation(d, s.id, 'A')) continue;
+                        if (this.checkConsecutiveShiftViolation(d, s.id, pattern)) continue;
                         const prevDay = this.getPreviousWorkDay(d);
-                        if (prevDay > 0 && this.getShift(prevDay, s.id) === 'J') continue;
+                        if (prevDay > 0 && this.isClosingShift(this.getShift(prevDay, s.id))) continue;
                     }
-                    if (pattern === 'J') {
-                        if (this.checkConsecutiveShiftViolation(d, s.id, 'J')) continue;
+                    if (this.isClosingShift(pattern)) {
+                        if (this.checkConsecutiveShiftViolation(d, s.id, pattern)) continue;
                     }
                     if (this.hasIncompatibleConflict(d, s.id, pattern)) continue;
 
-                    // Reassign from B to shortage pattern
+                    // Reassign from standard/early to shortage pattern
                     this.schedule[dateStr][s.id] = pattern; // Direct assignment to bypass setShift protection
-                    return true; // Shortage filled by B staff
+                    return true; // Shortage filled by another staff
                 }
 
                 return false; // Couldn't reassign
@@ -822,17 +854,17 @@ export class ShiftGenerator {
 
             // Helper to assign Chief if needed (after trying B reassignment)
             const assignIfShort = (pattern: ShiftPatternId, minCount: number): boolean => {
-                // First, try to reassign B staff
-                if (tryReassignBStaff(pattern, minCount)) {
-                    return false; // Shortage filled by B staff, Chief not needed
+                // First, try to reassign regular staff
+                if (tryReassignStandardStaff(pattern, minCount)) {
+                    return false; // Shortage filled by regular staff, Chief not needed
                 }
 
                 // If still short, use Chief
                 if (this.countPattern(d, pattern) < minCount) {
                     // Check constraints for Chief
-                    if (pattern === 'A') {
+                    if (this.isOpeningShift(pattern)) {
                         const prevDay = this.getPreviousWorkDay(d);
-                        if (prevDay > 0 && this.getShift(prevDay, chief.id) === 'J') return false;
+                        if (prevDay > 0 && this.isClosingShift(this.getShift(prevDay, chief.id))) return false;
                     }
                     this.setShift(d, chief.id, pattern);
                     backupCount++;
@@ -841,20 +873,12 @@ export class ShiftGenerator {
                 return false;
             };
 
-            // 1. Check A shortage (Critical)
-            if (assignIfShort('A', this.getPatternMinCount('A'))) continue;
+            const prioritizedPatterns = this.getWorkPatterns().sort((a, b) => {
+                const priority = { opening: 0, closing: 1, late: 2, standard: 3, early: 4 };
+                return priority[this.getShiftKind(a.id) || 'standard'] - priority[this.getShiftKind(b.id) || 'standard'];
+            });
 
-            // 2. Check J shortage (Critical)
-            if (assignIfShort('J', this.getPatternMinCount('J'))) continue;
-
-            // 3. Check D shortage
-            if (assignIfShort('D', this.getPatternMinCount('D'))) continue;
-
-            // 4. Check E shortage
-            if (assignIfShort('E', this.getPatternMinCount('E'))) continue;
-
-            // 5. Check C shortage
-            if (assignIfShort('C', this.getPatternMinCount('C'))) continue;
+            if (prioritizedPatterns.some(pattern => assignIfShort(pattern.id, pattern.minCount))) continue;
 
             // 6. Check Total shortage
             const total = this.countWorkingStaff(d);
@@ -913,20 +937,20 @@ export class ShiftGenerator {
                 const prevShift = this.getShift(prevDay, s.id);
                 const currShift = this.getShift(d, s.id);
 
-                // 1. J -> A violation
-                if (prevShift === 'J' && currShift === 'A') {
+                // 1. Closing -> opening violation
+                if (this.isClosingShift(prevShift) && this.isOpeningShift(currShift)) {
                     this.setShift(d, s.id, this.getFallbackWorkShift());
                     fixCount++;
                 }
 
-                // 2. A -> A violation
-                if (prevShift === 'A' && currShift === 'A') {
+                // 2. Consecutive opening violation
+                if (this.isOpeningShift(prevShift) && this.isOpeningShift(currShift)) {
                     this.setShift(d, s.id, this.getFallbackWorkShift());
                     fixCount++;
                 }
 
-                // 3. J -> J violation
-                if (prevShift === 'J' && currShift === 'J') {
+                // 3. Consecutive closing violation
+                if (this.isClosingShift(prevShift) && this.isClosingShift(currShift)) {
                     this.setShift(d, s.id, this.getFallbackWorkShift());
                     fixCount++;
                 }

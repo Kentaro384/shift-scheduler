@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import type { Settings, ShiftPatternDefinition } from '../types';
+import type { Settings, ShiftPatternDefinition, ShiftPatternKind } from '../types';
 import { X, Save, Settings2, Plus, Trash2 } from 'lucide-react';
-import { isWorkShiftId } from '../types';
+import { isWorkShiftId, normalizeShiftPattern, SHIFT_PATTERN_KIND_LABELS } from '../types';
 
 interface SettingsModalProps {
     settings: Settings;
@@ -17,7 +17,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, patterns
 
     const handleSave = () => {
         const cleanedPatterns = patternsForm
-            .map(p => ({ ...p, id: p.id.trim(), name: p.name.trim() || p.id.trim() }))
+            .map(p => normalizeShiftPattern({ ...p, id: p.id.trim(), name: p.name.trim() || p.id.trim() }))
             .filter(p => isWorkShiftId(p.id));
 
         if (cleanedPatterns.length === 0) {
@@ -77,7 +77,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, patterns
         }
         setPatternsForm(prev => [
             ...prev,
-            { id, name: '新規シフト', timeRange: '9:00-17:00', minCount: 0, breakTime: '1:00', workTime: '7:00', color: 'bg-gray-200' }
+            { id, name: '新規シフト', timeRange: '9:00-17:00', minCount: 0, kind: 'standard', breakTime: '1:00', workTime: '7:00', color: 'bg-gray-200' }
         ]);
     };
 
@@ -211,7 +211,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, patterns
                                             onChange={e => handlePatternIdChange(index, e.target.value)}
                                         />
                                     </div>
-                                    <div className="col-span-3">
+                                    <div className="col-span-2">
                                         <label className="block text-xs text-gray-500">名称</label>
                                         <input
                                             className="w-full border rounded p-1 text-sm"
@@ -219,13 +219,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, patterns
                                             onChange={e => handlePatternChange(index, 'name', e.target.value)}
                                         />
                                     </div>
-                                    <div className="col-span-4">
+                                    <div className="col-span-3">
                                         <label className="block text-xs text-gray-500">時間帯</label>
                                         <input
                                             className="w-full border rounded p-1 text-sm"
                                             value={p.timeRange}
                                             onChange={e => handlePatternChange(index, 'timeRange', e.target.value)}
                                         />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-xs text-gray-500">種別</label>
+                                        <select
+                                            className="w-full border rounded p-1 text-sm"
+                                            value={p.kind || 'standard'}
+                                            onChange={e => handlePatternChange(index, 'kind', e.target.value as ShiftPatternKind)}
+                                        >
+                                            {Object.entries(SHIFT_PATTERN_KIND_LABELS).map(([kind, label]) => (
+                                                <option key={kind} value={kind}>{label}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div className="col-span-2">
                                         <label className="block text-xs text-gray-500">平日最低人数</label>

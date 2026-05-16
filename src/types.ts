@@ -1,10 +1,20 @@
 export type ShiftPatternId = string;
+export type ShiftPatternKind = 'opening' | 'early' | 'standard' | 'late' | 'closing';
+
+export const SHIFT_PATTERN_KIND_LABELS: Record<ShiftPatternKind, string> = {
+    opening: '開園・早番',
+    early: '早め',
+    standard: '標準',
+    late: '遅番',
+    closing: '閉園・最遅番',
+};
 
 export interface ShiftPatternDefinition {
     id: ShiftPatternId;
     name: string;
     timeRange: string;
     minCount: number; // 平日最低人数
+    kind?: ShiftPatternKind; // 生成ロジック上の役割
     breakTime: string;
     workTime: string;
     color: string;
@@ -59,12 +69,12 @@ export interface TimeRange {
 export type TimeRangeSchedule = Record<string, Record<number, TimeRange>>;
 
 export const SHIFT_PATTERNS: ShiftPatternDefinition[] = [
-    { id: 'A', name: '早番', timeRange: '7:15-16:15', minCount: 2, breakTime: '1:00', workTime: '9:00', color: 'bg-blue-200' },
-    { id: 'B', name: '標準', timeRange: '8:00-17:00', minCount: 1, breakTime: '1:00', workTime: '9:00', color: 'bg-green-200' },
-    { id: 'C', name: '標準+', timeRange: '8:30-17:30', minCount: 1, breakTime: '1:00', workTime: '9:00', color: 'bg-emerald-200' },
-    { id: 'D', name: '遅番', timeRange: '9:00-18:00', minCount: 1, breakTime: '1:00', workTime: '9:00', color: 'bg-yellow-200' },
-    { id: 'E', name: '遅番+', timeRange: '9:15-18:15', minCount: 1, breakTime: '1:00', workTime: '9:00', color: 'bg-amber-200' },
-    { id: 'J', name: '最遅番', timeRange: '9:45-18:45', minCount: 2, breakTime: '1:00', workTime: '9:00', color: 'bg-orange-200' },
+    { id: 'A', name: '早番', timeRange: '7:15-16:15', minCount: 2, kind: 'opening', breakTime: '1:00', workTime: '9:00', color: 'bg-blue-200' },
+    { id: 'B', name: '標準', timeRange: '8:00-17:00', minCount: 1, kind: 'early', breakTime: '1:00', workTime: '9:00', color: 'bg-green-200' },
+    { id: 'C', name: '標準+', timeRange: '8:30-17:30', minCount: 1, kind: 'standard', breakTime: '1:00', workTime: '9:00', color: 'bg-emerald-200' },
+    { id: 'D', name: '遅番', timeRange: '9:00-18:00', minCount: 1, kind: 'late', breakTime: '1:00', workTime: '9:00', color: 'bg-yellow-200' },
+    { id: 'E', name: '遅番+', timeRange: '9:15-18:15', minCount: 1, kind: 'late', breakTime: '1:00', workTime: '9:00', color: 'bg-amber-200' },
+    { id: 'J', name: '最遅番', timeRange: '9:45-18:45', minCount: 2, kind: 'closing', breakTime: '1:00', workTime: '9:00', color: 'bg-orange-200' },
 ];
 
 export const HOLIDAY_PATTERNS = [
@@ -77,4 +87,32 @@ export const HOLIDAY_SHIFT_IDS: ShiftPatternId[] = ['振', '有', '休', ''];
 
 export function isWorkShiftId(shift: ShiftPatternId | undefined | null): shift is ShiftPatternId {
     return !!shift && !HOLIDAY_SHIFT_IDS.includes(shift);
+}
+
+export function getDefaultPatternKind(id: ShiftPatternId): ShiftPatternKind {
+    if (id === 'A') return 'opening';
+    if (id === 'B') return 'early';
+    if (id === 'D' || id === 'E') return 'late';
+    if (id === 'J') return 'closing';
+    return 'standard';
+}
+
+export function normalizeShiftPattern(pattern: ShiftPatternDefinition): ShiftPatternDefinition {
+    return {
+        ...pattern,
+        kind: pattern.kind ?? getDefaultPatternKind(pattern.id),
+    };
+}
+
+export function normalizeShiftPatterns(patterns: ShiftPatternDefinition[]): ShiftPatternDefinition[] {
+    return patterns.map(normalizeShiftPattern);
+}
+
+export function getShiftPatternKind(
+    shift: ShiftPatternId | undefined | null,
+    patterns: ShiftPatternDefinition[]
+): ShiftPatternKind | null {
+    if (!isWorkShiftId(shift)) return null;
+    const pattern = patterns.find(p => p.id === shift);
+    return pattern?.kind ?? getDefaultPatternKind(shift);
 }

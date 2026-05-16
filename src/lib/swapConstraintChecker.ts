@@ -1,5 +1,5 @@
-import type { Staff, ShiftSchedule, ShiftPatternId } from '../types';
-import { isWorkShiftId } from '../types';
+import type { Staff, ShiftSchedule, ShiftPatternDefinition, ShiftPatternId } from '../types';
+import { getShiftPatternKind, isWorkShiftId, normalizeShiftPatterns, SHIFT_PATTERNS } from '../types';
 
 export interface SwapViolation {
     staffId: number;
@@ -53,12 +53,25 @@ function getShift(schedule: ShiftSchedule, year: number, month: number, day: num
 }
 
 // Count early shifts (A, B) for a staff in the month
-function countEarlyShifts(schedule: ShiftSchedule, year: number, month: number, staffId: number): number {
+function isOpeningShift(shift: ShiftPatternId | undefined | null, patterns: ShiftPatternDefinition[]): boolean {
+    return getShiftPatternKind(shift, patterns) === 'opening';
+}
+
+function isEarlyLimitedShift(shift: ShiftPatternId | undefined | null, patterns: ShiftPatternDefinition[]): boolean {
+    const kind = getShiftPatternKind(shift, patterns);
+    return kind === 'opening' || kind === 'early';
+}
+
+function isClosingShift(shift: ShiftPatternId | undefined | null, patterns: ShiftPatternDefinition[]): boolean {
+    return getShiftPatternKind(shift, patterns) === 'closing';
+}
+
+function countEarlyShifts(schedule: ShiftSchedule, year: number, month: number, staffId: number, patterns: ShiftPatternDefinition[]): number {
     let count = 0;
     const daysInMonth = getDaysInMonth(year, month);
     for (let d = 1; d <= daysInMonth; d++) {
         const shift = getShift(schedule, year, month, d, staffId);
-        if (shift === 'A' || shift === 'B') count++;
+        if (isEarlyLimitedShift(shift, patterns)) count++;
     }
     return count;
 }
@@ -131,9 +144,11 @@ export function checkSwapViolations(
     schedule: ShiftSchedule,
     allStaff: Staff[],
     year: number,
-    month: number
+    month: number,
+    patterns: ShiftPatternDefinition[] = SHIFT_PATTERNS
 ): SwapViolation[] {
     const violations: SwapViolation[] = [];
+    const normalizedPatterns = normalizeShiftPatterns(patterns);
 
     const dateStr = getFormattedDate(year, month, day);
     const sourceShift = (schedule[dateStr]?.[sourceStaff.id] || '') as ShiftPatternId;
@@ -149,10 +164,10 @@ export function checkSwapViolations(
     tempSchedule[dateStr][targetStaff.id] = targetNewShift;
 
     // Check constraints for SOURCE staff (getting target's shift)
-    checkStaffConstraints(sourceStaff, sourceNewShift, day, tempSchedule, allStaff, year, month, violations);
+    checkStaffConstraints(sourceStaff, sourceNewShift, day, tempSchedule, allStaff, year, month, violations, normalizedPatterns);
 
     // Check constraints for TARGET staff (getting source's shift)
-    checkStaffConstraints(targetStaff, targetNewShift, day, tempSchedule, allStaff, year, month, violations);
+    checkStaffConstraints(targetStaff, targetNewShift, day, tempSchedule, allStaff, year, month, violations, normalizedPatterns);
 
     return violations;
 }
@@ -165,7 +180,8 @@ function checkStaffConstraints(
     allStaff: Staff[],
     year: number,
     month: number,
-    violations: SwapViolation[]
+    violations: SwapViolation[],
+    patterns: ShiftPatternDefinition[]
 ) {
     const prevDay = getPreviousWorkDay(year, month, day);
     const nextDay = getNextWorkDay(year, month, day);
@@ -173,70 +189,70 @@ function checkStaffConstraints(
     const nextShift = nextDay > 0 ? getShift(schedule, year, month, nextDay, staff.id) : '';
 
     // 1. Consecutive A-A
-    if (newShift === 'A' && prevShift === 'A') {
+    if (isOpeningShift(newShift, patterns) && isOpeningShift(prevShift, patterns)) {
         violations.push({
             staffId: staff.id,
             staffName: staff.name,
             type: 'consecutive_a',
-            description: `${staff.name}: A連続になります`,
+            description: `${staff.name}: 開園系シフト連続になります`,
             severity: 'warning'
         });
     }
-    if (newShift === 'A' && nextShift === 'A') {
+    if (isOpeningShift(newShift, patterns) && isOpeningShift(nextShift, patterns)) {
         violations.push({
             staffId: staff.id,
             staffName: staff.name,
             type: 'consecutive_a',
-            description: `${staff.name}: 翌日もAで連続になります`,
+            description: `${staff.name}: 翌日も開園系シフトで連続になります`,
             severity: 'warning'
         });
     }
 
     // 2. Consecutive J-J
-    if (newShift === 'J' && prevShift === 'J') {
+    if (isClosingShift(newShift, patterns) && isClosingShift(prevShift, patterns)) {
         violations.push({
             staffId: staff.id,
             staffName: staff.name,
             type: 'consecutive_j',
-            description: `${staff.name}: J連続になります`,
+            description: `${staff.name}: 閉園系シフト連続になります`,
             severity: 'warning'
         });
     }
-    if (newShift === 'J' && nextShift === 'J') {
+    if (isClosingShift(newShift, patterns) && isClosingShift(nextShift, patterns)) {
         violations.push({
             staffId: staff.id,
             staffName: staff.name,
             type: 'consecutive_j',
-            description: `${staff.name}: 翌日もJで連続になります`,
+            description: `${staff.name}: 翌日も閉園系シフトで連続になります`,
             severity: 'warning'
         });
     }
 
     // 3. J after A (previous day was J, now getting A)
-    if (newShift === 'A' && prevShift === 'J') {
+    if (isOpeningShift(newShift, patterns) && isClosingShift(prevShift, patterns)) {
         violations.push({
             staffId: staff.id,
             staffName: staff.name,
             type: 'a_after_j',
-            description: `${staff.name}: J→A連続になります`,
+            description: `${staff.name}: 閉園→開園シフトになります`,
             severity: 'warning'
         });
     }
 
     // 4. A before J (next day is A, now getting J)
-    if (newShift === 'J' && nextShift === 'A') {
+    if (isClosingShift(newShift, patterns) && isOpeningShift(nextShift, patterns)) {
         violations.push({
             staffId: staff.id,
             staffName: staff.name,
             type: 'j_after_a',
-            description: `${staff.name}: 翌日がAでJ→A連続になります`,
+            description: `${staff.name}: 翌日が開園系シフトで閉園→開園になります`,
             severity: 'warning'
         });
     }
 
     // 5. Early shift limit
-    if ((newShift === 'A' || newShift === 'B') && staff.earlyShiftLimit !== null) {
-        const currentEarlyCount = countEarlyShifts(schedule, year, month, staff.id);
+    if (isEarlyLimitedShift(newShift, patterns) && staff.earlyShiftLimit !== null) {
+        const currentEarlyCount = countEarlyShifts(schedule, year, month, staff.id, patterns);
         if (currentEarlyCount >= staff.earlyShiftLimit) {
             violations.push({
                 staffId: staff.id,
@@ -299,7 +315,8 @@ export function getSwapCandidates(
     schedule: ShiftSchedule,
     allStaff: Staff[],
     year: number,
-    month: number
+    month: number,
+    patterns: ShiftPatternDefinition[] = SHIFT_PATTERNS
 ): { staff: Staff; currentShift: ShiftPatternId; violations: SwapViolation[] }[] {
     const dateStr = getFormattedDate(year, month, day);
     const sourceShift = (schedule[dateStr]?.[sourceStaff.id] || '') as ShiftPatternId;
@@ -317,7 +334,7 @@ export function getSwapCandidates(
         .map(targetStaff => ({
             staff: targetStaff,
             currentShift: (schedule[dateStr]?.[targetStaff.id] || '') as ShiftPatternId,
-            violations: checkSwapViolations(sourceStaff, targetStaff, day, schedule, allStaff, year, month)
+            violations: checkSwapViolations(sourceStaff, targetStaff, day, schedule, allStaff, year, month, patterns)
         }))
         .sort((a, b) => {
             // Sort by violation count (fewer violations first), then severity

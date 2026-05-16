@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart3, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, RefreshCcw, Heart } from 'lucide-react';
 import type { Staff, ShiftSchedule, ShiftPatternId, ShiftPatternDefinition } from '../types';
-import { isWorkShiftId } from '../types';
+import { getShiftPatternKind, isWorkShiftId } from '../types';
 
 interface ShiftBalanceDashboardProps {
     staff: Staff[];
@@ -94,10 +94,12 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
         };
     };
 
-    const earlyFairness = calculateFairnessScore('A');
-    const lateFairness = calculateFairnessScore('J');
-    const showEarlyFairness = shiftOrder.includes('A');
-    const showLateFairness = shiftOrder.includes('J');
+    const openingPattern = patterns.find(pattern => getShiftPatternKind(pattern.id, patterns) === 'opening');
+    const closingPattern = patterns.find(pattern => getShiftPatternKind(pattern.id, patterns) === 'closing');
+    const earlyFairness = openingPattern ? calculateFairnessScore(openingPattern.id) : null;
+    const lateFairness = closingPattern ? calculateFairnessScore(closingPattern.id) : null;
+    const showEarlyFairness = !!openingPattern && !!earlyFairness;
+    const showLateFairness = !!closingPattern && !!lateFairness;
 
     return (
         <div className="mt-6 bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
@@ -121,23 +123,23 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Early Shift (A) Fairness */}
                         {showEarlyFairness && (
-                        <div className={`p-4 rounded-xl border-2 ${earlyFairness.isGood ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+                        <div className={`p-4 rounded-xl border-2 ${earlyFairness!.isGood ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
                             <div className="flex items-center gap-2 mb-2">
-                                {earlyFairness.isGood ? (
+                                {earlyFairness!.isGood ? (
                                     <CheckCircle className="text-green-500" size={20} />
                                 ) : (
                                     <AlertTriangle className="text-amber-500" size={20} />
                                 )}
-                                <span className="font-bold text-gray-700">早番 (A) バランス</span>
-                                <span className={`text-sm px-2 py-0.5 rounded-full ${earlyFairness.isGood ? 'bg-green-200 text-green-700' : 'bg-amber-200 text-amber-700'}`}>
-                                    {earlyFairness.isGood ? '良好' : '偏りあり'}
+                                <span className="font-bold text-gray-700">開園 ({openingPattern!.id}) バランス</span>
+                                <span className={`text-sm px-2 py-0.5 rounded-full ${earlyFairness!.isGood ? 'bg-green-200 text-green-700' : 'bg-amber-200 text-amber-700'}`}>
+                                    {earlyFairness!.isGood ? '良好' : '偏りあり'}
                                 </span>
                             </div>
                             <div className="text-sm text-gray-600">
-                                偏り指数: <span className="font-mono font-bold">{earlyFairness.score.toFixed(2)}</span>
-                                {!earlyFairness.isGood && earlyFairness.staffCounts.length > 0 && (
+                                偏り指数: <span className="font-mono font-bold">{earlyFairness!.score.toFixed(2)}</span>
+                                {!earlyFairness!.isGood && earlyFairness!.staffCounts.length > 0 && (
                                     <span className="ml-2">
-                                        (多: {earlyFairness.staffCounts[0]?.name} {earlyFairness.staffCounts[0]?.count}回)
+                                        (多: {earlyFairness!.staffCounts[0]?.name} {earlyFairness!.staffCounts[0]?.count}回)
                                     </span>
                                 )}
                             </div>
@@ -146,23 +148,23 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
 
                         {/* Late Shift (J) Fairness */}
                         {showLateFairness && (
-                        <div className={`p-4 rounded-xl border-2 ${lateFairness.isGood ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+                        <div className={`p-4 rounded-xl border-2 ${lateFairness!.isGood ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
                             <div className="flex items-center gap-2 mb-2">
-                                {lateFairness.isGood ? (
+                                {lateFairness!.isGood ? (
                                     <CheckCircle className="text-green-500" size={20} />
                                 ) : (
                                     <AlertTriangle className="text-amber-500" size={20} />
                                 )}
-                                <span className="font-bold text-gray-700">最遅番 (J) バランス</span>
-                                <span className={`text-sm px-2 py-0.5 rounded-full ${lateFairness.isGood ? 'bg-green-200 text-green-700' : 'bg-amber-200 text-amber-700'}`}>
-                                    {lateFairness.isGood ? '良好' : '偏りあり'}
+                                <span className="font-bold text-gray-700">閉園 ({closingPattern!.id}) バランス</span>
+                                <span className={`text-sm px-2 py-0.5 rounded-full ${lateFairness!.isGood ? 'bg-green-200 text-green-700' : 'bg-amber-200 text-amber-700'}`}>
+                                    {lateFairness!.isGood ? '良好' : '偏りあり'}
                                 </span>
                             </div>
                             <div className="text-sm text-gray-600">
-                                偏り指数: <span className="font-mono font-bold">{lateFairness.score.toFixed(2)}</span>
-                                {!lateFairness.isGood && lateFairness.staffCounts.length > 0 && (
+                                偏り指数: <span className="font-mono font-bold">{lateFairness!.score.toFixed(2)}</span>
+                                {!lateFairness!.isGood && lateFairness!.staffCounts.length > 0 && (
                                     <span className="ml-2">
-                                        (多: {lateFairness.staffCounts[0]?.name} {lateFairness.staffCounts[0]?.count}回)
+                                        (多: {lateFairness!.staffCounts[0]?.name} {lateFairness!.staffCounts[0]?.count}回)
                                     </span>
                                 )}
                             </div>

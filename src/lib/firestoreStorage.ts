@@ -7,7 +7,7 @@ import {
 import type { FirestoreError, Unsubscribe } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, TimeRangeSchedule } from '../types';
-import { SHIFT_PATTERNS } from '../types';
+import { SHIFT_PATTERNS, normalizeShiftPatterns } from '../types';
 
 // Collection paths
 const COLLECTION = 'organizations';
@@ -99,7 +99,7 @@ export const firestoreStorage = {
     },
 
     async savePatterns(patterns: ShiftPatternDefinition[]): Promise<void> {
-        await this.saveAll({ patterns });
+        await this.saveAll({ patterns: normalizeShiftPatterns(patterns) });
     },
 
     async saveManualShifts(manualShifts: ShiftSchedule): Promise<void> {
@@ -121,6 +121,10 @@ export const firestoreStorage = {
 
     getDefaultPatterns(): ShiftPatternDefinition[] {
         return SHIFT_PATTERNS;
+    },
+
+    normalizePatterns(patterns?: ShiftPatternDefinition[] | null): ShiftPatternDefinition[] {
+        return normalizeShiftPatterns(patterns?.length ? patterns : SHIFT_PATTERNS);
     }
 };
 

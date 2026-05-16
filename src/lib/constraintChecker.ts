@@ -5,7 +5,8 @@
  * Used for both validation and candidate evaluation.
  */
 
-import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings } from '../types';
+import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, ShiftPatternDefinition } from '../types';
+import { getShiftPatternKind, normalizeShiftPatterns, SHIFT_PATTERNS } from '../types';
 import { getDaysInMonth, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
 
 // ============================================
@@ -49,6 +50,7 @@ export interface ConstraintContext {
     settings: Settings;
     year: number;
     month: number;
+    patterns: ShiftPatternDefinition[];
 }
 
 // ============================================
@@ -58,6 +60,23 @@ export interface ConstraintContext {
 function getShift(ctx: ConstraintContext, day: number, staffId: number): ShiftPatternId {
     const dateStr = getFormattedDate(ctx.year, ctx.month, day);
     return ctx.schedule[dateStr]?.[staffId] || '';
+}
+
+function getShiftKind(ctx: ConstraintContext, shift: ShiftPatternId | undefined | null) {
+    return getShiftPatternKind(shift, ctx.patterns);
+}
+
+function isOpeningShift(ctx: ConstraintContext, shift: ShiftPatternId | undefined | null): boolean {
+    return getShiftKind(ctx, shift) === 'opening';
+}
+
+function isEarlyLimitedShift(ctx: ConstraintContext, shift: ShiftPatternId | undefined | null): boolean {
+    const kind = getShiftKind(ctx, shift);
+    return kind === 'opening' || kind === 'early';
+}
+
+function isClosingShift(ctx: ConstraintContext, shift: ShiftPatternId | undefined | null): boolean {
+    return getShiftKind(ctx, shift) === 'closing';
 }
 
 function isHoliday(ctx: ConstraintContext, day: number): boolean {
@@ -99,13 +118,13 @@ function countMonthlyPattern(ctx: ConstraintContext, staffId: number, pattern: S
     return count;
 }
 
-// Count early shifts (A + B) for a staff member
+// Count early-limited shifts for a staff member
 function countEarlyShifts(ctx: ConstraintContext, staffId: number): number {
     const daysInMonth = getDaysInMonth(ctx.year, ctx.month);
     let count = 0;
     for (let d = 1; d <= daysInMonth; d++) {
         const shift = getShift(ctx, d, staffId);
-        if (shift === 'A' || shift === 'B') count++;
+        if (isEarlyLimitedShift(ctx, shift)) count++;
     }
     return count;
 }
@@ -125,62 +144,62 @@ function countDayPattern(ctx: ConstraintContext, day: number, pattern: ShiftPatt
 // ============================================
 
 /**
- * Check J->A violation (インターバル確保)
- * Cannot assign A shift if previous day was J
+ * Check closing->opening violation (インターバル確保)
+ * Cannot assign an opening shift if previous day was closing
  */
 function checkJToAViolation(ctx: ConstraintContext, day: number, staffId: number, shift: ShiftPatternId): ConstraintViolation | null {
-    if (shift !== 'A') return null;
+    if (!isOpeningShift(ctx, shift)) return null;
 
     const prevDay = getPreviousWorkDay(ctx, day);
     if (prevDay === 0) return null;
 
     const prevShift = getShift(ctx, prevDay, staffId);
-    if (prevShift === 'J') {
+    if (isClosingShift(ctx, prevShift)) {
         return {
             type: 'hard',
             code: 'J_TO_A',
-            message: 'J→A違反（前日が最遅番）'
+            message: '閉園→開園シフト違反（前日が閉園シフト）'
         };
     }
     return null;
 }
 
 /**
- * Check A->J violation (reverse check for when assigning J)
- * Cannot assign J if next day is already A
+ * Check opening after closing violation (reverse check for when assigning closing)
+ * Cannot assign a closing shift if next work day is already opening
  */
 function checkAToJViolation(ctx: ConstraintContext, day: number, staffId: number, shift: ShiftPatternId): ConstraintViolation | null {
-    if (shift !== 'J') return null;
+    if (!isClosingShift(ctx, shift)) return null;
 
     const nextDay = getNextWorkDay(ctx, day);
     if (nextDay === 0) return null;
 
     const nextShift = getShift(ctx, nextDay, staffId);
-    if (nextShift === 'A') {
+    if (isOpeningShift(ctx, nextShift)) {
         return {
             type: 'hard',
             code: 'J_TO_A',
-            message: 'J→A違反（翌日が早番）'
+            message: '閉園→開園シフト違反（翌日が開園シフト）'
         };
     }
     return null;
 }
 
 /**
- * Check consecutive A or J violation
+ * Check consecutive opening or closing violation
  */
 function checkConsecutiveViolation(ctx: ConstraintContext, day: number, staffId: number, shift: ShiftPatternId): ConstraintViolation | null {
-    if (shift !== 'A' && shift !== 'J') return null;
+    if (!isOpeningShift(ctx, shift) && !isClosingShift(ctx, shift)) return null;
 
     // Check previous day
     const prevDay = getPreviousWorkDay(ctx, day);
     if (prevDay > 0) {
         const prevShift = getShift(ctx, prevDay, staffId);
-        if (prevShift === shift) {
+        if ((isOpeningShift(ctx, shift) && isOpeningShift(ctx, prevShift)) || (isClosingShift(ctx, shift) && isClosingShift(ctx, prevShift))) {
             return {
                 type: 'hard',
-                code: shift === 'A' ? 'CONSECUTIVE_A' : 'CONSECUTIVE_J',
-                message: `${shift}連続勤務`
+                code: isOpeningShift(ctx, shift) ? 'CONSECUTIVE_A' : 'CONSECUTIVE_J',
+                message: `${shift}系統の連続勤務`
             };
         }
     }
@@ -189,11 +208,11 @@ function checkConsecutiveViolation(ctx: ConstraintContext, day: number, staffId:
     const nextDay = getNextWorkDay(ctx, day);
     if (nextDay > 0) {
         const nextShift = getShift(ctx, nextDay, staffId);
-        if (nextShift === shift) {
+        if ((isOpeningShift(ctx, shift) && isOpeningShift(ctx, nextShift)) || (isClosingShift(ctx, shift) && isClosingShift(ctx, nextShift))) {
             return {
                 type: 'hard',
-                code: shift === 'A' ? 'CONSECUTIVE_A' : 'CONSECUTIVE_J',
-                message: `${shift}連続勤務`
+                code: isOpeningShift(ctx, shift) ? 'CONSECUTIVE_A' : 'CONSECUTIVE_J',
+                message: `${shift}系統の連続勤務`
             };
         }
     }
@@ -227,7 +246,7 @@ function checkIncompatibleViolation(ctx: ConstraintContext, day: number, staffId
  * Check weekly A/J limit (max 1 per week)
  */
 function checkWeeklyAJLimitViolation(ctx: ConstraintContext, day: number, staffId: number, shift: ShiftPatternId): ConstraintViolation | null {
-    if (shift !== 'A' && shift !== 'J') return null;
+    if (!isOpeningShift(ctx, shift) && !isClosingShift(ctx, shift)) return null;
 
     const date = new Date(ctx.year, ctx.month - 1, day);
     const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
@@ -245,7 +264,7 @@ function checkWeeklyAJLimitViolation(ctx: ConstraintContext, day: number, staffI
         if (d > daysInMonth) continue;
 
         const existingShift = getShift(ctx, d, staffId);
-        if (existingShift === 'A' || existingShift === 'J') {
+        if (isOpeningShift(ctx, existingShift) || isClosingShift(ctx, existingShift)) {
             count++;
         }
     }
@@ -254,7 +273,7 @@ function checkWeeklyAJLimitViolation(ctx: ConstraintContext, day: number, staffI
         return {
             type: 'hard',
             code: 'WEEKLY_AJ_LIMIT',
-            message: '週2回目のA/J'
+            message: '週2回目の開園・閉園シフト'
         };
     }
     return null;
@@ -266,13 +285,13 @@ function checkWeeklyAJLimitViolation(ctx: ConstraintContext, day: number, staffI
 function checkMinCountViolation(ctx: ConstraintContext, day: number, staffId: number, _newShift: ShiftPatternId): ConstraintViolation | null {
     const currentShift = getShift(ctx, day, staffId);
 
-    // If removing from A or J, check if it would cause shortage
-    if (currentShift === 'A' || currentShift === 'J') {
+    // If removing from opening or closing, check if it would cause shortage
+    if (isOpeningShift(ctx, currentShift) || isClosingShift(ctx, currentShift)) {
         const currentCount = countDayPattern(ctx, day, currentShift);
         if (currentCount <= 2) { // Min count is 2 for both A and J
             return {
                 type: 'hard',
-                code: currentShift === 'A' ? 'MIN_COUNT_A' : 'MIN_COUNT_J',
+                code: isOpeningShift(ctx, currentShift) ? 'MIN_COUNT_A' : 'MIN_COUNT_J',
                 message: `${currentShift}枠が${currentCount - 1}名に減少`
             };
         }
@@ -285,7 +304,7 @@ function checkMinCountViolation(ctx: ConstraintContext, day: number, staffId: nu
  * Check early shift limit (soft constraint)
  */
 function checkEarlyLimitViolation(ctx: ConstraintContext, _day: number, staffId: number, shift: ShiftPatternId): ConstraintViolation | null {
-    if (shift !== 'A' && shift !== 'B') return null;
+    if (!isEarlyLimitedShift(ctx, shift)) return null;
 
     const targetStaff = ctx.staff.find(s => s.id === staffId);
     if (!targetStaff || targetStaff.earlyShiftLimit === null) return null;
@@ -305,7 +324,7 @@ function checkEarlyLimitViolation(ctx: ConstraintContext, _day: number, staffId:
  * Check fairness violation (soft constraint)
  */
 function checkFairnessViolation(ctx: ConstraintContext, _day: number, staffId: number, shift: ShiftPatternId): ConstraintViolation | null {
-    if (shift !== 'A' && shift !== 'J') return null;
+    if (!isOpeningShift(ctx, shift) && !isClosingShift(ctx, shift)) return null;
 
     // Calculate average for regular staff
     const regularStaff = ctx.staff.filter(s => s.shiftType === 'regular');
@@ -321,7 +340,7 @@ function checkFairnessViolation(ctx: ConstraintContext, _day: number, staffId: n
     if (myCount > avg + 1) {
         return {
             type: 'soft',
-            code: shift === 'A' ? 'FAIRNESS_A' : 'FAIRNESS_J',
+            code: isOpeningShift(ctx, shift) ? 'FAIRNESS_A' : 'FAIRNESS_J',
             message: `${shift}回数が平均を超過（${myCount}回、平均${avg.toFixed(1)}回）`
         };
     }
@@ -462,9 +481,10 @@ export function createConstraintContext(
     holidays: Holiday[],
     settings: Settings,
     year: number,
-    month: number
+    month: number,
+    patterns: ShiftPatternDefinition[] = SHIFT_PATTERNS
 ): ConstraintContext {
-    return { schedule, staff, holidays, settings, year, month };
+    return { schedule, staff, holidays, settings, year, month, patterns: normalizeShiftPatterns(patterns) };
 }
 
 // ============================================
@@ -563,11 +583,9 @@ export function findShortages(
     const shortages: { pattern: ShiftPatternId; current: number; required: number }[] = [];
     const dateStr = getFormattedDate(ctx.year, ctx.month, day);
 
-    // Define minimum counts
-    const minCounts: { pattern: ShiftPatternId; min: number }[] = [
-        { pattern: 'A', min: 2 },
-        { pattern: 'J', min: 2 },
-    ];
+    const minCounts = ctx.patterns
+        .filter(pattern => (isOpeningShift(ctx, pattern.id) || isClosingShift(ctx, pattern.id)) && pattern.minCount > 0)
+        .map(pattern => ({ pattern: pattern.id, min: pattern.minCount }));
 
     for (const { pattern, min } of minCounts) {
         let count = 0;

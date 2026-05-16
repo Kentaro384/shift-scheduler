@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, Bell, Calendar, Users, Clock, X } from 'lucide-react';
-import type { Staff, ShiftSchedule, Holiday, TimeRangeSchedule } from '../types';
-import { isWorkShiftId } from '../types';
+import type { Staff, ShiftSchedule, Holiday, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
+import { getShiftPatternKind, isWorkShiftId } from '../types';
 import { countWorkingStaff } from '../lib/shiftCountUtils';
 
 interface AlertBadgeProps {
@@ -13,6 +13,7 @@ interface AlertBadgeProps {
     month: number;
     holidays: Holiday[];
     minCount: number;
+    patterns: ShiftPatternDefinition[];
 }
 
 type AlertSeverity = 'error' | 'warning' | 'info';
@@ -39,6 +40,7 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
     month,
     holidays,
     minCount,
+    patterns,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -127,7 +129,7 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
             }
         });
 
-        // 3. Check early shift (A) streaks (2+)
+        // 3. Check opening shift streaks (2+)
         targetStaff.forEach(s => {
             let streak = 0;
             let startDay = 0;
@@ -136,7 +138,7 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
                 const day = days[i];
                 const shift = schedule[getDateStr(day)]?.[s.id];
 
-                if (shift === 'A') {
+                if (getShiftPatternKind(shift, patterns) === 'opening') {
                     if (streak === 0) startDay = day;
                     streak++;
                 } else {
@@ -145,8 +147,8 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
                             id: `early-streak-${s.id}-${startDay}`,
                             type: 'early_streak',
                             severity: 'warning',
-                            title: '早番連続',
-                            description: `${s.name}さん: A ${streak}日連続`,
+                            title: '開園シフト連続',
+                            description: `${s.name}さん: 開園系 ${streak}日連続`,
                             icon: <Calendar className="text-orange-500" size={16} />,
                         });
                     }
@@ -158,14 +160,14 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
                     id: `early-streak-${s.id}-${startDay}-end`,
                     type: 'early_streak',
                     severity: 'warning',
-                    title: '早番連続',
-                    description: `${s.name}さん: A ${streak}日連続`,
+                    title: '開園シフト連続',
+                    description: `${s.name}さん: 開園系 ${streak}日連続`,
                     icon: <Calendar className="text-orange-500" size={16} />,
                 });
             }
         });
 
-        // 4. Check late shift (J) streaks (2+)
+        // 4. Check closing shift streaks (2+)
         targetStaff.forEach(s => {
             let streak = 0;
             let startDay = 0;
@@ -174,7 +176,7 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
                 const day = days[i];
                 const shift = schedule[getDateStr(day)]?.[s.id];
 
-                if (shift === 'J') {
+                if (getShiftPatternKind(shift, patterns) === 'closing') {
                     if (streak === 0) startDay = day;
                     streak++;
                 } else {
@@ -183,8 +185,8 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
                             id: `late-streak-${s.id}-${startDay}`,
                             type: 'late_streak',
                             severity: 'warning',
-                            title: '遅番連続',
-                            description: `${s.name}さん: J ${streak}日連続`,
+                            title: '閉園シフト連続',
+                            description: `${s.name}さん: 閉園系 ${streak}日連続`,
                             icon: <Clock className="text-purple-500" size={16} />,
                         });
                     }
@@ -196,15 +198,15 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
                     id: `late-streak-${s.id}-${startDay}-end`,
                     type: 'late_streak',
                     severity: 'warning',
-                    title: '遅番連続',
-                    description: `${s.name}さん: J ${streak}日連続`,
+                    title: '閉園シフト連続',
+                    description: `${s.name}さん: 閉園系 ${streak}日連続`,
                     icon: <Clock className="text-purple-500" size={16} />,
                 });
             }
         });
 
         return alertList;
-    }, [staff, schedule, timeRangeSchedule, days, year, month, holidays, minCount]);
+    }, [staff, schedule, timeRangeSchedule, days, year, month, holidays, minCount, patterns]);
 
     const errorCount = alerts.filter(a => a.severity === 'error').length;
     const warningCount = alerts.filter(a => a.severity === 'warning').length;
