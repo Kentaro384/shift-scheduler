@@ -208,7 +208,7 @@ function App() {
     firestoreStorage.saveSchedule(newSchedule);
   };
 
-  const handleForceClearMonth = () => {
+  const handleForceClearMonth = async () => {
     const confirmText = `${year}-${String(month).padStart(2, '0')}`;
     const input = window.prompt(
       `${year}年${month}月のシフト・時間指定・手動固定予定をすべて削除します。\n職員設定、シフトパターン、祝日は残ります。\n\n実行するには ${confirmText} と入力してください。`
@@ -219,8 +219,8 @@ function App() {
     const newTimeRangeSchedule = { ...timeRangeSchedule };
     const newManualShifts = { ...manualShifts };
 
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = getFormattedDate(year, month, d);
+    const dateStrings = days.map(day => getFormattedDate(year, month, day));
+    for (const dateStr of dateStrings) {
       delete newSchedule[dateStr];
       delete newTimeRangeSchedule[dateStr];
       delete newManualShifts[dateStr];
@@ -229,11 +229,14 @@ function App() {
     setSchedule(newSchedule);
     setTimeRangeSchedule(newTimeRangeSchedule);
     setManualShifts(newManualShifts);
-    firestoreStorage.saveSchedule(newSchedule);
-    firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule);
-    firestoreStorage.saveManualShifts(newManualShifts);
     setShowSettingsMenu(false);
-    toast.success('当月を白紙に戻しました', `${year}年${month}月の入力を削除しました`);
+
+    try {
+      await firestoreStorage.clearMonthData(dateStrings);
+      toast.success('当月を白紙に戻しました', `${year}年${month}月の入力を削除しました`);
+    } catch {
+      toast.error('削除に失敗しました', '通信状態を確認してもう一度試してください');
+    }
   };
 
   const handleApplyDefaultTimeRanges = () => {

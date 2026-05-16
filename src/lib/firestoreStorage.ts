@@ -1,8 +1,10 @@
 import {
+    deleteField,
     doc,
     getDoc,
-    setDoc,
     onSnapshot,
+    setDoc,
+    updateDoc,
 } from 'firebase/firestore';
 import type { FirestoreError, Unsubscribe } from 'firebase/firestore';
 import { db } from './firebase';
@@ -108,6 +110,20 @@ export const firestoreStorage = {
 
     async saveTimeRangeSchedule(timeRangeSchedule: TimeRangeSchedule): Promise<void> {
         await this.saveAll({ timeRangeSchedule });
+    },
+
+    async clearMonthData(dateStrings: string[]): Promise<void> {
+        const updates: Record<string, unknown> = {
+            updatedAt: Date.now(),
+        };
+
+        dateStrings.forEach(dateStr => {
+            updates[`schedule.${dateStr}`] = deleteField();
+            updates[`timeRangeSchedule.${dateStr}`] = deleteField();
+            updates[`manualShifts.${dateStr}`] = deleteField();
+        });
+
+        await updateDoc(getDocRef(), updates);
     },
 
     // Get default values
