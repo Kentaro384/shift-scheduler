@@ -569,8 +569,8 @@ export function evaluateCandidates(
         // Skip if already assigned to target shift
         if (currentShift === targetShift) continue;
 
-        // Skip if on leave
-        if (currentShift === '有' || currentShift === '振') continue;
+        // Skip if on fixed plans or leave
+        if (currentShift && !isWorkShiftId(currentShift)) continue;
 
         const violations = checkConstraints(ctx, day, staff.id, targetShift);
         const hasHardViolation = violations.some(v => v.type === 'hard');
@@ -678,10 +678,7 @@ export function findSwapSuggestions(
 
         // Skip if already on the needed shift, on leave, or not working
         if (currentShiftA === shortagePattern ||
-            currentShiftA === '有' ||
-            currentShiftA === '振' ||
-            currentShiftA === '休' ||
-            currentShiftA === '') continue;
+            !isWorkShiftId(currentShiftA)) continue;
 
         // Check if this staff can take the shortage pattern
         const violationsA = checkConstraints(ctx, day, candidateA.id, shortagePattern);
@@ -696,8 +693,7 @@ export function findSwapSuggestions(
             const currentShiftB = ctx.schedule[dateStr]?.[candidateB.id] || '';
 
             // Skip if on leave or already has A's current shift
-            if (currentShiftB === '有' ||
-                currentShiftB === '振' ||
+            if (!isWorkShiftId(currentShiftB) ||
                 currentShiftB === currentShiftA) continue;
 
             // Check if B can take A's current shift

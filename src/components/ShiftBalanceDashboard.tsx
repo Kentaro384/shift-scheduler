@@ -50,6 +50,9 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
         shiftOrder.forEach(shift => counts[shift] = 0);
         counts['振'] = 0;
         counts['有'] = 0;
+        counts['半有'] = 0;
+        counts['出'] = 0;
+        counts['保'] = 0;
 
         days.forEach(day => {
             const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -61,6 +64,8 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                     counts['振'] = (counts['振'] || 0) + 1;
                 } else if (shift === '有') {
                     counts['有'] = (counts['有'] || 0) + 1;
+                } else if (shift === '半有' || shift === '出' || shift === '保') {
+                    counts[shift] = (counts[shift] || 0) + 1;
                 }
             }
         });
@@ -184,6 +189,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                 const total = shiftOrder.reduce((sum, shift) => sum + (counts[shift] || 0), 0);
                                 const furikyu = counts['振'] || 0;
                                 const yukyu = counts['有'] || 0;
+                                const fixedPlans = (counts['半有'] || 0) + (counts['出'] || 0) + (counts['保'] || 0);
 
                                 return (
                                     <div key={s.id} className="flex items-center gap-2">
@@ -225,9 +231,14 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                             {yukyu > 0 && (
                                                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold rounded-full bg-pink-100 text-pink-700 border border-pink-300" title="有給休暇">
                                                     <Heart size={10} />
-                                                    {yukyu}
-                                                </span>
-                                            )}
+                                            {yukyu}
+                                        </span>
+                                    )}
+                                    {fixedPlans > 0 && (
+                                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold rounded-full bg-slate-100 text-slate-700 border border-slate-300" title="その他固定予定">
+                                            {fixedPlans}
+                                        </span>
+                                    )}
                                         </div>
                                     </div>
                                 );

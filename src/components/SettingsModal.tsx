@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { Settings, ShiftPatternDefinition, ShiftPatternKind } from '../types';
 import { X, Save, Settings2, Plus, Trash2 } from 'lucide-react';
-import { isWorkShiftId, normalizeShiftPattern, SHIFT_PATTERN_KIND_LABELS } from '../types';
+import { isWorkShiftId, normalizeShiftPattern, REAL_WORLD_SHIFT_PATTERNS, SHIFT_PATTERN_KIND_LABELS } from '../types';
 
 interface SettingsModalProps {
     settings: Settings;
@@ -79,6 +79,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, patterns
             ...prev,
             { id, name: '新規シフト', timeRange: '9:00-17:00', minCount: 0, kind: 'standard', breakTime: '1:00', workTime: '7:00', color: 'bg-gray-200' }
         ]);
+    };
+
+    const handleApplyRealWorldPreset = () => {
+        if (!window.confirm("シフトパターンを実勤務表ベースの A/B/C/C'/D/E/F に置き換えますか？\n既存のシフト表に入っている記号は自動では消えません。")) return;
+        setPatternsForm(REAL_WORLD_SHIFT_PATTERNS.map(pattern => ({ ...pattern })));
+        setForm(prev => ({ ...prev, saturdayShiftPattern: 'B' }));
     };
 
     const handleDeletePattern = (index: number) => {
@@ -192,13 +198,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, patterns
                     <section>
                         <div className="flex items-center justify-between mb-4 border-b pb-2">
                             <h3 className="text-lg font-bold text-gray-800">シフトパターン設定</h3>
-                            <button
-                                onClick={handleAddPattern}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg bg-[#FF6B6B] text-white hover:bg-[#FF5252] transition-colors"
-                            >
-                                <Plus size={16} />
-                                追加
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleApplyRealWorldPreset}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg border border-[#45B7D1] text-[#256D85] bg-white hover:bg-blue-50 transition-colors"
+                                >
+                                    実勤務表プリセット
+                                </button>
+                                <button
+                                    onClick={handleAddPattern}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg bg-[#FF6B6B] text-white hover:bg-[#FF5252] transition-colors"
+                                >
+                                    <Plus size={16} />
+                                    追加
+                                </button>
+                            </div>
                         </div>
                         <div className="space-y-4">
                             {patternsForm.map((p, index) => (

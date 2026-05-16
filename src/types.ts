@@ -108,21 +108,32 @@ export interface TimeRange {
 export type TimeRangeSchedule = Record<string, Record<number, TimeRange>>;
 
 export const SHIFT_PATTERNS: ShiftPatternDefinition[] = [
-    { id: 'A', name: '早番', timeRange: '7:15-16:15', minCount: 2, kind: 'opening', breakTime: '1:00', workTime: '9:00', color: 'bg-blue-200' },
-    { id: 'B', name: '標準', timeRange: '8:00-17:00', minCount: 1, kind: 'early', breakTime: '1:00', workTime: '9:00', color: 'bg-green-200' },
-    { id: 'C', name: '標準+', timeRange: '8:30-17:30', minCount: 1, kind: 'standard', breakTime: '1:00', workTime: '9:00', color: 'bg-emerald-200' },
-    { id: 'D', name: '遅番', timeRange: '9:00-18:00', minCount: 1, kind: 'late', breakTime: '1:00', workTime: '9:00', color: 'bg-yellow-200' },
-    { id: 'E', name: '遅番+', timeRange: '9:15-18:15', minCount: 1, kind: 'late', breakTime: '1:00', workTime: '9:00', color: 'bg-amber-200' },
-    { id: 'J', name: '最遅番', timeRange: '9:45-18:45', minCount: 2, kind: 'closing', breakTime: '1:00', workTime: '9:00', color: 'bg-orange-200' },
+    { id: 'A', name: '早番', timeRange: '7:15-16:15', minCount: 0, kind: 'opening', breakTime: '1:00', workTime: '9:00', color: 'bg-amber-200' },
+    { id: 'B', name: '早番+', timeRange: '7:30-16:30', minCount: 0, kind: 'early', breakTime: '1:00', workTime: '9:00', color: 'bg-sky-200' },
+    { id: 'C', name: '標準', timeRange: '8:00-17:00', minCount: 0, kind: 'standard', breakTime: '1:00', workTime: '9:00', color: 'bg-blue-200' },
+    { id: "C'", name: '標準+', timeRange: '8:15-17:15', minCount: 0, kind: 'standard', breakTime: '1:00', workTime: '9:00', color: 'bg-indigo-200' },
+    { id: 'D', name: '中番', timeRange: '8:30-17:30', minCount: 0, kind: 'standard', breakTime: '1:00', workTime: '9:00', color: 'bg-orange-200' },
+    { id: 'E', name: '遅番', timeRange: '9:00-18:00', minCount: 0, kind: 'late', breakTime: '1:00', workTime: '9:00', color: 'bg-purple-200' },
+    { id: 'F', name: '延長対応', timeRange: '9:30-18:30', minCount: 0, kind: 'closing', breakTime: '1:00', workTime: '9:00', color: 'bg-teal-200' },
 ];
+
+export const REAL_WORLD_SHIFT_PATTERNS: ShiftPatternDefinition[] = SHIFT_PATTERNS;
 
 export const HOLIDAY_PATTERNS = [
     { id: '振', name: '振休', color: 'bg-purple-200' },
     { id: '有', name: '有給', color: 'bg-pink-200' },
+    { id: '半有', name: '半日有給', color: 'bg-rose-100' },
+    { id: '出', name: '出張・外出', color: 'bg-sky-100' },
+    { id: '保', name: '保留・その他', color: 'bg-slate-100' },
     { id: '休', name: '公休', color: 'bg-gray-100' },
 ];
 
-export const HOLIDAY_SHIFT_IDS: ShiftPatternId[] = ['振', '有', '休', ''];
+export const PROTECTED_SHIFT_IDS: ShiftPatternId[] = ['振', '有', '半有', '出', '保'];
+export const HOLIDAY_SHIFT_IDS: ShiftPatternId[] = [...PROTECTED_SHIFT_IDS, '休', ''];
+
+export function isProtectedShiftId(shift: ShiftPatternId | undefined | null): boolean {
+    return !!shift && PROTECTED_SHIFT_IDS.includes(shift);
+}
 
 export function isWorkShiftId(shift: ShiftPatternId | undefined | null): shift is ShiftPatternId {
     return !!shift && !HOLIDAY_SHIFT_IDS.includes(shift);
@@ -131,8 +142,8 @@ export function isWorkShiftId(shift: ShiftPatternId | undefined | null): shift i
 export function getDefaultPatternKind(id: ShiftPatternId): ShiftPatternKind {
     if (id === 'A') return 'opening';
     if (id === 'B') return 'early';
-    if (id === 'D' || id === 'E') return 'late';
-    if (id === 'J') return 'closing';
+    if (id === 'E') return 'late';
+    if (id === 'F' || id === 'J') return 'closing';
     return 'standard';
 }
 

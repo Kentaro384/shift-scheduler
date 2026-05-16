@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId, TimeRangeSchedule, TimeRange } from './types';
-import { countsForStaffing, isCookingStaff, isTimeRangeStaff } from './types';
+import { HOLIDAY_PATTERNS, countsForStaffing, isCookingStaff, isProtectedShiftId, isTimeRangeStaff, isWorkShiftId } from './types';
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { countAllPatterns } from './lib/shiftCountUtils';
@@ -138,7 +138,7 @@ function App() {
   };
 
   const handleReset = () => {
-    if (!window.confirm('自動生成されたシフトをリセットしますか？\n（手動入力されたパートシフト、有給は保持されます）')) {
+    if (!window.confirm('自動生成されたシフトをリセットしますか？\n（手動入力された時間指定・有給・振休・出張などの固定予定は保持されます）')) {
       return;
     }
 
@@ -156,8 +156,7 @@ function App() {
           // Keep ALL manual-only staff shifts
           return;
         } else if (s.shiftType === 'regular' || s.position === '主任') {
-          // Keep Paid Leave ONLY (Compensatory Off '振' is now auto-generated, so clear it)
-          if (currentShift === '有') {
+          if (isProtectedShiftId(currentShift)) {
             return;
           }
           // Clear others
@@ -343,6 +342,9 @@ function App() {
     if (shiftId === '振') return `${restBaseStyle} bg-[#F3F4F6] border border-[#10B981] border-l-[5px] border-l-[#10B981] opacity-75`;
     // 有給 - グレー背景 + ピンクのアクセント（休み感を強調）
     if (shiftId === '有') return `${restBaseStyle} bg-[#F3F4F6] border border-[#F472B6] border-l-[5px] border-l-[#F472B6] opacity-75`;
+    if (shiftId === '半有') return `${restBaseStyle} bg-[#FFF1F2] border border-[#FB7185] border-l-[5px] border-l-[#FB7185]`;
+    if (shiftId === '出') return `${restBaseStyle} bg-[#EFF6FF] border border-[#60A5FA] border-l-[5px] border-l-[#60A5FA]`;
+    if (shiftId === '保') return `${restBaseStyle} bg-[#F1F5F9] border border-[#64748B] border-l-[5px] border-l-[#64748B]`;
     // 休日 - Cool Gray (最も目立たせない)
     if (shiftId === '休') return `${restBaseStyle} bg-[#F9FAFB] border border-[#D1D5DB] border-l-[5px] border-l-[#9CA3AF] text-[#9CA3AF] opacity-50`;
 
@@ -384,6 +386,9 @@ function App() {
       'J': '★', // 星
       '振': '○', // 白丸
       '有': '◇', // 白菱形
+      '半有': '◐',
+      '出': '↗',
+      '保': '□',
       '休': '－', // 横線
     };
     return markers[shiftId] || '';
@@ -406,7 +411,7 @@ function App() {
       }
 
       const shift = schedule[dateStr]?.[s.id];
-      if (shift && shift !== '休' && shift !== '振' && shift !== '有') {
+      if (isWorkShiftId(shift)) {
         count++;
       }
     });
@@ -425,6 +430,7 @@ function App() {
       month,
       staff,
       schedule,
+      timeRangeSchedule,
       patterns,
       holidays,
     });
@@ -670,7 +676,7 @@ function App() {
                             onClick={() => handleCellClick(s.id, day)}
                           >
                             {/* Display priority: 1) Holiday shifts 2) Part-time time range 3) Other shifts 4) Empty */}
-                            {(shiftId === '休' || shiftId === '振' || shiftId === '有') ? (
+                            {(shiftId && !isWorkShiftId(shiftId)) ? (
                               /* Holiday shifts - show for everyone including part-timers */
                               shiftId === '休' ? (
                                 <div className="w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center text-[#9CA3AF] font-medium text-sm opacity-60">
@@ -894,6 +900,7 @@ function App() {
             currentShift={currentShift}
             defaultTimeRange={staffMember?.defaultTimeRange}
             disableShiftCounting={staffMember ? !countsForStaffing(staffMember) : false}
+            holidayOptions={HOLIDAY_PATTERNS}
             patterns={patterns}
             onSaveTimeRange={(timeRange: TimeRange) => {
               // Save time range to timeRangeSchedule with deep copy

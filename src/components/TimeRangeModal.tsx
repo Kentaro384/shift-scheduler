@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Clock, Star } from 'lucide-react';
 import type { ShiftPatternDefinition, TimeRange, ShiftPatternId } from '../types';
+import { HOLIDAY_PATTERNS, isWorkShiftId } from '../types';
 
 interface TimeRangeModalProps {
     staffId: number;
@@ -13,6 +14,7 @@ interface TimeRangeModalProps {
     patterns: ShiftPatternDefinition[];
     defaultTimeRange?: TimeRange;  // Staff's default work hours (includes countAsShifts)
     disableShiftCounting?: boolean;
+    holidayOptions?: { id: ShiftPatternId; name: string; color: string }[];
     onSaveTimeRange: (timeRange: TimeRange) => void;
     onSaveShift: (shift: ShiftPatternId) => void;
     onSaveAsDefault: (timeRange: TimeRange) => void;
@@ -75,6 +77,7 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
     patterns,
     defaultTimeRange,
     disableShiftCounting = false,
+    holidayOptions = HOLIDAY_PATTERNS,
     onSaveTimeRange,
     onSaveShift,
     onSaveAsDefault,
@@ -87,13 +90,13 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
     const initialShifts = disableShiftCounting ? [] : currentTimeRange?.countAsShifts || defaultTimeRange?.countAsShifts || [];
 
     const [mode, setMode] = useState<'time' | 'holiday'>(
-        currentTimeRange ? 'time' : (currentShift === '振' || currentShift === '有' || currentShift === '休') ? 'holiday' : 'time'
+        currentTimeRange ? 'time' : (currentShift && !isWorkShiftId(currentShift)) ? 'holiday' : 'time'
     );
     const [startTime, setStartTime] = useState(initialStart);
     const [endTime, setEndTime] = useState(initialEnd);
     const [selectedShifts, setSelectedShifts] = useState<ShiftPatternId[]>(initialShifts);
     const [selectedHoliday, setSelectedHoliday] = useState<ShiftPatternId>(
-        (currentShift === '振' || currentShift === '有' || currentShift === '休') ? currentShift : '休'
+        (currentShift && !isWorkShiftId(currentShift)) ? currentShift : '休'
     );
 
     const dateStr = `${month}/${day}(${getDayName(year, month, day)})`;
@@ -138,11 +141,14 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
         );
     };
 
-    const holidayOptions = [
-        { id: '振' as ShiftPatternId, name: '振休', color: 'bg-[#F3F4F6] border-[#10B981] text-[#10B981]' },
-        { id: '有' as ShiftPatternId, name: '有給', color: 'bg-[#F3F4F6] border-[#F472B6] text-[#F472B6]' },
-        { id: '休' as ShiftPatternId, name: '公休', color: 'bg-gray-100 border-gray-300 text-gray-500' },
-    ];
+    const getHolidayButtonClass = (shiftId: ShiftPatternId): string => {
+        if (shiftId === '振') return 'bg-[#F3F4F6] border-[#10B981] text-[#10B981]';
+        if (shiftId === '有') return 'bg-[#F3F4F6] border-[#F472B6] text-[#F472B6]';
+        if (shiftId === '半有') return 'bg-[#FFF1F2] border-[#FB7185] text-[#BE123C]';
+        if (shiftId === '出') return 'bg-[#EFF6FF] border-[#60A5FA] text-[#1D4ED8]';
+        if (shiftId === '保') return 'bg-[#F1F5F9] border-[#64748B] text-[#475569]';
+        return 'bg-gray-100 border-gray-300 text-gray-500';
+    };
 
     // Shift pattern colors for selection
     const getShiftButtonClass = (shiftId: ShiftPatternId) => {
@@ -323,7 +329,7 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
                                         key={opt.id}
                                         onClick={() => setSelectedHoliday(opt.id)}
                                         className={`p-4 rounded-xl border-2 transition-all ${selectedHoliday === opt.id
-                                            ? `${opt.color} border-current ring-2 ring-offset-2`
+                                            ? `${getHolidayButtonClass(opt.id)} border-current ring-2 ring-offset-2`
                                             : 'bg-white border-gray-200 hover:border-gray-300'
                                             }`}
                                     >

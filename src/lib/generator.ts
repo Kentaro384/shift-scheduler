@@ -1,11 +1,22 @@
 import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
 import { getDaysInMonth, getDayOfWeek, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
-import { SHIFT_PATTERNS, getShiftPatternKind, isCookingStaff, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns } from '../types';
+import { SHIFT_PATTERNS, countsForStaffing, getShiftPatternKind, isCookingStaff, isProtectedShiftId, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns } from '../types';
 import { countEffectiveShift, countWorkingStaff as countWorkingStaffUtil } from './shiftCountUtils';
 import { canAssignShift, createConstraintContext, type ConstraintCode } from './constraintChecker';
 
 function isManualOnlyStaff(staff: Staff): boolean {
     return isTimeRangeStaff(staff) || isCookingStaff(staff);
+}
+
+function parseTimeToMinutes(time: string): number {
+    const [hours, minutes] = time.split(':').map(Number);
+    return (hours || 0) * 60 + (minutes || 0);
+}
+
+function parsePatternRange(pattern: ShiftPatternDefinition): { start: number; end: number } | null {
+    const [start, end] = pattern.timeRange.split('-');
+    if (!start || !end) return null;
+    return { start: parseTimeToMinutes(start), end: parseTimeToMinutes(end) };
 }
 
 export class ShiftGenerator {
@@ -34,7 +45,7 @@ export class ShiftGenerator {
         this.timeRangeSchedule = timeRangeSchedule;
 
         // Initialize schedule structure with current schedule
-        // IMPORTANT: Preserve '有' (Paid Leave) and '振' (Substitute Holiday) exactly as entered
+        // IMPORTANT: Preserve fixed plans such as paid leave, transfer off, outing, and pending status.
         for (let d = 1; d <= this.daysInMonth; d++) {
             const dateStr = getFormattedDate(year, month, d);
             this.schedule[dateStr] = {};
@@ -46,8 +57,8 @@ export class ShiftGenerator {
                     // Manual-only staff: preserve ALL manual entries
                     this.schedule[dateStr][s.id] = existingShift ?? '';
                 } else {
-                    // Regular/Chief/Director: Preserve '有' and '振' only
-                    if (existingShift === '有' || existingShift === '振') {
+                    // Regular/Chief/Director: preserve fixed plans only.
+                    if (isProtectedShiftId(existingShift)) {
                         this.schedule[dateStr][s.id] = existingShift;
                     } else {
                         this.schedule[dateStr][s.id] = '';
@@ -128,8 +139,8 @@ export class ShiftGenerator {
 
         const current = this.schedule[dateStr][staffId];
 
-        // CRITICAL: Never overwrite '有' (Paid Leave) or '振' (Substitute Holiday)
-        if (current === '有' || current === '振') {
+        // CRITICAL: Never overwrite fixed plans.
+        if (isProtectedShiftId(current)) {
             return; // Absolutely protected
         }
 
@@ -181,6 +192,16 @@ export class ShiftGenerator {
         return this.patterns.filter(p => isWorkShiftId(p.id));
     }
 
+    private getTimeOrderedWorkPatterns(): ShiftPatternDefinition[] {
+        return [...this.getWorkPatterns()].sort((a, b) => {
+            const rangeA = parsePatternRange(a);
+            const rangeB = parsePatternRange(b);
+            if (!rangeA || !rangeB) return a.id.localeCompare(b.id);
+            if (rangeA.start !== rangeB.start) return rangeA.start - rangeB.start;
+            return rangeA.end - rangeB.end;
+        });
+    }
+
     private isWorkShift(shift: ShiftPatternId | undefined): boolean {
         return isWorkShiftId(shift);
     }
@@ -213,11 +234,75 @@ export class ShiftGenerator {
             ?? '休';
     }
 
-    private getNextFallbackShift(current: ShiftPatternId): ShiftPatternId {
-        const workIds = this.getWorkPatterns().map(p => p.id);
-        const currentIndex = workIds.indexOf(current);
-        if (currentIndex >= 0 && currentIndex < workIds.length - 1) return workIds[currentIndex + 1];
-        return this.getFallbackWorkShift();
+    private getCoverageSlots(): number[] {
+        const ranges = this.getWorkPatterns()
+            .map(parsePatternRange)
+            .filter((range): range is { start: number; end: number } => !!range);
+        if (ranges.length === 0) return [];
+
+        const start = Math.min(...ranges.map(range => range.start));
+        const end = Math.max(...ranges.map(range => range.end));
+        const slots: number[] = [];
+        for (let minute = start; minute < end; minute += 30) {
+            slots.push(minute);
+        }
+        return slots;
+    }
+
+    private countCoverageAt(day: number, minute: number): number {
+        const dateStr = getFormattedDate(this.year, this.month, day);
+        let count = 0;
+
+        for (const s of this.staff) {
+            if (!countsForStaffing(s)) continue;
+
+            if (isTimeRangeStaff(s)) {
+                const timeRange = this.timeRangeSchedule[dateStr]?.[s.id];
+                if (!timeRange) continue;
+                const start = parseTimeToMinutes(timeRange.start);
+                const end = parseTimeToMinutes(timeRange.end);
+                if (minute >= start && minute < end) count++;
+                continue;
+            }
+
+            const shift = this.getShift(day, s.id);
+            const pattern = this.patterns.find(p => p.id === shift);
+            const range = pattern ? parsePatternRange(pattern) : null;
+            if (range && minute >= range.start && minute < range.end) count++;
+        }
+
+        return count;
+    }
+
+    private getCoverageScore(day: number, pattern: ShiftPatternDefinition): number {
+        const range = parsePatternRange(pattern);
+        if (!range) return 0;
+
+        let score = 0;
+        for (const slot of this.getCoverageSlots()) {
+            if (slot < range.start || slot >= range.end) continue;
+            const currentCoverage = this.countCoverageAt(day, slot);
+            score += 1 / (currentCoverage + 1);
+        }
+
+        return score;
+    }
+
+    private chooseCoveragePattern(staff: Staff, day: number, relaxConstraints = false): ShiftPatternId | undefined {
+        const candidates = this.getTimeOrderedWorkPatterns()
+            .filter(pattern => this.canAssignByConstraints(staff, day, pattern.id, relaxConstraints));
+
+        if (candidates.length === 0) return undefined;
+
+        return candidates
+            .sort((a, b) => {
+                const scoreDiff = this.getCoverageScore(day, b) - this.getCoverageScore(day, a);
+                if (scoreDiff !== 0) return scoreDiff;
+                const countDiff = this.countTotalShifts(staff.id, a.id) - this.countTotalShifts(staff.id, b.id);
+                if (countDiff !== 0) return countDiff;
+                return this.getTimeOrderedWorkPatterns().findIndex(p => p.id === a.id)
+                    - this.getTimeOrderedWorkPatterns().findIndex(p => p.id === b.id);
+            })[0]?.id;
     }
 
     private isWeekdayAutoAssignable(s: Staff): boolean {
@@ -280,7 +365,7 @@ export class ShiftGenerator {
                 if (isTimeRangeStaff(s)) {
                     // Check schedule first
                     const shift = this.getShift(day, s.id);
-                    if (shift && shift !== '休' && shift !== '振' && shift !== '有') {
+                    if (isWorkShiftId(shift)) {
                         partTimeCount++;
                         return;
                     }
@@ -483,12 +568,9 @@ export class ShiftGenerator {
                 this.getWorkPatterns().some(pattern => this.canAssignByConstraints(s, d, pattern.id))
             );
 
-            // Sort remaining candidates to distribute burden
-            // Sort by total shifts (A+B+J) ascending
+            // Sort remaining candidates to distribute burden across the full time-flow pattern set.
             remaining.sort((a, b) => {
-                const balanceIds = this.getWorkPatterns()
-                    .filter(p => ['opening', 'early', 'closing'].includes(this.getShiftKind(p.id) || 'standard'))
-                    .map(p => p.id);
+                const balanceIds = this.getTimeOrderedWorkPatterns().map(p => p.id);
                 const countA = balanceIds.reduce((sum, id) => sum + this.countTotalShifts(a.id, id), 0);
                 const countB = balanceIds.reduce((sum, id) => sum + this.countTotalShifts(b.id, id), 0);
                 return countA - countB;
@@ -496,17 +578,8 @@ export class ShiftGenerator {
 
 
             for (const s of remaining) {
-                // Assign B (or C/D/E fallback) to ALL remaining regular staff
-                // Do NOT assign 休 automatically - regular staff should work weekdays
-                let shift: ShiftPatternId = this.getFallbackWorkShift();
-                if (!this.canAssignByConstraints(s, d, shift)) {
-                    shift = this.getFirstPatternByKind(['standard', 'late']) ?? this.getNextFallbackShift(shift);
-                }
-                if (!this.canAssignByConstraints(s, d, shift)) {
-                    const allowedShift = this.getWorkPatterns().find(pattern => this.canAssignByConstraints(s, d, pattern.id))?.id;
-                    if (!allowedShift) continue;
-                    shift = allowedShift;
-                }
+                const shift = this.chooseCoveragePattern(s, d) ?? this.chooseCoveragePattern(s, d, true);
+                if (!shift) continue;
 
                 this.setShift(d, s.id, shift);
                 assignedIds.add(s.id);
@@ -618,9 +691,7 @@ export class ShiftGenerator {
 
                 // Sort by total shifts to distribute burden
                 availableStaff.sort((a, b) => {
-                    const balanceIds = this.getWorkPatterns()
-                        .filter(p => ['opening', 'early', 'closing'].includes(this.getShiftKind(p.id) || 'standard'))
-                        .map(p => p.id);
+                    const balanceIds = this.getTimeOrderedWorkPatterns().map(p => p.id);
                     const countA = balanceIds.reduce((sum, id) => sum + this.countTotalShifts(a.id, id), 0);
                     const countB = balanceIds.reduce((sum, id) => sum + this.countTotalShifts(b.id, id), 0);
                     return countA - countB;
@@ -628,18 +699,8 @@ export class ShiftGenerator {
 
                 const candidate = availableStaff[0];
 
-                // Assign fallback work shift (or standard/late if constrained)
-                let shift: ShiftPatternId = this.getFallbackWorkShift();
-                if (!this.canAssignByConstraints(candidate, d, shift)) {
-                    shift = this.getFirstPatternByKind(['standard', 'late']) ?? this.getNextFallbackShift(shift);
-                }
-                if (!this.canAssignByConstraints(candidate, d, shift)) {
-                    const allowedShift = this.getWorkPatterns().find(pattern =>
-                        this.canAssignByConstraints(candidate, d, pattern.id)
-                    )?.id;
-                    if (!allowedShift) break;
-                    shift = allowedShift;
-                }
+                const shift = this.chooseCoveragePattern(candidate, d) ?? this.chooseCoveragePattern(candidate, d, true);
+                if (!shift) break;
 
                 this.setShift(d, candidate.id, shift);
             }

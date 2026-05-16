@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { X, Clock } from 'lucide-react';
 import type { Staff, ShiftSchedule, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
-import { countsForStaffing, isCookingStaff, isTimeRangeStaff } from '../types';
+import { countsForStaffing, isCookingStaff, isTimeRangeStaff, isWorkShiftId } from '../types';
 import { getFormattedDate } from '../lib/utils';
 
 interface HourlyStaffChartProps {
@@ -82,7 +82,7 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
 
             // Regular staff with shift pattern
             const shiftId = schedule[dateStr]?.[s.id];
-            if (!shiftId || shiftId === '休' || shiftId === '振' || shiftId === '有') return;
+            if (!isWorkShiftId(shiftId)) return;
 
             const pattern = patterns.find(p => p.id === shiftId);
             if (!pattern) return;
