@@ -15,7 +15,6 @@ import { TimeRangeModal } from './components/TimeRangeModal';
 import { HourlyStaffChart } from './components/HourlyStaffChart';
 import { ShiftPaletteIcon } from './components/ShiftPaletteIcon';
 import { ShiftBalanceDashboard } from './components/ShiftBalanceDashboard';
-import { AlertBadge } from './components/ShiftAlerts';
 import { LoginScreen } from './components/LoginScreen';
 import { onAuthStateChange, signOut } from './lib/auth';
 import type { AuthUser } from './lib/auth';
@@ -596,7 +595,8 @@ function App() {
   const manualFixedCount = monthDateStrings.reduce((total, dateStr) =>
     total + Object.keys(manualShifts[dateStr] || {}).length
   , 0);
-  const shortageDayNumbers = dailyCounts.flatMap((count, index) => {
+  type ShortageIssue = { day: number; label: string; shiftPattern?: ShiftPatternId };
+  const staffingShortages: ShortageIssue[] = dailyCounts.flatMap((count, index) => {
     const day = index + 1;
     const date = new Date(year, month - 1, day);
     const isSat = date.getDay() === 6;
@@ -604,24 +604,30 @@ function App() {
     const isHol = isHoliday(day);
     if (isSun || isHol) return [];
     const isShort = isSat ? count < settings.saturdayStaffCount : count < settings.weekdayStaffCount;
-    return isShort ? [day] : [];
+    return isShort ? [{ day, label: '出勤人数' }] : [];
   });
-  const shortageDays = shortageDayNumbers.length;
-  const unassignedTimeRanges = monthDateStrings.flatMap(dateStr => {
-    const dateRanges = (timeRangeSchedule[dateStr] || {}) as Record<string | number, TimeRange>;
-    return Object.entries(dateRanges).flatMap(([staffId, timeRange]) => {
-      const staffMember = staff.find(s => String(s.id) === String(staffId));
-      if (!staffMember || !isTimeRangeStaff(staffMember) || !countsForStaffing(staffMember)) return [];
-      if (timeRange.countAsShifts?.length) return [];
-      return [{ dateStr, staffId: staffMember.id, timeRange }];
+  const patternShortages: ShortageIssue[] = qualifiedCounts.flatMap((counts, index) => {
+    const day = index + 1;
+    const date = new Date(year, month - 1, day);
+    const isSat = date.getDay() === 6;
+    const isSun = date.getDay() === 0;
+    const isHol = isHoliday(day);
+    if (isSat || isSun || isHol) return [];
+    return patterns.flatMap(pattern => {
+      const minCount = pattern.minCount || 0;
+      if (minCount <= 0) return [];
+      const count = counts[pattern.id] || 0;
+      return count < minCount ? [{ day, label: `${pattern.id}不足`, shiftPattern: pattern.id }] : [];
     });
   });
-  const firstUnassignedTimeRange = unassignedTimeRanges[0];
+  const shortageIssues = [...staffingShortages, ...patternShortages];
+  const shortageIssueCount = shortageIssues.length;
+  const firstShortageIssue = shortageIssues[0];
   const openFirstIssue = () => {
-    if (firstUnassignedTimeRange) {
-      setEditingPartTime({ staffId: firstUnassignedTimeRange.staffId, day: Number(firstUnassignedTimeRange.dateStr.slice(-2)) });
+    if (firstShortageIssue?.shiftPattern) {
+      setCandidateSearch({ day: firstShortageIssue.day, shiftPattern: firstShortageIssue.shiftPattern });
     } else {
-      setHourlyChartDay(shortageDayNumbers[0] || null);
+      setHourlyChartDay(firstShortageIssue?.day || null);
     }
   };
   const setupSteps = [
@@ -629,7 +635,7 @@ function App() {
     { label: '固定勤務', done: hasTimeRangeInput, note: hasTimeRangeInput ? '反映済み' : `${fixedDefaultStaffCount}人対象`, onClick: handleApplyDefaultTimeRanges, icon: CalendarCheck },
     { label: '固定予定', done: manualFixedCount > 0, note: manualFixedCount > 0 ? `${manualFixedCount}件` : '必要時', onClick: () => setShowHolidayModal(true), icon: Calendar },
     { label: '自動生成', done: hasGeneratedShift, note: hasGeneratedShift ? '生成済み' : '未生成', onClick: handleGenerate, icon: RefreshCw },
-    { label: '不足確認', done: hasGeneratedShift && shortageDays === 0 && unassignedTimeRanges.length === 0, note: `${shortageDays + unassignedTimeRanges.length}件`, onClick: openFirstIssue, icon: AlertTriangle },
+    { label: '不足確認', done: hasGeneratedShift && shortageIssueCount === 0, note: !hasGeneratedShift ? '未生成' : shortageIssueCount > 0 ? `${shortageIssueCount}件 要修正` : 'OK', onClick: openFirstIssue, icon: AlertTriangle },
     { label: 'Excel', done: false, note: '出力', onClick: handleDownloadExcel, icon: Download },
   ];
 
@@ -689,18 +695,6 @@ function App() {
                   <ChevronRight size={18} className="landscape:w-4 landscape:h-4 md:w-5 md:h-5" />
                 </button>
               </div>
-              {/* Alert Badge */}
-              <AlertBadge
-                staff={staff}
-                schedule={schedule}
-                timeRangeSchedule={timeRangeSchedule}
-                days={days}
-                year={year}
-                month={month}
-                holidays={holidays}
-                minCount={settings.weekdayStaffCount}
-                patterns={patterns}
-              />
             </div>
 
             {/* Row 2: Action Buttons */}
@@ -792,29 +786,6 @@ function App() {
                 <RotateCcw size={16} className="md:w-[18px] md:h-[18px]" />
                 <span className="hidden sm:inline">リセット</span>
               </button>
-              <button
-                onClick={handleApplyDefaultTimeRanges}
-                className="flex items-center space-x-1 md:space-x-2 px-2.5 landscape:px-2 md:px-4 py-1.5 landscape:py-1 md:py-2 bg-white text-gray-600 border border-gray-200 rounded-full hover:border-[#10B981] hover:text-[#059669] transition-all duration-200 font-medium active:scale-95 text-xs landscape:text-xs md:text-sm"
-              >
-                <CalendarCheck size={16} className="md:w-[18px] md:h-[18px]" />
-                <span className="hidden sm:inline">固定勤務</span>
-              </button>
-              <button
-                onClick={handleGenerate}
-                disabled={isGenerating}
-                className={`btn-primary text-xs landscape:text-xs md:text-sm px-3 landscape:px-2 md:px-5 py-1.5 landscape:py-1 md:py-2 ${isGenerating ? 'opacity-80 cursor-wait' : 'active:scale-95'}`}
-              >
-                <RefreshCw size={16} className={`md:w-[18px] md:h-[18px] ${isGenerating ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">{isGenerating ? '生成中...' : '自動生成'}</span>
-                <span className="sm:hidden">{isGenerating ? '...' : '生成'}</span>
-              </button>
-              <button
-                onClick={handleDownloadExcel}
-                className="flex items-center space-x-1 px-2.5 landscape:px-2 md:px-4 py-1.5 landscape:py-1 md:py-2 bg-white text-gray-600 border border-gray-200 rounded-full hover:border-[#45B7D1] hover:text-[#45B7D1] transition-all duration-200 font-medium active:scale-95 text-xs landscape:text-xs md:text-sm"
-              >
-                <Download size={16} className="md:w-[18px] md:h-[18px]" />
-                <span className="hidden sm:inline">Excel</span>
-              </button>
             </div>
           </div>
         </div>
@@ -833,7 +804,7 @@ function App() {
             <div className="grid flex-1 grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
               {setupSteps.map(step => {
                 const StepIcon = step.icon;
-                const hasIssue = step.label === '不足確認' && !step.done && hasGeneratedShift && (shortageDays > 0 || unassignedTimeRanges.length > 0);
+                const hasIssue = step.label === '不足確認' && !step.done && hasGeneratedShift && shortageIssueCount > 0;
                 return (
                   <button
                     key={step.label}
