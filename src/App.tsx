@@ -1059,8 +1059,10 @@ function App() {
       {editingPartTime && (() => {
         const staffMember = staff.find(s => s.id === editingPartTime.staffId);
         const dateStr = getFormattedDate(year, month, editingPartTime.day);
+        const weekday = new Date(year, month - 1, editingPartTime.day).getDay();
         const currentTimeRange = timeRangeSchedule[dateStr]?.[editingPartTime.staffId] || null;
         const currentShift = schedule[dateStr]?.[editingPartTime.staffId] || '';
+        const defaultTimeRange = staffMember ? getStaffTimeRangeForWeekday(staffMember, weekday) : undefined;
 
         return (
           <TimeRangeModal
@@ -1071,7 +1073,7 @@ function App() {
             month={month}
             currentTimeRange={currentTimeRange}
             currentShift={currentShift}
-            defaultTimeRange={staffMember?.defaultTimeRange}
+            defaultTimeRange={defaultTimeRange}
             disableShiftCounting={staffMember ? !countsForStaffing(staffMember) : false}
             holidayOptions={HOLIDAY_PATTERNS}
             patterns={patterns}
