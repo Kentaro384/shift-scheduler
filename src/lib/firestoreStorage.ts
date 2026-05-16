@@ -25,6 +25,7 @@ interface OrganizationData {
     manualShifts: ShiftSchedule;
     timeRangeSchedule: TimeRangeSchedule;  // Part-time worker time ranges
     notes: DailyNotes;
+    excelExportLog?: Record<string, string>;
     updatedAt: number;
 }
 
@@ -115,6 +116,10 @@ export const firestoreStorage = {
 
     async saveNotes(notes: DailyNotes): Promise<void> {
         await this.saveAll({ notes });
+    },
+
+    async saveExcelExportLog(excelExportLog: Record<string, string>): Promise<void> {
+        await this.saveAll({ excelExportLog });
     },
 
     async clearMonthData(dateStrings: string[], currentStaff: Staff[]): Promise<void> {

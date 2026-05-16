@@ -26,6 +26,17 @@ import { useToast } from './components/Toast';
 import { checkConstraints, createConstraintContext } from './lib/constraintChecker';
 import { getShiftCardClass, getShiftChipClass, getShiftMarker } from './lib/shiftPalette';
 
+const getMonthKey = (year: number, month: number) => `${year}-${String(month).padStart(2, '0')}`;
+
+const formatExportedAt = (date: Date) => {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+};
+
 function App() {
   // Auth state
   const [user, setUser] = useState<AuthUser>(null);
@@ -42,6 +53,7 @@ function App() {
   const [patterns, setPatterns] = useState<ShiftPatternDefinition[]>([]);
   const [timeRangeSchedule, setTimeRangeSchedule] = useState<TimeRangeSchedule>({});
   const [notes, setNotes] = useState<DailyNotes>({});
+  const [excelExportLog, setExcelExportLog] = useState<Record<string, string>>({});
 
   // Modal States
   const [showStaffList, setShowStaffList] = useState(false);
@@ -59,6 +71,7 @@ function App() {
   // UX States
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [lastExcelExportedAt, setLastExcelExportedAt] = useState('');
 
   // Toast notifications
   const toast = useToast();
@@ -104,6 +117,7 @@ function App() {
         setPatterns(firestoreStorage.normalizePatterns(data.patterns));
         setTimeRangeSchedule(data.timeRangeSchedule || {});
         setNotes(data.notes || {});
+        setExcelExportLog(data.excelExportLog || {});
       } else {
         // Initialize with defaults if no data exists
         setPatterns(firestoreStorage.normalizePatterns());
@@ -119,6 +133,10 @@ function App() {
   const month = currentDate.getMonth() + 1;
   const daysInMonth = getDaysInMonth(year, month);
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  useEffect(() => {
+    setLastExcelExportedAt(excelExportLog[getMonthKey(year, month)] || '');
+  }, [excelExportLog, year, month]);
 
   const changeMonth = (offset: number) => {
     setCurrentDate(new Date(year, month - 1 + offset, 1));
@@ -509,8 +527,8 @@ function App() {
     return countAllPatterns(staff, schedule, timeRangeSchedule, dateStr, true, patterns.map(p => p.id));
   });
 
-  const handleDownloadExcel = () => {
-    exportToExcel({
+  const handleDownloadExcel = async () => {
+    await exportToExcel({
       year,
       month,
       staff,
@@ -520,6 +538,11 @@ function App() {
       holidays,
       notes,
     });
+    const exportedAt = formatExportedAt(new Date());
+    const log = { ...excelExportLog, [getMonthKey(year, month)]: exportedAt };
+    setExcelExportLog(log);
+    void firestoreStorage.saveExcelExportLog(log);
+    setLastExcelExportedAt(exportedAt);
   };
 
   const handleNoteEdit = (day: number) => {
@@ -596,10 +619,10 @@ function App() {
     { label: '初期化', done: true, note: isMonthBlank ? '白紙' : '入力中', onClick: handleForceClearMonth, icon: Trash2, danger: true },
     { label: '祝日設定', done: monthlyHolidayCount > 0, note: monthlyHolidayCount > 0 ? `${monthlyHolidayCount}件` : '確認', onClick: () => setShowHolidayModal(true), icon: Calendar },
     { label: '固定勤務', done: hasTimeRangeInput, note: hasTimeRangeInput ? '反映済み' : `${fixedDefaultStaffCount}人対象`, onClick: handleApplyDefaultTimeRanges, icon: CalendarCheck },
-    { label: '固定予定', done: manualFixedCount > 0, note: manualFixedCount > 0 ? `${manualFixedCount}件` : '必要時', onClick: () => setShowHolidayModal(true), icon: Calendar },
+    { label: '固定予定', done: manualFixedCount > 0, note: manualFixedCount > 0 ? `${manualFixedCount}件` : '必要時', onClick: undefined, icon: Calendar, disabled: true },
     { label: '自動生成', done: hasGeneratedShift, note: hasGeneratedShift ? '生成済み' : '未生成', onClick: handleGenerate, icon: RefreshCw },
     { label: '不足確認', done: hasGeneratedShift && shortageIssueCount === 0, note: !hasGeneratedShift ? '未生成' : shortageIssueCount > 0 ? `${shortageIssueCount}件 要修正` : 'OK', onClick: showShortageList, icon: AlertTriangle },
-    { label: 'Excel', done: false, note: '出力', onClick: handleDownloadExcel, icon: Download },
+    { label: 'Excel', done: Boolean(lastExcelExportedAt), note: lastExcelExportedAt || '未出力', onClick: handleDownloadExcel, icon: Download },
   ];
 
   // Show loading screen while checking auth
@@ -634,7 +657,7 @@ function App() {
   return (
     <div className="min-h-screen bg-[#F7F8FA] flex flex-col font-sans text-[#1F2937]">
       <header className="bg-[#FDFDFD] border-b border-[#E5E7EB] shadow-[0_2px_4px_rgba(0,0,0,0.06)] p-2 landscape:p-1.5 md:p-4 sticky top-0 z-30">
-        <div className="max-w-[1920px] mx-auto">
+        <div className="max-w-[1920px] mx-auto relative">
           {/* Mobile portrait: 2-row, Mobile landscape & Desktop: 1-row */}
           <div className="flex flex-col landscape:flex-row landscape:justify-between landscape:items-center md:flex-row md:justify-between md:items-center gap-2 landscape:gap-0 md:gap-0">
             {/* Row 1: Logo + Month Navigation */}
@@ -647,7 +670,7 @@ function App() {
                 <span className="font-semibold text-gray-700">{settings.profileName}</span>
                 <span>{settings.fiscalYear}年度</span>
               </div>
-              <div className="flex items-center bg-gray-100 rounded-full p-0.5 landscape:p-0.5 md:p-1">
+              <div className="flex items-center bg-gray-100 rounded-full p-0.5 landscape:p-0.5 md:p-1 landscape:absolute landscape:left-1/2 landscape:-translate-x-1/2 md:absolute md:left-1/2 md:-translate-x-1/2">
                 <button onClick={() => changeMonth(-1)} className="p-1.5 landscape:p-1 md:p-2 hover:bg-gray-200 rounded-full transition-all duration-200 text-gray-600">
                   <ChevronLeft size={18} className="landscape:w-4 landscape:h-4 md:w-5 md:h-5" />
                 </button>
@@ -766,17 +789,20 @@ function App() {
               {setupSteps.map(step => {
                 const StepIcon = step.icon;
                 const hasIssue = step.label === '不足確認' && !step.done && hasGeneratedShift && shortageIssueCount > 0;
+                const isDisabled = (isGenerating && step.label === '自動生成') || step.disabled;
                 return (
                   <button
                     key={step.label}
                     type="button"
                     onClick={step.onClick}
-                    disabled={isGenerating && step.label === '自動生成'}
-                    className={`flex min-h-[44px] items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-all active:scale-[0.98] disabled:cursor-wait disabled:opacity-75 ${
+                    disabled={isDisabled}
+                    className={`flex min-h-[44px] items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-all active:scale-[0.98] disabled:cursor-default disabled:active:scale-100 ${
                       hasIssue
                         ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
                         : step.done
                           ? 'border-emerald-100 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                          : step.disabled
+                            ? 'cursor-default border-gray-200 bg-gray-50 text-gray-400'
                           : step.danger
                             ? 'border-gray-200 bg-white text-gray-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
                             : 'border-gray-200 bg-white text-gray-600 hover:border-[#FF6B6B] hover:bg-pink-50 hover:text-[#FF6B6B]'
@@ -900,16 +926,16 @@ function App() {
                             ) : isPartTime && partTimeRange ? (
                               /* Time-range worker with time range - only if no holiday set */
                               <div
-                                className="w-9 md:w-12 min-h-10 mx-auto flex flex-col items-center justify-center rounded-md text-[7px] md:text-[8px] shadow-sm transition-all duration-150 hover:scale-105 hover:shadow-md bg-[#FFF8E7] border border-[#F4D58A] text-[#5A4632] font-medium leading-tight px-0.5 py-1"
+                                className="w-9 md:w-12 min-h-10 mx-auto flex flex-col items-center justify-center rounded-md text-[7px] md:text-[8px] shadow-sm transition-all duration-150 hover:scale-105 hover:shadow-md bg-[#FCFBF7] border border-[#E4DBCA] text-[#5F5A50] font-medium leading-tight px-0.5 py-1"
                                 title={`${partTimeRange.start}-${partTimeRange.end}${partTimeRange.countAsShifts?.length ? ` / 集計: ${partTimeRange.countAsShifts.join(', ')}` : ' / 集計なし'}`}
                               >
                                 <span>{partTimeRange.start}</span>
-                                <span className="text-[#C58B1A]">↓</span>
+                                <span className="text-[#B3945B]">↓</span>
                                 <span>{partTimeRange.end}</span>
                                 {partTimeRange.countAsShifts?.length ? (
                                   <span className="mt-0.5 flex flex-wrap justify-center gap-[1px] max-w-full">
                                     {partTimeRange.countAsShifts.map(shift => (
-                                      <span key={shift} className={`px-0.5 rounded-sm font-bold leading-none ${getShiftChipClass(shift, patterns)}`}>
+                                      <span key={shift} className={`px-0.5 rounded-sm font-bold leading-none opacity-80 ${getShiftChipClass(shift, patterns)}`}>
                                         {shift}
                                       </span>
                                     ))}

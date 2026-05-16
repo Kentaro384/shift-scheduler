@@ -83,34 +83,34 @@ const NAMED_SHIFT_INDEX: Record<string, number> = {
 
 const FIXED_SHIFT_STYLES: Record<string, Pick<PaletteEntry, 'card' | 'chip' | 'solid'>> = {
   '振': {
-    card: 'bg-[#FFFDF8] border border-dashed border-[#54D3A2] border-l-[5px] border-l-[#54D3A2] text-[#4B5563]',
-    chip: 'bg-[#FFFDF8] text-[#15803D] border border-dashed border-[#54D3A2]',
-    solid: 'bg-[#54D3A2] text-white',
+    card: 'bg-[#FCFDFB] border border-dashed border-[#9DDCBD] border-l-[4px] border-l-[#7BCFA7] text-[#5F6B63]',
+    chip: 'bg-[#FCFDFB] text-[#3F7F5B] border border-dashed border-[#9DDCBD]',
+    solid: 'bg-[#7BCFA7] text-white',
   },
   '有': {
-    card: 'bg-[#FFF7FB] border border-dashed border-[#F472B6] border-l-[5px] border-l-[#F472B6] text-[#4B5563]',
-    chip: 'bg-[#FFF7FB] text-[#BE185D] border border-dashed border-[#F472B6]',
-    solid: 'bg-[#F472B6] text-white',
+    card: 'bg-[#FDFBFC] border border-dashed border-[#E8A8C7] border-l-[4px] border-l-[#D98AB4] text-[#6B5F66]',
+    chip: 'bg-[#FDFBFC] text-[#96506F] border border-dashed border-[#E8A8C7]',
+    solid: 'bg-[#D98AB4] text-white',
   },
   '半有': {
-    card: 'bg-[#FFF1F2] border border-dashed border-[#FB7185] border-l-[5px] border-l-[#FB7185] text-[#4B5563]',
-    chip: 'bg-[#FFF1F2] text-[#BE123C] border border-dashed border-[#FB7185]',
-    solid: 'bg-[#FB7185] text-white',
+    card: 'bg-[#FDF9FA] border border-dashed border-[#E9A5AD] border-l-[4px] border-l-[#D9828E] text-[#6B5F61]',
+    chip: 'bg-[#FDF9FA] text-[#9B4D57] border border-dashed border-[#E9A5AD]',
+    solid: 'bg-[#D9828E] text-white',
   },
   '研': {
-    card: 'bg-[#FFFBEB] border border-dashed border-[#F59E0B] border-l-[5px] border-l-[#F59E0B] text-[#4B5563]',
-    chip: 'bg-[#FFFBEB] text-[#92400E] border border-dashed border-[#F59E0B]',
-    solid: 'bg-[#F59E0B] text-white',
+    card: 'bg-[#FDFBF4] border border-dashed border-[#D9BF76] border-l-[4px] border-l-[#C9A84F] text-[#6B6252]',
+    chip: 'bg-[#FDFBF4] text-[#7A6432] border border-dashed border-[#D9BF76]',
+    solid: 'bg-[#C9A84F] text-white',
   },
   '出': {
-    card: 'bg-[#F4FAFF] border border-dashed border-[#60A5FA] border-l-[5px] border-l-[#60A5FA] text-[#4B5563]',
-    chip: 'bg-[#F4FAFF] text-[#1D4ED8] border border-dashed border-[#60A5FA]',
-    solid: 'bg-[#60A5FA] text-white',
+    card: 'bg-[#F8FBFD] border border-dashed border-[#9CC3EA] border-l-[4px] border-l-[#7FAFE0] text-[#5F6770]',
+    chip: 'bg-[#F8FBFD] text-[#4C719C] border border-dashed border-[#9CC3EA]',
+    solid: 'bg-[#7FAFE0] text-white',
   },
   '保': {
-    card: 'bg-[#FAF5FF] border border-dashed border-[#C084FC] border-l-[5px] border-l-[#C084FC] text-[#4B5563]',
-    chip: 'bg-[#FAF5FF] text-[#7E22CE] border border-dashed border-[#C084FC]',
-    solid: 'bg-[#C084FC] text-white',
+    card: 'bg-[#FBFAFD] border border-dashed border-[#C7B4E6] border-l-[4px] border-l-[#B19AD8] text-[#655F6B]',
+    chip: 'bg-[#FBFAFD] text-[#6E5A96] border border-dashed border-[#C7B4E6]',
+    solid: 'bg-[#B19AD8] text-white',
   },
   '休': {
     card: 'bg-[#FAFAFA] border border-[#E5E7EB] border-l-[5px] border-l-[#D1D5DB] text-[#A1A1AA] opacity-60',
