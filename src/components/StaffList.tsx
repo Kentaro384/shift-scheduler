@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Staff, StaffPosition, StaffShiftType, StaffRole, ShiftPatternDefinition, ShiftPatternId, FloorType, StaffWeekday, TimeRange } from '../types';
-import { getStaffAvailableWeekdays, STAFF_WEEKDAY_LABELS, STAFF_WEEKDAYS } from '../types';
+import { getStaffAvailableWeekdays, getStaffRoleLabel, normalizeStaffRole, STAFF_ROLE_LABELS, STAFF_WEEKDAY_LABELS, STAFF_WEEKDAYS } from '../types';
 import { X, Plus, Edit2, Trash2, Save, Users, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface StaffListProps {
@@ -12,7 +12,7 @@ interface StaffListProps {
 
 const POSITIONS: StaffPosition[] = ['園長', '主任', '保育士', 'パート', '看護師', '調理'];
 const SHIFT_TYPES: StaffShiftType[] = ['no_shift', 'backup', 'regular', 'part_time', 'cooking'];
-const ROLES: (Exclude<StaffRole, null> | 'null')[] = ['infant', 'toddler', 'free', 'cooking', 'null'];
+const ROLES: (Exclude<StaffRole, null> | 'null')[] = ['age1', 'age2', 'age3', 'free', 'cooking', 'null'];
 const FLOORS: FloorType[] = ['1F', '2F', '3F', 'free', 'none'];
 
 function generateTimeOptions(): string[] {
@@ -35,13 +35,7 @@ const SHIFT_TYPE_LABELS: Record<StaffShiftType, string> = {
     cooking: '調理',
 };
 
-const ROLE_LABELS: Record<Exclude<StaffRole, null> | 'null', string> = {
-    infant: '乳児',
-    toddler: '幼児',
-    free: 'フリー',
-    cooking: '調理',
-    null: '指定なし',
-};
+const ROLE_LABELS: Record<Exclude<StaffRole, null> | 'null', string> = { ...STAFF_ROLE_LABELS, null: '指定なし' };
 
 export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate, onClose }) => {
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -80,7 +74,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                 }
             : editForm.position === '調理'
                 ? { ...editForm, shiftType: 'cooking' as const, role: 'cooking' as const, hasQualification: false }
-                : editForm;
+                : { ...editForm, role: normalizeStaffRole(editForm.role || null) };
 
         const newStaff = staff.map(s =>
             s.id === editingId ? { ...s, ...normalizedForm } as Staff : s
@@ -99,7 +93,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
             shiftType: 'regular',
             preferredShifts: [],
             weeklyDays: 5,
-            role: 'infant',
+            role: 'age1',
             incompatibleWith: [],
             earlyShiftLimit: null,
             saturdayOnly: false,
@@ -255,7 +249,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                             </div>
                                             <div className="col-span-2">
                                                 <label className="block text-xs text-gray-500 mb-1">担当</label>
-                                                <select className="w-full border rounded p-2" value={editForm.role || 'null'} onChange={e => handleChange('role', e.target.value === 'null' ? null : e.target.value as Exclude<StaffRole, null>)}>
+                                                <select className="w-full border rounded p-2" value={normalizeStaffRole(editForm.role || null) || 'null'} onChange={e => handleChange('role', e.target.value === 'null' ? null : e.target.value as Exclude<StaffRole, null>)}>
                                                     {ROLES.map(r => <option key={r} value={String(r)}>{ROLE_LABELS[r]}</option>)}
                                                 </select>
                                             </div>
@@ -451,7 +445,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                             </div>
                                             <div className="text-sm text-gray-500 flex space-x-4">
                                                 <span>タイプ: {SHIFT_TYPE_LABELS[s.shiftType]}</span>
-                                                <span>担当: {s.role ? ROLE_LABELS[s.role] : '指定なし'}</span>
+                                                <span>担当: {getStaffRoleLabel(s.role)}</span>
                                                 <span>週: {s.weeklyDays}日</span>
                                                 <span>曜日: {getStaffAvailableWeekdays(s).map(day => STAFF_WEEKDAY_LABELS[day]).join('')}</span>
                                             </div>

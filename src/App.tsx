@@ -3,7 +3,7 @@ import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, S
 import { HOLIDAY_PATTERNS, countsForStaffing, getStaffTimeRangeForWeekday, isCookingStaff, isProtectedShiftId, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId } from './types';
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
-import { countAllPatterns } from './lib/shiftCountUtils';
+import { countAllPatterns, isSaturdayWorkMarker } from './lib/shiftCountUtils';
 import { exportToExcel } from './lib/excelExport';
 import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, DatabaseBackup, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { StaffList } from './components/StaffList';
@@ -193,7 +193,7 @@ function App() {
           const manualDay = (manualShifts[dateStr] || {}) as Record<string | number, ShiftPatternId>;
           const manualShift = manualDay[s.id] || manualDay[String(s.id)];
           const isManualProtectedShift = currentShift === manualShift && isProtectedShiftId(currentShift);
-          if (isProtectedShiftId(currentShift) && (currentShift !== '振' || isManualProtectedShift)) {
+          if (isProtectedShiftId(currentShift) && (isManualProtectedShift || (currentShift !== '振' && currentShift !== '出'))) {
             return;
           }
           // Clear others
@@ -558,7 +558,7 @@ function App() {
       }
 
       const shift = schedule[dateStr]?.[s.id];
-      if (isWorkShiftId(shift)) {
+      if (isWorkShiftId(shift) || isSaturdayWorkMarker(dateStr, shift)) {
         count++;
       }
     });

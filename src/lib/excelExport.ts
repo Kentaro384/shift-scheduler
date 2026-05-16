@@ -1,7 +1,8 @@
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import type { Staff, ShiftSchedule, ShiftPatternDefinition, Holiday, TimeRangeSchedule, TimeRange, DailyNotes } from '../types';
-import { HOLIDAY_PATTERNS, isTimeRangeStaff, isWorkShiftId } from '../types';
+import { HOLIDAY_PATTERNS, getStaffAgeGroup, isCookingStaff, isTimeRangeStaff, isWorkShiftId } from '../types';
+import { isSaturdayWorkMarker } from './shiftCountUtils';
 import { getDaysInMonth, getFormattedDate } from './utils';
 
 interface ExportOptions {
@@ -85,6 +86,13 @@ function applyThinBorder(cell: ExcelJS.Cell): void {
     };
 }
 
+function applyMediumTopBorder(cell: ExcelJS.Cell): void {
+    cell.border = {
+        ...(cell.border || {}),
+        top: { style: 'medium', color: { argb: COLORS.border } },
+    };
+}
+
 function setSolidFill(cell: ExcelJS.Cell, color: string): void {
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
 }
@@ -113,6 +121,14 @@ function getColumnLetter(col: number): string {
         current = Math.floor((current - 1) / 26);
     }
     return letter;
+}
+
+function getStaffPrintGroup(staff: Staff): string {
+    const ageGroup = getStaffAgeGroup(staff);
+    if (ageGroup) return ageGroup;
+    if (isCookingStaff(staff)) return 'cooking';
+    if (staff.position === 'パート' || staff.position === '看護師' || isTimeRangeStaff(staff)) return 'part_time';
+    return staff.position;
 }
 
 export async function exportToExcel(options: ExportOptions): Promise<void> {
@@ -248,9 +264,10 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
     });
 
     let currentRow = 5;
-    staff.forEach(s => {
+    staff.forEach((s, index) => {
         const row = worksheet.getRow(currentRow);
         row.height = 30;
+        const hasGroupBoundary = index > 0 && getStaffPrintGroup(staff[index - 1]) !== getStaffPrintGroup(s);
 
         const staffCell = worksheet.getCell(currentRow, 1);
         staffCell.value = s.name;
@@ -295,7 +312,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
             const timeRange = getTimeRangeForStaff(timeRangeSchedule, dateStr, s.id);
             if (shift) {
                 if (counts[shift] !== undefined) counts[shift]++;
-                if (isWorkShiftId(shift)) totalWorkDays++;
+                if (isWorkShiftId(shift) || isSaturdayWorkMarker(dateStr, shift)) totalWorkDays++;
             } else if (timeRange) {
                 totalWorkDays++;
             }
@@ -313,6 +330,12 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         totalCell.font = font(9, true);
         totalCell.alignment = { horizontal: 'center', vertical: 'middle' };
         applyThinBorder(totalCell);
+
+        if (hasGroupBoundary) {
+            for (let col = 1; col <= printLastCol; col++) {
+                applyMediumTopBorder(worksheet.getCell(currentRow, col));
+            }
+        }
 
         currentRow++;
     });

@@ -1,6 +1,6 @@
-import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
+import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, TimeRangeSchedule, ShiftPatternDefinition, StaffAgeRole } from '../types';
 import { getDaysInMonth, getDayOfWeek, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
-import { SHIFT_PATTERNS, countsForStaffing, getShiftPatternKind, isCookingStaff, isProtectedShiftId, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns } from '../types';
+import { SHIFT_PATTERNS, countsForStaffing, getStaffAgeGroup, getShiftPatternKind, isCookingStaff, isProtectedShiftId, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns } from '../types';
 import { countEffectiveShift, countWorkingStaff as countWorkingStaffUtil } from './shiftCountUtils';
 import { canAssignShift, createConstraintContext, type ConstraintCode } from './constraintChecker';
 
@@ -60,7 +60,7 @@ export class ShiftGenerator {
                     const manualDay = (manualShifts[dateStr] || {}) as Record<string | number, ShiftPatternId>;
                     const manualShift = manualDay[s.id] || manualDay[String(s.id)];
                     const isManualProtectedShift = existingShift && existingShift === manualShift && isProtectedShiftId(existingShift);
-                    const shouldPreserveProtectedShift = isManualProtectedShift || (isProtectedShiftId(existingShift) && existingShift !== '振');
+                    const shouldPreserveProtectedShift = isManualProtectedShift || (isProtectedShiftId(existingShift) && existingShift !== '振' && existingShift !== '出');
 
                     // Regular/Chief/Director: preserve fixed plans, but auto-generated transfer offs are cleared.
                     if (shouldPreserveProtectedShift) {
@@ -85,6 +85,7 @@ export class ShiftGenerator {
         this.phase4_5_LateShiftCoverage();
         this.phase5_PartTime();
         this.phase6_MinCountAdjustment();
+        this.phase6_5_AgeGroupBalance();
         this.phase7_ChiefBackup();
         this.phase8_CompensatoryOff();
         this.phase9_FillEmpty();
@@ -95,6 +96,7 @@ export class ShiftGenerator {
         if (fixCount > 0) {
             this.phase4_5_LateShiftCoverage();
             this.phase6_MinCountAdjustment();
+            this.phase6_5_AgeGroupBalance();
             this.phase7_ChiefBackup();
         }
 
@@ -403,7 +405,7 @@ export class ShiftGenerator {
 
             // Assign selected shift pattern to selected Regulars
             selected.forEach(s => {
-                this.setShift(day, s.id, saturdayPattern);
+                this.setShift(day, s.id, '出');
                 satCounts[s.id]++;
 
                 // Assign Compensatory Off ('振') in the same week (Mon-Fri)
@@ -598,29 +600,30 @@ export class ShiftGenerator {
         for (let d = 1; d <= this.daysInMonth; d++) {
             if (this.isHoliday(d) || this.isSaturday(d)) continue;
 
-            // Check if we have at least one infant and one toddler role in late/closing shifts
+            // Check if we have at least one 1歳 and one 2歳 role in late/closing shifts.
             const lateShiftIds = this.getWorkPatterns()
                 .filter(p => this.isLateCoverageShift(p.id))
                 .map(p => p.id);
             const lateFallback = lateShiftIds[0];
             if (!lateFallback) continue;
-            let hasInfant = false;
-            let hasToddler = false;
+            let hasAge1 = false;
+            let hasAge2 = false;
 
             this.staff.forEach(s => {
                 const shift = this.getShift(d, s.id);
                 if (lateShiftIds.includes(shift)) {
-                    if (s.role === 'infant') hasInfant = true;
-                    if (s.role === 'toddler') hasToddler = true;
+                    const ageGroup = getStaffAgeGroup(s);
+                    if (ageGroup === 'age1') hasAge1 = true;
+                    if (ageGroup === 'age2') hasAge2 = true;
                 }
             });
 
-            if (!hasInfant) {
-                // Find an infant staff currently in B or C and swap to D
+            if (!hasAge1) {
+                // Find a 1歳 staff currently in a non-late work shift and move them to late coverage.
                 const candidate = this.staff.find(s =>
                     !isManualOnlyStaff(s) &&
                     !s.saturdayOnly &&
-                    s.role === 'infant' &&
+                    getStaffAgeGroup(s) === 'age1' &&
                     !this.isLateCoverageShift(this.getShift(d, s.id)) &&
                     this.isWorkShift(this.getShift(d, s.id)) &&
                     this.canAssignByConstraints(s, d, lateFallback)
@@ -628,12 +631,12 @@ export class ShiftGenerator {
                 if (candidate) this.setShift(d, candidate.id, lateFallback);
             }
 
-            if (!hasToddler) {
-                // Find a toddler staff currently in B or C and swap to D
+            if (!hasAge2) {
+                // Find a 2歳 staff currently in a non-late work shift and move them to late coverage.
                 const candidate = this.staff.find(s =>
                     !isManualOnlyStaff(s) &&
                     !s.saturdayOnly &&
-                    s.role === 'toddler' &&
+                    getStaffAgeGroup(s) === 'age2' &&
                     !this.isLateCoverageShift(this.getShift(d, s.id)) &&
                     this.isWorkShift(this.getShift(d, s.id)) &&
                     this.canAssignByConstraints(s, d, lateFallback)
@@ -681,7 +684,7 @@ export class ShiftGenerator {
             // 2. Check Total Count
             // Loop until we reach the configured weekday minimum or run out of candidates.
             while (true) {
-                let totalWorking = this.countWorkingStaff(d);
+                const totalWorking = this.countWorkingStaff(d);
                 if (totalWorking >= this.settings.weekdayStaffCount) break;
 
                 const availableStaff = this.staff.filter(s =>
@@ -710,6 +713,77 @@ export class ShiftGenerator {
                 this.setShift(d, candidate.id, shift);
             }
         }
+    }
+
+    // Phase 6.5: avoid stacking late/closing shifts within the same age group.
+    private phase6_5_AgeGroupBalance() {
+        const targetGroups: StaffAgeRole[] = ['age1', 'age2'];
+        for (let d = 1; d <= this.daysInMonth; d++) {
+            if (this.isHoliday(d) || this.isSaturday(d)) continue;
+            targetGroups.forEach(group => this.balanceAgeGroupLateShifts(d, group));
+        }
+    }
+
+    private balanceAgeGroupLateShifts(day: number, group: StaffAgeRole) {
+        const groupStaff = this.staff.filter(s =>
+            getStaffAgeGroup(s) === group &&
+            this.isWorkShift(this.getShift(day, s.id)) &&
+            !isManualOnlyStaff(s) &&
+            !s.saturdayOnly
+        );
+        const lateStaff = groupStaff.filter(s => this.isLateCoverageShift(this.getShift(day, s.id)));
+        if (lateStaff.length <= 1) return;
+
+        for (const target of lateStaff.slice(1)) {
+            const targetShift = this.getShift(day, target.id);
+            if (!this.isLateCoverageShift(targetShift)) continue;
+
+            if (this.trySwapLateShiftOutsideAgeGroup(day, group, target, targetShift)) continue;
+            this.tryBalanceWithChief(day, target, targetShift);
+        }
+    }
+
+    private trySwapLateShiftOutsideAgeGroup(day: number, group: StaffAgeRole, target: Staff, targetShift: ShiftPatternId): boolean {
+        const candidates = this.staff.filter(s => {
+            if (s.id === target.id) return false;
+            if (s.position === '主任' || s.position === '園長') return false;
+            if (getStaffAgeGroup(s) === group) return false;
+            if (!this.isWeekdayAutoAssignable(s)) return false;
+
+            const candidateShift = this.getShift(day, s.id);
+            if (!this.isWorkShift(candidateShift) || this.isLateCoverageShift(candidateShift)) return false;
+            return this.canAssignByConstraints(s, day, targetShift, true) &&
+                this.canAssignByConstraints(target, day, candidateShift, true);
+        });
+
+        candidates.sort((a, b) =>
+            this.countTotalShifts(a.id, targetShift) - this.countTotalShifts(b.id, targetShift)
+        );
+
+        const swapTarget = candidates[0];
+        if (!swapTarget) return false;
+
+        const candidateShift = this.getShift(day, swapTarget.id);
+        this.schedule[getFormattedDate(this.year, this.month, day)][target.id] = candidateShift;
+        this.schedule[getFormattedDate(this.year, this.month, day)][swapTarget.id] = targetShift;
+        return true;
+    }
+
+    private tryBalanceWithChief(day: number, target: Staff, targetShift: ShiftPatternId): boolean {
+        const chief = this.staff.find(s => s.position === '主任');
+        if (!chief) return false;
+
+        const chiefShift = this.getShift(day, chief.id);
+        if (this.isLateCoverageShift(chiefShift)) return false;
+
+        const fallbackShift = this.isWorkShift(chiefShift) ? chiefShift : this.getFallbackWorkShift();
+        if (!this.canAssignByConstraints(chief, day, targetShift, true)) return false;
+        if (!this.canAssignByConstraints(target, day, fallbackShift, true)) return false;
+
+        const dateStr = getFormattedDate(this.year, this.month, day);
+        this.schedule[dateStr][chief.id] = targetShift;
+        this.schedule[dateStr][target.id] = fallbackShift;
+        return true;
     }
 
     // Phase 7: Chief Backup

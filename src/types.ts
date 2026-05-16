@@ -22,7 +22,8 @@ export interface ShiftPatternDefinition {
 
 export type StaffPosition = '園長' | '主任' | '保育士' | 'パート' | '看護師' | '調理';
 export type StaffShiftType = 'no_shift' | 'backup' | 'regular' | 'part_time' | 'cooking';
-export type StaffRole = 'infant' | 'toddler' | 'free' | 'cooking' | null;
+export type StaffAgeRole = 'age1' | 'age2' | 'age3';
+export type StaffRole = StaffAgeRole | 'infant' | 'toddler' | 'free' | 'cooking' | null;
 export type FloorType = '1F' | '2F' | '3F' | 'free' | 'none';
 export type StaffWeekday = 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -36,6 +37,26 @@ export const STAFF_WEEKDAY_LABELS: Record<StaffWeekday, string> = {
 };
 
 export const STAFF_WEEKDAYS: StaffWeekday[] = [1, 2, 3, 4, 5, 6];
+
+export const STAFF_ROLE_LABELS: Record<Exclude<StaffRole, null>, string> = {
+    age1: '1歳',
+    age2: '2歳',
+    age3: '3歳',
+    infant: '1歳',
+    toddler: '2歳',
+    free: 'フリー',
+    cooking: '調理',
+};
+
+export function normalizeStaffRole(role: StaffRole): StaffRole {
+    if (role === 'infant') return 'age1';
+    if (role === 'toddler') return 'age2';
+    return role;
+}
+
+export function getStaffRoleLabel(role: StaffRole): string {
+    return role ? STAFF_ROLE_LABELS[role] : '指定なし';
+}
 
 export interface Staff {
     id: number;
@@ -61,6 +82,11 @@ export function isTimeRangeStaff(staff: Staff): boolean {
 
 export function isCookingStaff(staff: Staff): boolean {
     return staff.shiftType === 'cooking' || staff.position === '調理' || staff.role === 'cooking';
+}
+
+export function getStaffAgeGroup(staff: Staff): StaffAgeRole | null {
+    const role = normalizeStaffRole(staff.role);
+    return role === 'age1' || role === 'age2' || role === 'age3' ? role : null;
 }
 
 export function countsForStaffing(staff: Staff): boolean {
