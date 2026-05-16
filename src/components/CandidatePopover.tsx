@@ -3,6 +3,7 @@ import { CheckCircle, AlertTriangle, XCircle, User } from 'lucide-react';
 import type { CandidateEvaluation, ConstraintViolation } from '../lib/constraintChecker';
 import type { ShiftPatternId, ShiftPatternDefinition } from '../types';
 import { SHIFT_PATTERNS, HOLIDAY_PATTERNS } from '../types';
+import { getShiftChipClass } from '../lib/shiftPalette';
 
 interface CandidatePopoverProps {
     day: number;
@@ -19,12 +20,12 @@ interface CandidatePopoverProps {
 // Get shift display info
 function getShiftInfo(shiftId: ShiftPatternId, patterns: ShiftPatternDefinition[] = SHIFT_PATTERNS) {
     const pattern = patterns.find(p => p.id === shiftId);
-    if (pattern) return { name: pattern.name, color: pattern.color };
+    if (pattern) return { name: pattern.name, color: getShiftChipClass(pattern.id, patterns) };
 
     const holiday = HOLIDAY_PATTERNS.find(p => p.id === shiftId);
-    if (holiday) return { name: holiday.name, color: holiday.color };
+    if (holiday) return { name: holiday.name, color: getShiftChipClass(holiday.id, patterns) };
 
-    return { name: shiftId || '未設定', color: 'bg-gray-100' };
+    return { name: shiftId || '未設定', color: getShiftChipClass(shiftId || '休', patterns) };
 }
 
 // Get day of week name

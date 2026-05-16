@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { BarChart3, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, RefreshCcw, Heart } from 'lucide-react';
 import type { Staff, ShiftSchedule, ShiftPatternId, ShiftPatternDefinition } from '../types';
 import { countsForStaffing, getShiftPatternKind, isTimeRangeStaff, isWorkShiftId } from '../types';
+import { getShiftAccentColor, getShiftChipClass } from '../lib/shiftPalette';
 
 interface ShiftBalanceDashboardProps {
     staff: Staff[];
@@ -11,20 +12,6 @@ interface ShiftBalanceDashboardProps {
     month: number;
     patterns: ShiftPatternDefinition[];
 }
-
-// Rev.5 Time-flow Colors
-const SHIFT_COLORS: Record<string, string> = {
-    'A': '#F59E0B', // Sunrise Yellow
-    'B': '#38BDF8', // Morning Sky Blue
-    'C': '#3B82F6', // Midday Blue
-    'D': '#F97316', // Sunset Orange
-    'E': '#A855F7', // Twilight Purple
-    'F': '#14B8A6',
-    "C'": '#6366F1',
-    'J': '#DC2626', // Night Crimson
-};
-
-const FALLBACK_COLORS = ['#F59E0B', '#38BDF8', '#3B82F6', '#F97316', '#A855F7', '#DC2626', '#10B981', '#64748B'];
 
 export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
     staff,
@@ -36,8 +23,6 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
 }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     const shiftOrder = patterns.map(pattern => pattern.id).filter(isWorkShiftId);
-    const getShiftColor = (shift: ShiftPatternId, index = 0) =>
-        SHIFT_COLORS[shift] || FALLBACK_COLORS[index % FALLBACK_COLORS.length];
 
     // Filter to only regular/backup staff (not cooking, not no_shift)
     const targetStaff = staff.filter(s =>
@@ -198,7 +183,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                             {s.name}
                                         </div>
                                         <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden flex">
-                                            {shiftOrder.map((shift, shiftIndex) => {
+                                            {shiftOrder.map((shift) => {
                                                 const count = counts[shift] || 0;
                                                 if (count === 0) return null;
                                                 const width = (count / maxTotal) * 100;
@@ -208,7 +193,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                                         className="h-full flex items-center justify-center text-xs font-bold text-white"
                                                         style={{
                                                             width: `${width}%`,
-                                                            backgroundColor: getShiftColor(shift, shiftIndex),
+                                                            backgroundColor: getShiftAccentColor(shift, patterns),
                                                             minWidth: count > 0 ? '20px' : '0'
                                                         }}
                                                         title={`${shift}: ${count}回`}
@@ -224,13 +209,13 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                         {/* Leave Badges */}
                                         <div className="flex gap-1 w-16 justify-end">
                                             {furikyu > 0 && (
-                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300" title="振替休日">
+                                                <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold rounded-full ${getShiftChipClass('振', patterns)}`} title="振替休日">
                                                     <RefreshCcw size={10} />
                                                     {furikyu}
                                                 </span>
                                             )}
                                             {yukyu > 0 && (
-                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold rounded-full bg-pink-100 text-pink-700 border border-pink-300" title="有給休暇">
+                                                <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold rounded-full ${getShiftChipClass('有', patterns)}`} title="有給休暇">
                                                     <Heart size={10} />
                                             {yukyu}
                                         </span>
@@ -248,22 +233,22 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
 
                         {/* Legend */}
                         <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-gray-200">
-                            {shiftOrder.map((shift, shiftIndex) => (
+                            {shiftOrder.map((shift) => (
                                 <div key={shift} className="flex items-center gap-1">
                                     <div
                                         className="w-4 h-4 rounded"
-                                        style={{ backgroundColor: getShiftColor(shift, shiftIndex) }}
+                                        style={{ backgroundColor: getShiftAccentColor(shift, patterns) }}
                                     />
                                     <span className="text-xs text-gray-600">{shift}</span>
                                 </div>
                             ))}
                             <div className="flex items-center gap-1">
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300">
+                                <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded-full ${getShiftChipClass('振', patterns)}`}>
                                     <RefreshCcw size={10} />振
                                 </span>
                             </div>
                             <div className="flex items-center gap-1">
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded-full bg-pink-100 text-pink-700 border border-pink-300">
+                                <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs rounded-full ${getShiftChipClass('有', patterns)}`}>
                                     <Heart size={10} />有
                                 </span>
                             </div>

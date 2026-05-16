@@ -6,6 +6,7 @@ import {
     createConstraintContext,
     type ConstraintViolation
 } from '../lib/constraintChecker';
+import { getShiftChipClass } from '../lib/shiftPalette';
 
 interface CandidateSearchModalProps {
     day: number;
@@ -30,25 +31,6 @@ function ConstraintBadge({ violation }: { violation: ConstraintViolation }) {
             {isHard ? '✕' : '△'} {violation.message}
         </span>
     );
-}
-
-// Shift color function - consistent with App.tsx getShiftColor and Rev5 spec
-function getShiftColor(shiftId: ShiftPatternId): string {
-    const colors: Record<string, string> = {
-        // Rev5: 時間帯カラー（サンライズ → モーニング → ミッドデイ → サンセット → トワイライト → ナイト）
-        'A': 'bg-[rgba(245,158,11,0.20)] text-[#1F2937] border-l-4 border-l-[#F59E0B]',   // Sunrise Amber
-        'B': 'bg-[rgba(56,189,248,0.15)] text-[#1F2937] border-l-4 border-l-[#38BDF8]',   // Morning Sky Blue
-        'C': 'bg-[rgba(59,130,246,0.15)] text-[#1F2937] border-l-4 border-l-[#3B82F6]',   // Midday Blue
-        'D': 'bg-[rgba(249,115,22,0.20)] text-[#1F2937] border-l-4 border-l-[#F97316]',   // Sunset Orange ← Fixed!
-        'E': 'bg-[rgba(168,85,247,0.15)] text-[#1F2937] border-l-4 border-l-[#A855F7]',   // Twilight Purple
-        'F': 'bg-[rgba(20,184,166,0.15)] text-[#1F2937] border-l-4 border-l-[#14B8A6]',
-        "C'": 'bg-[rgba(99,102,241,0.15)] text-[#1F2937] border-l-4 border-l-[#6366F1]',
-        'J': 'bg-[rgba(220,38,38,0.15)] text-[#1F2937] border-l-4 border-l-[#DC2626]',    // Night Crimson
-        '振': 'bg-[#F3F4F6] text-[#10B981] border border-[#10B981]',
-        '有': 'bg-[#F3F4F6] text-[#F472B6] border border-[#F472B6]',
-        '休': 'bg-gray-100 text-gray-400',
-    };
-    return colors[shiftId] || 'bg-gray-100 text-gray-500';
 }
 
 // Get day of week name
@@ -106,7 +88,7 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
                 <div className="header-gradient p-4 flex justify-between items-center flex-shrink-0">
                     <h2 className="text-lg font-bold text-white drop-shadow-md flex items-center gap-2">
                         <Users size={20} />
-                        <span className={`px-2 py-0.5 rounded ${getShiftColor(shiftPattern)} text-sm font-bold`}>
+                        <span className={`px-2 py-0.5 rounded ${getShiftChipClass(shiftPattern, patterns)} text-sm font-bold`}>
                             {shiftPattern}
                         </span>
                         シフト候補者
@@ -124,7 +106,7 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
                 <div className="px-4 pt-3 pb-2 bg-gradient-to-r from-pink-50 to-amber-50 border-b border-gray-100">
                     <p className="text-sm text-gray-600">
                         <span className="font-medium">{dateStr}</span>に
-                        <span className={`mx-1 px-2 py-0.5 rounded ${getShiftColor(shiftPattern)} font-bold`}>
+                        <span className={`mx-1 px-2 py-0.5 rounded ${getShiftChipClass(shiftPattern, patterns)} font-bold`}>
                             {shiftPattern}
                         </span>
                         ({getShiftLabel(shiftPattern, patterns)})を配置できる職員:
@@ -178,7 +160,7 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
                                                 </span>
                                             </div>
                                             {/* Current shift with A~J notation and consistent colors */}
-                                            <span className={`text-xs px-2 py-0.5 rounded font-bold ${getShiftColor(candidate.currentShift)}`}>
+                                            <span className={`text-xs px-2 py-0.5 rounded font-bold ${getShiftChipClass(candidate.currentShift || '休', patterns)}`}>
                                                 現在: {candidate.currentShift || '休'}
                                             </span>
                                         </div>

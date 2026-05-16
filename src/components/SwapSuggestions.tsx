@@ -3,6 +3,7 @@ import { ArrowLeftRight, AlertTriangle, CheckCircle, XCircle, ArrowRightLeft } f
 import type { Holiday, Settings, ShiftPatternDefinition, ShiftPatternId, ShiftSchedule, Staff } from '../types';
 import { isWorkShiftId } from '../types';
 import { getSwapCandidates, type SwapViolation } from '../lib/swapConstraintChecker';
+import { getShiftChipClass } from '../lib/shiftPalette';
 
 interface SwapSuggestionsProps {
     day: number;
@@ -17,20 +18,6 @@ interface SwapSuggestionsProps {
     onApplySwap: (staffAId: number, staffBId: number) => void;
     onClose: () => void;
 }
-
-const getShiftColor = (shift: ShiftPatternId): string => {
-    const colors: Record<string, string> = {
-        'A': 'bg-blue-100 text-blue-700 border-blue-300',
-        'B': 'bg-green-100 text-green-700 border-green-300',
-        'C': 'bg-teal-100 text-teal-700 border-teal-300',
-        'D': 'bg-orange-100 text-orange-700 border-orange-300',
-        'E': 'bg-purple-100 text-purple-700 border-purple-300',
-        'F': 'bg-emerald-100 text-emerald-700 border-emerald-300',
-        "C'": 'bg-indigo-100 text-indigo-700 border-indigo-300',
-        'J': 'bg-pink-100 text-pink-700 border-pink-300',
-    };
-    return colors[shift] || 'bg-gray-100 text-gray-700 border-gray-300';
-};
 
 export const SwapSuggestions: React.FC<SwapSuggestionsProps> = ({
     day,
@@ -90,7 +77,7 @@ export const SwapSuggestions: React.FC<SwapSuggestionsProps> = ({
                 </div>
                 <p className="text-sm text-gray-600 mt-1">
                     <span className="font-medium">{currentStaff.name}</span>
-                    <span className={`mx-1 px-2 py-0.5 rounded text-xs font-bold ${getShiftColor(currentShift)}`}>
+                    <span className={`mx-1 px-2 py-0.5 rounded text-xs font-bold ${getShiftChipClass(currentShift, patterns)}`}>
                         {currentShift}
                     </span>
                     と入替えた場合の影響を確認できます
@@ -122,11 +109,11 @@ export const SwapSuggestions: React.FC<SwapSuggestionsProps> = ({
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <span className="font-medium text-gray-800">{targetStaff.name}</span>
-                                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${getShiftColor(targetShift)}`}>
+                                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${getShiftChipClass(targetShift, patterns)}`}>
                                                 {targetShift}
                                             </span>
                                             <ArrowLeftRight className="w-3 h-3 text-gray-400" />
-                                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${getShiftColor(currentShift)}`}>
+                                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${getShiftChipClass(currentShift, patterns)}`}>
                                                 {currentShift}
                                             </span>
                                         </div>

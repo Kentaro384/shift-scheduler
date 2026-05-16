@@ -11,6 +11,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { HolidayModal } from './components/HolidayModal';
 import { ShiftEditModal } from './components/ShiftEditModal';
 import { CandidateSearchModal } from './components/CandidateSearchModal';
+import { ShortageModal, type ShortageIssue } from './components/ShortageModal';
 import { TimeRangeModal } from './components/TimeRangeModal';
 import { HourlyStaffChart } from './components/HourlyStaffChart';
 import { ShiftPaletteIcon } from './components/ShiftPaletteIcon';
@@ -23,6 +24,7 @@ import type { OrganizationData } from './lib/firestoreStorage';
 import { storage } from './lib/storage';
 import { useToast } from './components/Toast';
 import { checkConstraints, createConstraintContext } from './lib/constraintChecker';
+import { getShiftCardClass, getShiftChipClass, getShiftMarker } from './lib/shiftPalette';
 
 function App() {
   // Auth state
@@ -50,6 +52,7 @@ function App() {
   const [editingPartTime, setEditingPartTime] = useState<{ staffId: number; day: number } | null>(null);
   // Candidate search from summary row - opens modal with pre-selected shift
   const [candidateSearch, setCandidateSearch] = useState<{ day: number; shiftPattern: ShiftPatternId } | null>(null);
+  const [showShortageModal, setShowShortageModal] = useState(false);
   // Hourly staff chart - shows time-based workload for selected day
   const [hourlyChartDay, setHourlyChartDay] = useState<number | null>(null);
 
@@ -476,71 +479,6 @@ function App() {
     return holidays.some(h => h.date === dateStr);
   };
 
-  const getShiftColor = (shiftId: string) => {
-    // Rev.4: New color palette with 30°+ hue separation for better differentiation
-    const baseStyle = 'border border-[#D1D5DB] text-[#1F2937] font-medium';
-
-    // 休暇系スタイル（出勤シフトより控えめに）
-    const restBaseStyle = 'border-dashed text-[#6B7280]';
-
-    // 振休 - グレー背景 + 緑のアクセント（休み感を強調）
-    if (shiftId === '振') return `${restBaseStyle} bg-[#F3F4F6] border border-[#10B981] border-l-[5px] border-l-[#10B981] opacity-75`;
-    // 有給 - グレー背景 + ピンクのアクセント（休み感を強調）
-    if (shiftId === '有') return `${restBaseStyle} bg-[#F3F4F6] border border-[#F472B6] border-l-[5px] border-l-[#F472B6] opacity-75`;
-    if (shiftId === '半有') return `${restBaseStyle} bg-[#FFF1F2] border border-[#FB7185] border-l-[5px] border-l-[#FB7185]`;
-    if (shiftId === '研') return `${restBaseStyle} bg-[#ECFDF5] border border-[#34D399] border-l-[5px] border-l-[#34D399]`;
-    if (shiftId === '出') return `${restBaseStyle} bg-[#EFF6FF] border border-[#60A5FA] border-l-[5px] border-l-[#60A5FA]`;
-    if (shiftId === '保') return `${restBaseStyle} bg-[#F1F5F9] border border-[#64748B] border-l-[5px] border-l-[#64748B]`;
-    // 休日 - Cool Gray (最も目立たせない)
-    if (shiftId === '休') return `${restBaseStyle} bg-[#F9FAFB] border border-[#D1D5DB] border-l-[5px] border-l-[#9CA3AF] text-[#9CA3AF] opacity-50`;
-
-    const pattern = patterns.find(p => p.id === shiftId);
-    if (pattern) {
-      // 時間帯カラー：サンライズ → モーニング → ミッドデイ → サンセット → トワイライト → ナイト
-      // A - 🌅 Sunrise Amber (早朝・暖色)
-      if (shiftId === 'A') return `${baseStyle} bg-[rgba(245,158,11,0.12)] border-l-[5px] border-l-[#F59E0B]`;
-      // B - ☀️ Morning Sky Blue (午前・明るい青)
-      if (shiftId === 'B') return `${baseStyle} bg-[rgba(56,189,248,0.10)] border-l-[5px] border-l-[#38BDF8]`;
-      // C - 🌤️ Midday Blue (日中・深い青)
-      if (shiftId === 'C') return `${baseStyle} bg-[rgba(59,130,246,0.10)] border-l-[5px] border-l-[#3B82F6]`;
-      // D - 🌇 Sunset Orange (午後・オレンジ)
-      if (shiftId === 'D') return `${baseStyle} bg-[rgba(249,115,22,0.12)] border-l-[5px] border-l-[#F97316]`;
-      // E - 🌆 Twilight Purple (夕方・紫)
-      if (shiftId === 'E') return `${baseStyle} bg-[rgba(168,85,247,0.10)] border-l-[5px] border-l-[#A855F7]`;
-      // F - Neutral White (追加標準枠)
-      if (shiftId === 'F') return `${baseStyle} bg-[rgba(20,184,166,0.10)] border-l-[5px] border-l-[#14B8A6]`;
-      // C' - Deep Blue Variant
-      if (shiftId === "C'") return `${baseStyle} bg-[rgba(99,102,241,0.10)] border-l-[5px] border-l-[#6366F1]`;
-      // J - 🌙 Night Crimson (夜・深い赤)
-      if (shiftId === 'J') return `${baseStyle} bg-[rgba(220,38,38,0.10)] border-l-[5px] border-l-[#DC2626]`;
-      return `${baseStyle} bg-[#FDFDFD]`;
-    }
-
-    return 'bg-[#FDFDFD] border border-[#E5E7EB] text-[#D1D5DB]'; // Empty/Unknown
-  };
-
-  // Rev.5: Shape markers for colorblind accessibility
-  const getShiftMarker = (shiftId: string): string => {
-    const markers: Record<string, string> = {
-      'A': '●', // 塘り丸
-      'B': '■', // 塘り四角
-      'C': '◆', // 塘り菱形
-      'D': '▲', // 三角上
-      'E': '▼', // 三角下
-      'F': '⬟', // 五角形
-      "C'": '⬢', // 六角形
-      'J': '★', // 星
-      '振': '○', // 白丸
-      '有': '◇', // 白菱形
-      '半有': '◐',
-      '研': '✎',
-      '出': '↗',
-      '保': '□',
-      '休': '－', // 横線
-    };
-    return markers[shiftId] || '';
-  };
-
   // Calculate daily staff counts (including part-timers with time ranges)
   const dailyCounts = days.map(day => {
     const dateStr = getFormattedDate(year, month, day);
@@ -615,7 +553,6 @@ function App() {
   const manualFixedCount = monthDateStrings.reduce((total, dateStr) =>
     total + Object.keys(manualShifts[dateStr] || {}).length
   , 0);
-  type ShortageIssue = { day: number; label: string; missingCount: number };
   const staffingShortages: ShortageIssue[] = dailyCounts.flatMap((count, index) => {
     const day = index + 1;
     const date = new Date(year, month - 1, day);
@@ -653,8 +590,7 @@ function App() {
       toast.success('不足はありません', '現在のシフトは必要人数を満たしています');
       return;
     }
-    const lines = shortageIssues.map(issue => `${month}月${issue.day}日 ${issue.label}:${issue.missingCount}名不足`);
-    window.alert(lines.join('\n'));
+    setShowShortageModal(true);
   };
   const setupSteps = [
     { label: '初期化', done: true, note: isMonthBlank ? '白紙' : '入力中', onClick: handleForceClearMonth, icon: Trash2, danger: true },
@@ -957,23 +893,23 @@ function App() {
                                   －
                                 </div>
                               ) : (
-                                <div className={`w-7 h-6 md:w-9 md:h-8 mx-auto flex items-center justify-center gap-0.5 rounded-md text-xs md:text-sm shadow-sm ${getShiftColor(shiftId)}`}>
+                                <div className={`w-7 h-6 md:w-9 md:h-8 mx-auto flex items-center justify-center gap-0.5 rounded-md text-xs md:text-sm shadow-sm ${getShiftCardClass(shiftId, patterns)}`}>
                                   <span className="font-medium">{shiftId}</span>
                                 </div>
                               )
                             ) : isPartTime && partTimeRange ? (
                               /* Time-range worker with time range - only if no holiday set */
                               <div
-                                className="w-9 md:w-12 min-h-10 mx-auto flex flex-col items-center justify-center rounded-md text-[7px] md:text-[8px] shadow-sm transition-all duration-150 hover:scale-105 hover:shadow-md bg-gray-100 border border-gray-300 text-gray-700 font-medium leading-tight px-0.5 py-1"
+                                className="w-9 md:w-12 min-h-10 mx-auto flex flex-col items-center justify-center rounded-md text-[7px] md:text-[8px] shadow-sm transition-all duration-150 hover:scale-105 hover:shadow-md bg-[#FFF8E7] border border-[#F4D58A] text-[#5A4632] font-medium leading-tight px-0.5 py-1"
                                 title={`${partTimeRange.start}-${partTimeRange.end}${partTimeRange.countAsShifts?.length ? ` / 集計: ${partTimeRange.countAsShifts.join(', ')}` : ' / 集計なし'}`}
                               >
                                 <span>{partTimeRange.start}</span>
-                                <span className="text-gray-400">↓</span>
+                                <span className="text-[#C58B1A]">↓</span>
                                 <span>{partTimeRange.end}</span>
                                 {partTimeRange.countAsShifts?.length ? (
                                   <span className="mt-0.5 flex flex-wrap justify-center gap-[1px] max-w-full">
                                     {partTimeRange.countAsShifts.map(shift => (
-                                      <span key={shift} className="px-0.5 rounded-sm bg-white border border-emerald-300 text-emerald-700 font-bold leading-none">
+                                      <span key={shift} className={`px-0.5 rounded-sm font-bold leading-none ${getShiftChipClass(shift, patterns)}`}>
                                         {shift}
                                       </span>
                                     ))}
@@ -985,7 +921,7 @@ function App() {
                             ) : shiftId ? (
                               <div className={`
                                   w-7 h-6 md:w-9 md:h-8 mx-auto flex items-center justify-center gap-0.5 rounded-md text-xs md:text-sm shadow-sm transition-all duration-150 hover:scale-110 hover:shadow-md active:scale-95
-                                  ${getShiftColor(shiftId)}
+                                  ${getShiftCardClass(shiftId, patterns)}
                                 `}>
                                 <span className="text-[8px] md:text-[10px] opacity-80">{getShiftMarker(shiftId)}</span>
                                 <span className="font-medium">{shiftId}</span>
@@ -1168,6 +1104,16 @@ function App() {
             );
           }}
           onClose={() => setCandidateSearch(null)}
+        />
+      )}
+
+      {showShortageModal && (
+        <ShortageModal
+          year={year}
+          month={month}
+          issues={shortageIssues}
+          patterns={patterns}
+          onClose={() => setShowShortageModal(false)}
         />
       )}
 

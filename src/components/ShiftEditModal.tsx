@@ -9,6 +9,7 @@ import {
     type ConstraintViolation
 } from '../lib/constraintChecker';
 import { SwapSuggestions } from './SwapSuggestions';
+import { getShiftChipClass, getShiftMarker, getShiftSolidClass } from '../lib/shiftPalette';
 
 interface ShiftEditModalProps {
     staffId: number;
@@ -39,33 +40,6 @@ function ConstraintBadge({ violation }: { violation: ConstraintViolation }) {
     );
 }
 
-function getPatternColor(id: ShiftPatternId, index: number): string {
-    const colors: Record<string, string> = {
-        A: 'bg-[#F59E0B] text-white',
-        B: 'bg-[#38BDF8] text-white',
-        C: 'bg-[#3B82F6] text-white',
-        D: 'bg-[#F97316] text-white',
-        E: 'bg-[#A855F7] text-white',
-        F: 'bg-[#14B8A6] text-white',
-        "C'": 'bg-[#6366F1] text-white',
-        J: 'bg-[#DC2626] text-white',
-    };
-    const fallback = [
-        'bg-[#14B8A6] text-white',
-        'bg-[#64748B] text-white',
-        'bg-[#84CC16] text-white',
-        'bg-[#EC4899] text-white',
-        'bg-[#6366F1] text-white',
-    ];
-    return colors[id] || fallback[index % fallback.length];
-}
-
-function getPatternMarker(id: ShiftPatternId, index: number): string {
-    const markers: Record<string, string> = { A: '●', B: '■', C: '◆', D: '▲', E: '▼', F: '⬟', "C'": '⬢', J: '★' };
-    const fallback = ['⬟', '⬢', '⬣', '◆', '■'];
-    return markers[id] || fallback[index % fallback.length];
-}
-
 export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
     staffId,
     staffName,
@@ -94,43 +68,37 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
 
     const dateStr = `${month}/${day}`;
 
-    const workShiftOptions: { id: ShiftPatternId; label: string; color: string; marker: string }[] = patterns.map((pattern, index) => ({
-        id: pattern.id,
-        label: pattern.name || pattern.id,
-        color: getPatternColor(pattern.id, index),
-        marker: getPatternMarker(pattern.id, index),
-    }));
-
-    const shiftOptions: { id: ShiftPatternId; label: string; color: string; marker: string }[] = [
-        ...workShiftOptions,
-        ...HOLIDAY_PATTERNS.map(pattern => ({
+    const workShiftOptions: { id: ShiftPatternId; label: string; color: string; marker: string }[] = useMemo(
+        () => patterns.map((pattern) => ({
             id: pattern.id,
-            label: pattern.name,
-            color: pattern.id === '振'
-                ? 'bg-[#F3F4F6] text-[#10B981] border-2 border-[#10B981]'
-                : pattern.id === '有'
-                    ? 'bg-[#F3F4F6] text-[#F472B6] border-2 border-[#F472B6]'
-                    : pattern.id === '半有'
-                        ? 'bg-[#FFF1F2] text-[#BE123C] border-2 border-[#FB7185]'
-                        : pattern.id === '研'
-                            ? 'bg-[#ECFDF5] text-[#047857] border-2 border-[#34D399]'
-                            : pattern.id === '出'
-                                ? 'bg-[#EFF6FF] text-[#1D4ED8] border-2 border-[#60A5FA]'
-                                : pattern.id === '保'
-                                    ? 'bg-[#F1F5F9] text-[#475569] border-2 border-[#64748B]'
-                                    : 'bg-gray-100 text-gray-400',
-            marker: pattern.id === '振' ? '○' : pattern.id === '有' ? '◇' : pattern.id === '半有' ? '◐' : pattern.id === '研' ? '✎' : pattern.id === '出' ? '↗' : pattern.id === '保' ? '□' : '－',
+            label: pattern.name || pattern.id,
+            color: getShiftSolidClass(pattern.id, patterns),
+            marker: getShiftMarker(pattern.id),
         })),
-    ];
+        [patterns]
+    );
+
+    const shiftOptions: { id: ShiftPatternId; label: string; color: string; marker: string }[] = useMemo(
+        () => [
+            ...workShiftOptions,
+            ...HOLIDAY_PATTERNS.map(pattern => ({
+                id: pattern.id,
+                label: pattern.name,
+                color: getShiftChipClass(pattern.id, patterns),
+                marker: getShiftMarker(pattern.id),
+            })),
+        ],
+        [patterns, workShiftOptions]
+    );
 
     // Check constraints for each shift option
     const shiftViolations = useMemo(() => {
-        const violations: Record<ShiftPatternId, ConstraintViolation[]> = {} as any;
+        const violations: Record<string, ConstraintViolation[]> = {};
         for (const opt of shiftOptions) {
             violations[opt.id] = checkConstraints(ctx, day, staffId, opt.id);
         }
         return violations;
-    }, [ctx, day, staffId]);
+    }, [ctx, day, staffId, shiftOptions]);
 
     // Get candidates for selected shift
     const candidates = useMemo(() =>
@@ -333,7 +301,7 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
                                                             {candidate.staffName}
                                                         </span>
                                                     </div>
-                                                    <span className="text-xs text-gray-500">
+                                                    <span className={`text-xs px-2 py-0.5 rounded font-bold ${getShiftChipClass(candidate.currentShift || '休', patterns)}`}>
                                                         現在: {candidate.currentShift || '休'}
                                                     </span>
                                                 </div>
