@@ -59,6 +59,7 @@ export interface ConstraintContext {
 export interface ConstraintCheckOptions {
     includeSoft?: boolean;
     ignoreCodes?: ConstraintCode[];
+    previousShift?: ShiftPatternId;
 }
 
 // ============================================
@@ -419,19 +420,30 @@ function checkWeeklyAJLimitViolation(ctx: ConstraintContext, day: number, staffI
 /**
  * Check if minimum count would be violated by removing from current shift
  */
-function checkMinCountViolation(ctx: ConstraintContext, day: number, staffId: number, _newShift: ShiftPatternId): ConstraintViolation | null {
-    const currentShift = getShift(ctx, day, staffId);
+function checkMinCountViolation(
+    ctx: ConstraintContext,
+    day: number,
+    staffId: number,
+    newShift: ShiftPatternId,
+    options: ConstraintCheckOptions = {}
+): ConstraintViolation | null {
+    const previousShift = options.previousShift ?? getShift(ctx, day, staffId);
+    if (!previousShift || previousShift === newShift || !isWorkShiftId(previousShift)) return null;
 
-    // If removing from opening or closing, check if it would cause shortage
-    if (isOpeningShift(ctx, currentShift) || isClosingShift(ctx, currentShift)) {
-        const currentCount = countDayPattern(ctx, day, currentShift);
-        if (currentCount <= 2) { // Min count is 2 for both A and J
-            return {
-                type: 'hard',
-                code: isOpeningShift(ctx, currentShift) ? 'MIN_COUNT_A' : 'MIN_COUNT_J',
-                message: `${currentShift}枠が${currentCount - 1}名に減少`
-            };
-        }
+    const pattern = ctx.patterns.find(p => p.id === previousShift);
+    const minCount = pattern?.minCount || 0;
+    if (minCount <= 0) return null;
+
+    const currentCellShift = getShift(ctx, day, staffId);
+    const alreadyChanged = currentCellShift === newShift;
+    const remainingCount = countDayPattern(ctx, day, previousShift) - (alreadyChanged ? 0 : 1);
+
+    if (remainingCount < minCount) {
+        return {
+            type: 'hard',
+            code: isOpeningShift(ctx, previousShift) ? 'MIN_COUNT_A' : 'MIN_COUNT_J',
+            message: `${previousShift}枠が${remainingCount}名に減少`
+        };
     }
 
     return null;
@@ -522,7 +534,7 @@ export function checkConstraints(
     const weeklyLimit = checkWeeklyAJLimitViolation(ctx, day, staffId, newShift);
     if (weeklyLimit) violations.push(weeklyLimit);
 
-    const minCount = checkMinCountViolation(ctx, day, staffId, newShift);
+    const minCount = checkMinCountViolation(ctx, day, staffId, newShift, options);
     if (minCount) violations.push(minCount);
 
     // Soft constraints

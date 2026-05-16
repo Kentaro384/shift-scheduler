@@ -351,7 +351,7 @@ function App() {
 
     // Check for constraint violations
     const ctx = createConstraintContext(newSchedule, staff, holidays, settings, year, month, patterns);
-    const violations = checkConstraints(ctx, day, staffId, shiftId);
+    const violations = checkConstraints(ctx, day, staffId, shiftId, { previousShift: prevShift });
     const hardViolations = violations.filter(v => v.type === 'hard');
 
     // Apply changes
@@ -390,6 +390,7 @@ function App() {
     // Save previous state for undo
     const prevSchedule = JSON.parse(JSON.stringify(schedule));
     const prevManualShifts = JSON.parse(JSON.stringify(manualShifts));
+    const prevShift = schedule[dateStr]?.[targetStaffId] || '';
 
     // Create new schedule
     const newSchedule = { ...schedule };
@@ -398,7 +399,7 @@ function App() {
 
     // Check for constraint violations
     const ctx = createConstraintContext(newSchedule, staff, holidays, settings, year, month, patterns);
-    const violations = checkConstraints(ctx, day, targetStaffId, shiftId);
+    const violations = checkConstraints(ctx, day, targetStaffId, shiftId, { previousShift: prevShift });
     const hardViolations = violations.filter(v => v.type === 'hard');
 
     // Apply changes
