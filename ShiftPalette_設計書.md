@@ -115,6 +115,7 @@ interface Staff {
   hasQualification: boolean;
   availableWeekdays?: StaffWeekday[];
   defaultTimeRange?: TimeRange;
+  weeklyTimeRanges?: Partial<Record<StaffWeekday, TimeRange>>;
   floor?: '1F' | '2F' | '3F' | 'free' | 'none';
 }
 ```
@@ -132,6 +133,7 @@ interface Staff {
 | `hasQualification` | 資格者集計、資格あり時間指定職員のカウントに利用 |
 | `availableWeekdays` | 勤務可能曜日。未設定なら月〜土すべて可 |
 | `defaultTimeRange` | 時間指定勤務のデフォルト |
+| `weeklyTimeRanges` | 曜日別の固定勤務時間と集計対象シフト。設定がある曜日は `defaultTimeRange` より優先 |
 | `floor` | 同一フロア同一シフトを避ける制約に利用 |
 
 ### 4.3 職員種別の扱い
@@ -237,7 +239,7 @@ type TimeRangeSchedule = Record<string, Record<number, TimeRange>>;
 - 資格有無
 - デフォルト勤務時間
 
-時間指定職員は、勤務可能曜日とデフォルト勤務時間を組み合わせて、月次表へ固定勤務を一括反映できる。
+時間指定職員は、勤務可能曜日、デフォルト勤務時間、曜日別固定勤務を組み合わせて、月次表へ固定勤務を一括反映できる。曜日別固定勤務では、曜日ごとに開始・終了時刻と `A`〜`F` などの集計対象シフトを設定できる。集計対象を空にすると「割当なし」となり、勤務時間は反映するがシフト別資格者数にはカウントしない。
 
 ### 5.3 自動生成
 
@@ -249,7 +251,7 @@ type TimeRangeSchedule = Record<string, Record<number, TimeRange>>;
 
 ### 5.4 固定勤務の一括反映
 
-「固定勤務」ボタンは、園長・パート・看護師・時間指定保育士など、時間指定入力対象の職員に設定された `availableWeekdays` と `defaultTimeRange` をもとに、その月の `timeRangeSchedule` へ勤務時間を一括入力する。
+「固定勤務」ボタンは、園長・パート・看護師・時間指定保育士など、時間指定入力対象の職員に設定された `availableWeekdays`、`weeklyTimeRanges`、`defaultTimeRange` をもとに、その月の `timeRangeSchedule` へ勤務時間を一括入力する。曜日別設定がある日は `weeklyTimeRanges` を優先し、ない日は `defaultTimeRange` を使う。
 
 | 条件 | 扱い |
 |---|---|
@@ -259,6 +261,8 @@ type TimeRangeSchedule = Record<string, Record<number, TimeRange>>;
 | 既に時間入力がある日 | 上書きせず保持 |
 | `休`, `有`, `振`, `半有`, `研`, `出`, `保` などがある日 | 上書きせず保持 |
 | 空欄の該当曜日 | デフォルト勤務時間と集計対象シフトを反映 |
+| 曜日別固定勤務がある日 | 曜日別の時間帯・集計対象シフトを優先して反映 |
+| 集計対象が「割当なし」の日 | 勤務時間だけ反映し、A〜Fなどのシフト別資格者数にはカウントしない |
 
 この機能により、曜日・時間帯がほぼ固定のパート職員について、月初にまとめて勤務時間を敷き、休みや研修などの例外だけ個別修正する運用ができる。
 

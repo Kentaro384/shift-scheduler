@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { Staff, StaffPosition, StaffShiftType, StaffRole, ShiftPatternDefinition, ShiftPatternId, FloorType, StaffWeekday } from '../types';
+import type { Staff, StaffPosition, StaffShiftType, StaffRole, ShiftPatternDefinition, ShiftPatternId, FloorType, StaffWeekday, TimeRange } from '../types';
 import { getStaffAvailableWeekdays, STAFF_WEEKDAY_LABELS, STAFF_WEEKDAYS } from '../types';
 import { X, Plus, Edit2, Trash2, Save, Users, ArrowUp, ArrowDown } from 'lucide-react';
 
@@ -14,6 +14,18 @@ const POSITIONS: StaffPosition[] = ['園長', '主任', '保育士', 'パート'
 const SHIFT_TYPES: StaffShiftType[] = ['no_shift', 'backup', 'regular', 'part_time', 'cooking'];
 const ROLES: (Exclude<StaffRole, null> | 'null')[] = ['infant', 'toddler', 'free', 'cooking', 'null'];
 const FLOORS: FloorType[] = ['1F', '2F', '3F', 'free', 'none'];
+
+function generateTimeOptions(): string[] {
+    const options: string[] = [];
+    for (let hour = 7; hour <= 19; hour++) {
+        for (let minute = 0; minute < 60; minute += 15) {
+            options.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+        }
+    }
+    return options;
+}
+
+const TIME_OPTIONS = generateTimeOptions();
 
 const SHIFT_TYPE_LABELS: Record<StaffShiftType, string> = {
     no_shift: 'シフトなし',
@@ -34,6 +46,7 @@ const ROLE_LABELS: Record<Exclude<StaffRole, null> | 'null', string> = {
 export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate, onClose }) => {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editForm, setEditForm] = useState<Partial<Staff>>({});
+    const isTimeRangeEditable = editForm.shiftType === 'part_time' || editForm.position === '看護師' || editForm.position === '園長';
 
     const handleEdit = (s: Staff) => {
         setEditingId(s.id);
@@ -131,6 +144,36 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
             ? current.filter(id => id !== staffId)
             : [...current, staffId];
         handleChange('incompatibleWith', updated);
+    };
+
+    const getEditTimeRangeForWeekday = (weekday: StaffWeekday): TimeRange | undefined => {
+        const weeklyRanges = editForm.weeklyTimeRanges as Record<string | number, TimeRange | undefined> | undefined;
+        return weeklyRanges?.[weekday] || weeklyRanges?.[String(weekday)];
+    };
+
+    const setEditTimeRangeForWeekday = (weekday: StaffWeekday, timeRange?: TimeRange) => {
+        const current = (editForm.weeklyTimeRanges || {}) as Partial<Record<StaffWeekday, TimeRange>>;
+        const updated = { ...current };
+        if (timeRange) {
+            updated[weekday] = timeRange;
+        } else {
+            delete updated[weekday];
+        }
+        handleChange('weeklyTimeRanges', updated);
+    };
+
+    const updateWeekdayTimeRange = (weekday: StaffWeekday, patch: Partial<TimeRange>) => {
+        const current = getEditTimeRangeForWeekday(weekday) || editForm.defaultTimeRange || { start: '09:00', end: '17:00', countAsShifts: [] };
+        setEditTimeRangeForWeekday(weekday, { ...current, ...patch });
+    };
+
+    const toggleWeekdayShift = (weekday: StaffWeekday, shiftId: ShiftPatternId) => {
+        const current = getEditTimeRangeForWeekday(weekday) || editForm.defaultTimeRange || { start: '09:00', end: '17:00', countAsShifts: [] };
+        const currentShifts = current.countAsShifts || [];
+        const nextShifts = currentShifts.includes(shiftId)
+            ? currentShifts.filter(id => id !== shiftId)
+            : [...currentShifts, shiftId];
+        setEditTimeRangeForWeekday(weekday, { ...current, countAsShifts: nextShifts.length > 0 ? nextShifts : undefined });
     };
 
     return (
@@ -231,6 +274,82 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                             </div>
                                             <p className="mt-1 text-[11px] text-gray-500">未選択に戻したい場合は全曜日を選んでください。土曜専門の場合は土曜のみになります。</p>
                                         </div>
+
+                                        {isTimeRangeEditable && (
+                                            <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-3">
+                                                <div className="flex items-center justify-between gap-3 mb-3">
+                                                    <div>
+                                                        <label className="block text-xs text-gray-600 font-semibold">固定勤務パターン</label>
+                                                        <p className="text-[11px] text-gray-500">曜日ごとの時間帯と、集計にカウントするシフトを設定します。固定勤務ボタンで月次表へ反映されます。</p>
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {STAFF_WEEKDAYS.map(day => {
+                                                        const isEnabled = getStaffAvailableWeekdays(editForm as Staff).includes(day);
+                                                        const range = getEditTimeRangeForWeekday(day) || editForm.defaultTimeRange;
+                                                        const weekdayRange = getEditTimeRangeForWeekday(day);
+                                                        return (
+                                                            <div key={day} className={`rounded-lg border bg-white p-2 ${isEnabled ? 'border-emerald-100' : 'border-gray-100 opacity-50'}`}>
+                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                    <div className="w-8 text-sm font-bold text-gray-700">{STAFF_WEEKDAY_LABELS[day]}</div>
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={!isEnabled}
+                                                                        onClick={() => weekdayRange ? setEditTimeRangeForWeekday(day, undefined) : setEditTimeRangeForWeekday(day, range || { start: '09:00', end: '17:00', countAsShifts: [] })}
+                                                                        className={`px-2 py-1 rounded border text-xs font-semibold ${weekdayRange ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-500 border-gray-200 hover:border-emerald-400'} disabled:cursor-not-allowed`}
+                                                                    >
+                                                                        {weekdayRange ? '個別' : '共通'}
+                                                                    </button>
+                                                                    <select
+                                                                        disabled={!isEnabled}
+                                                                        value={range?.start || '09:00'}
+                                                                        onChange={e => updateWeekdayTimeRange(day, { start: e.target.value })}
+                                                                        className="border rounded px-2 py-1 text-xs disabled:bg-gray-100"
+                                                                    >
+                                                                        {TIME_OPTIONS.map(time => <option key={time} value={time}>{time}</option>)}
+                                                                    </select>
+                                                                    <span className="text-gray-400">-</span>
+                                                                    <select
+                                                                        disabled={!isEnabled}
+                                                                        value={range?.end || '17:00'}
+                                                                        onChange={e => updateWeekdayTimeRange(day, { end: e.target.value })}
+                                                                        className="border rounded px-2 py-1 text-xs disabled:bg-gray-100"
+                                                                    >
+                                                                        {TIME_OPTIONS.filter(time => time > (range?.start || '09:00')).map(time => <option key={time} value={time}>{time}</option>)}
+                                                                    </select>
+                                                                    <div className="flex flex-wrap gap-1">
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled={!isEnabled}
+                                                                            onClick={() => updateWeekdayTimeRange(day, { countAsShifts: undefined })}
+                                                                            title="勤務時間だけ反映し、A〜Fなどのシフト枠にはカウントしません"
+                                                                            className={`px-1.5 py-1 rounded border text-[11px] font-bold ${!range?.countAsShifts?.length ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-500'} disabled:cursor-not-allowed`}
+                                                                        >
+                                                                            割当なし
+                                                                        </button>
+                                                                        {patterns.map(pattern => {
+                                                                            const selected = !!range?.countAsShifts?.includes(pattern.id);
+                                                                            return (
+                                                                                <button
+                                                                                    key={pattern.id}
+                                                                                    type="button"
+                                                                                    disabled={!isEnabled}
+                                                                                    onClick={() => toggleWeekdayShift(day, pattern.id)}
+                                                                                    title={pattern.name}
+                                                                                    className={`min-w-7 px-1.5 py-1 rounded border text-[11px] font-bold ${selected ? 'bg-[#FF6B6B] text-white border-[#FF6B6B]' : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-[#FF6B6B]'} disabled:cursor-not-allowed`}
+                                                                                >
+                                                                                    {pattern.id}
+                                                                                </button>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
 
                                         <div>
                                             <label className="block text-xs text-gray-500 mb-2">勤務可能シフト</label>

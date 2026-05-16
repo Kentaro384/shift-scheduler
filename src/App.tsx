@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId, TimeRangeSchedule, TimeRange } from './types';
-import { HOLIDAY_PATTERNS, countsForStaffing, isCookingStaff, isProtectedShiftId, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId } from './types';
+import { HOLIDAY_PATTERNS, countsForStaffing, getStaffTimeRangeForWeekday, isCookingStaff, isProtectedShiftId, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId } from './types';
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { countAllPatterns } from './lib/shiftCountUtils';
@@ -173,7 +173,7 @@ function App() {
   };
 
   const handleApplyDefaultTimeRanges = () => {
-    const targetStaff = staff.filter(s => isTimeRangeStaff(s) && s.defaultTimeRange);
+    const targetStaff = staff.filter(s => isTimeRangeStaff(s) && (s.defaultTimeRange || Object.keys(s.weeklyTimeRanges || {}).length > 0));
     if (targetStaff.length === 0) {
       toast.info('固定勤務を反映できません', 'デフォルト勤務時間が設定された時間指定職員がいません');
       return;
@@ -197,6 +197,8 @@ function App() {
 
       targetStaff.forEach(s => {
         if (!isStaffAvailableOnWeekday(s, weekday)) return;
+        const defaultTimeRange = getStaffTimeRangeForWeekday(s, weekday);
+        if (!defaultTimeRange) return;
 
         const existingShift = schedule[dateStr]?.[s.id];
         if (existingShift) {
@@ -217,9 +219,9 @@ function App() {
         }
 
         newTimeRangeSchedule[dateStr][s.id] = {
-          start: s.defaultTimeRange!.start,
-          end: s.defaultTimeRange!.end,
-          countAsShifts: [...(s.defaultTimeRange!.countAsShifts || [])],
+          start: defaultTimeRange.start,
+          end: defaultTimeRange.end,
+          countAsShifts: [...(defaultTimeRange.countAsShifts || [])],
         };
         appliedCount++;
       });

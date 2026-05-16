@@ -51,6 +51,7 @@ export interface Staff {
     hasQualification: boolean;
     availableWeekdays?: StaffWeekday[]; // 勤務可能曜日。未設定なら月〜土すべて可
     defaultTimeRange?: TimeRange; // Default work hours for part-time workers
+    weeklyTimeRanges?: Partial<Record<StaffWeekday, TimeRange>>; // Optional per-weekday default work hours
     floor?: FloorType; // フロア担当（同一フロアのスタッフはシフトを分ける）
 }
 
@@ -73,6 +74,11 @@ export function getStaffAvailableWeekdays(staff: Staff): StaffWeekday[] {
 
 export function isStaffAvailableOnWeekday(staff: Staff, weekday: number): boolean {
     return getStaffAvailableWeekdays(staff).includes(weekday as StaffWeekday);
+}
+
+export function getStaffTimeRangeForWeekday(staff: Staff, weekday: number): TimeRange | undefined {
+    const weeklyRanges = staff.weeklyTimeRanges as Record<string | number, TimeRange | undefined> | undefined;
+    return weeklyRanges?.[weekday] || weeklyRanges?.[String(weekday)] || staff.defaultTimeRange;
 }
 
 export function staffAllowsShift(staff: Staff, shift: ShiftPatternId): boolean {

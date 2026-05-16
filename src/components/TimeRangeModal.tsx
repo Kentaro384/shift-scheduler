@@ -268,6 +268,16 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
                                         シフト割当（集計にカウント）
                                     </p>
                                     <div className="flex flex-wrap justify-center gap-2">
+                                        <button
+                                            onClick={() => setSelectedShifts([])}
+                                            title="勤務時間だけ登録し、A〜Fなどのシフト枠にはカウントしません"
+                                            className={`px-2 h-9 rounded-lg border-2 font-bold text-xs transition-all ${selectedShifts.length === 0
+                                                ? 'bg-gray-700 text-white border-gray-700 ring-2 ring-gray-700 ring-offset-1'
+                                                : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
+                                                }`}
+                                        >
+                                            割当なし
+                                        </button>
                                         {patterns.map(pattern => {
                                             const shiftId = pattern.id;
                                             return (
