@@ -278,26 +278,24 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
                                         return (
                                             <button
                                                 key={candidate.staffId}
-                                                onClick={() => candidate.isAssignable && handleCandidateSelect(candidate.staffId)}
-                                                disabled={!candidate.isAssignable}
-                                                className={`w-full p-3 rounded-xl text-left transition-all ${candidate.isAssignable
-                                                    ? 'bg-white border border-gray-200 hover:border-green-400 hover:shadow-md'
-                                                    : 'bg-gray-50 border border-gray-100 cursor-not-allowed opacity-60'
+                                                onClick={() => handleCandidateSelect(candidate.staffId)}
+                                                className={`w-full p-3 rounded-xl text-left transition-all bg-white border hover:shadow-md active:scale-[0.99] ${hardViolations.length > 0
+                                                    ? 'border-red-100 hover:border-red-300'
+                                                    : softViolations.length > 0
+                                                        ? 'border-amber-100 hover:border-amber-300'
+                                                        : 'border-gray-200 hover:border-green-400'
                                                     }`}
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
-                                                        {candidate.isAssignable ? (
-                                                            candidate.violations.length === 0 ? (
-                                                                <CheckCircle className="w-5 h-5 text-green-500" />
-                                                            ) : (
-                                                                <AlertTriangle className="w-5 h-5 text-amber-500" />
-                                                            )
+                                                        {hardViolations.length > 0 ? (
+                                                            <AlertTriangle className="w-5 h-5 text-red-500" />
+                                                        ) : softViolations.length > 0 ? (
+                                                            <AlertTriangle className="w-5 h-5 text-amber-500" />
                                                         ) : (
-                                                            <X className="w-5 h-5 text-gray-400" />
+                                                            <CheckCircle className="w-5 h-5 text-green-500" />
                                                         )}
-                                                        <span className={`font-medium ${candidate.isAssignable ? 'text-gray-800' : 'text-gray-400'
-                                                            }`}>
+                                                        <span className="font-medium text-gray-800">
                                                             {candidate.staffName}
                                                         </span>
                                                     </div>
@@ -324,8 +322,8 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
 
                             {/* Summary */}
                             <div className="mt-4 pt-3 border-t border-gray-100 text-xs text-gray-500 flex justify-between">
-                                <span>✅ 配置可能: {candidates.filter(c => c.isAssignable).length}名</span>
-                                <span>❌ 制約違反: {candidates.filter(c => !c.isAssignable).length}名</span>
+                                <span>✅ 制約なし: {candidates.filter(c => c.isAssignable).length}名</span>
+                                <span>⚠️ 制約あり: {candidates.filter(c => !c.isAssignable).length}名</span>
                             </div>
                         </div>
                     ) : (

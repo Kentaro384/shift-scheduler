@@ -37,10 +37,23 @@ interface StaffWorkTime {
     staffId: number;
     name: string;
     isQualified: boolean;
+    isPartTime: boolean;
     startMinutes: number;
     endMinutes: number;
     label: string; // e.g., "A" or "9:00-14:00"
     originalIndex: number; // Keep original order from staff array
+}
+
+function getWorkBarClass(sw: StaffWorkTime): string {
+    if (sw.isQualified) {
+        return sw.isPartTime
+            ? 'bg-gradient-to-r from-[#D9A46F] to-[#C98B5D]'
+            : 'bg-gradient-to-r from-[#FFBE6B] to-[#FF8A3D]';
+    }
+
+    return sw.isPartTime
+        ? 'bg-gradient-to-r from-[#B0A092] to-[#958779]'
+        : 'bg-gradient-to-r from-[#C8A27A] to-[#9E7958]';
 }
 
 export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
@@ -72,6 +85,7 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                         staffId: s.id,
                         name: s.name,
                         isQualified: countsForStaffing(s) && s.hasQualification,
+                        isPartTime: true,
                         startMinutes: parseTimeToMinutes(timeRange.start),
                         endMinutes: parseTimeToMinutes(timeRange.end),
                         label: `${timeRange.start}-${timeRange.end}${assignedShifts}`,
@@ -93,6 +107,7 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                 staffId: s.id,
                 name: s.name,
                 isQualified: countsForStaffing(s) && s.hasQualification,
+                isPartTime: false,
                 startMinutes: parseTimeToMinutes(startStr),
                 endMinutes: parseTimeToMinutes(endStr),
                 label: shiftId,
@@ -209,12 +224,9 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                                         />
                                     ))}
 
-                                    {/* Work time bar - coral pink for qualified, gray for unqualified */}
+                                    {/* Work time bar */}
                                     <div
-                                        className={`absolute top-1 bottom-1 rounded-md flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${sw.isQualified
-                                                ? 'bg-gradient-to-r from-[#FFA8A8] to-[#FF8A8A]' // Light coral pink
-                                                : 'bg-gradient-to-r from-gray-400 to-gray-500'
-                                            }`}
+                                        className={`absolute top-1 bottom-1 rounded-md flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${getWorkBarClass(sw)}`}
                                         style={{
                                             left: `${getPosition(sw.startMinutes)}%`,
                                             width: `${getWidth(sw.startMinutes, sw.endMinutes)}%`

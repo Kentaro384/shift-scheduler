@@ -109,7 +109,7 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
                         <span className={`mx-1 px-2 py-0.5 rounded ${getShiftChipClass(shiftPattern, patterns)} font-bold`}>
                             {shiftPattern}
                         </span>
-                        ({getShiftLabel(shiftPattern, patterns)})を配置できる職員:
+                        ({getShiftLabel(shiftPattern, patterns)})の候補職員:
                     </p>
                 </div>
 
@@ -128,34 +128,29 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
 
                                 // Flat design status indicator
                                 let statusIcon: React.ReactNode;
-                                if (candidate.isAssignable) {
-                                    if (candidate.violations.length === 0) {
-                                        // Green circle - OK
-                                        statusIcon = <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold">○</div>;
-                                    } else {
-                                        // Amber circle - Warning
-                                        statusIcon = <div className="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center text-white text-xs font-bold">△</div>;
-                                    }
+                                if (hardViolations.length > 0) {
+                                    statusIcon = <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-white text-xs font-bold">!</div>;
+                                } else if (softViolations.length > 0) {
+                                    statusIcon = <div className="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center text-white text-xs font-bold">△</div>;
                                 } else {
-                                    // Gray circle - Disabled
-                                    statusIcon = <div className="w-5 h-5 rounded-full bg-gray-300 flex items-center justify-center text-white text-xs font-bold">✕</div>;
+                                    statusIcon = <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold">○</div>;
                                 }
 
                                 return (
                                     <button
                                         key={candidate.staffId}
-                                        onClick={() => candidate.isAssignable && handleSelect(candidate.staffId)}
-                                        disabled={!candidate.isAssignable}
-                                        className={`w-full p-3 rounded-xl text-left transition-all ${candidate.isAssignable
-                                            ? 'bg-white border border-gray-200 hover:border-green-400 hover:shadow-md'
-                                            : 'bg-gray-50 border border-gray-100 cursor-not-allowed opacity-60'
+                                        onClick={() => handleSelect(candidate.staffId)}
+                                        className={`w-full p-3 rounded-xl text-left transition-all bg-white border hover:shadow-md active:scale-[0.99] ${hardViolations.length > 0
+                                            ? 'border-red-100 hover:border-red-300'
+                                            : softViolations.length > 0
+                                                ? 'border-amber-100 hover:border-amber-300'
+                                                : 'border-gray-200 hover:border-green-400'
                                             }`}
                                     >
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
                                                 {statusIcon}
-                                                <span className={`font-medium ${candidate.isAssignable ? 'text-gray-800' : 'text-gray-400'
-                                                    }`}>
+                                                <span className="font-medium text-gray-800">
                                                     {candidate.staffName}
                                                 </span>
                                             </div>
@@ -186,11 +181,11 @@ export const CandidateSearchModal: React.FC<CandidateSearchModalProps> = ({
                 <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 text-xs text-gray-500 flex justify-between">
                     <span className="flex items-center gap-1">
                         <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                        配置可能: {candidates.filter(c => c.isAssignable).length}名
+                        制約なし: {candidates.filter(c => c.isAssignable).length}名
                     </span>
                     <span className="flex items-center gap-1">
-                        <div className="w-3 h-3 rounded-full bg-gray-300"></div>
-                        制約違反: {candidates.filter(c => !c.isAssignable).length}名
+                        <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                        制約あり: {candidates.filter(c => !c.isAssignable).length}名
                     </span>
                 </div>
             </div>

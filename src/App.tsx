@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId, TimeRangeSchedule, TimeRange, DailyNotes } from './types';
-import { HOLIDAY_PATTERNS, countsForStaffing, getStaffTimeRangeForWeekday, isCookingStaff, isProtectedShiftId, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId } from './types';
+import { HOLIDAY_PATTERNS, countsForStaffing, getStaffAgeGroup, getStaffTimeRangeForWeekday, isCookingStaff, isProtectedShiftId, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId } from './types';
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { countAllPatterns, isSaturdayWorkMarker } from './lib/shiftCountUtils';
@@ -35,6 +35,21 @@ const formatExportedAt = (date: Date) => {
   const hh = String(date.getHours()).padStart(2, '0');
   const min = String(date.getMinutes()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+};
+
+const getStaffBadge = (staffMember: Staff) => {
+  if (staffMember.position === '園長') return { label: '園', className: 'bg-[#FFE8A3] text-[#7A5600]' };
+  if (staffMember.position === '主任') return { label: '主', className: 'bg-[#FFD7CF] text-[#9F2B2B]' };
+  if (staffMember.position === '看護師') return { label: '看', className: 'bg-[#D7F0FF] text-[#0F6678]' };
+  if (staffMember.position === 'パート') return { label: 'パ', className: 'bg-[#E8E1FF] text-[#5B3EA8]' };
+  if (staffMember.position === '調理') return { label: '調', className: 'bg-[#FFE66D] text-[#7C5800]' };
+
+  const ageGroup = getStaffAgeGroup(staffMember);
+  if (ageGroup === 'age1') return { label: '1', className: 'bg-[#FFE0E8] text-[#9D174D]' };
+  if (ageGroup === 'age2') return { label: '2', className: 'bg-[#DFF7EE] text-[#0F766E]' };
+  if (ageGroup === 'age3') return { label: '3', className: 'bg-[#E0F2FE] text-[#075985]' };
+
+  return null;
 };
 
 function App() {
@@ -864,8 +879,8 @@ function App() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                <tr className="bg-amber-50/70 border-b border-amber-100">
-                  <td className="border-r border-amber-100 p-1.5 md:p-2 sticky left-0 z-10 bg-amber-50 font-bold text-amber-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
+                <tr className="bg-[#FCFBF7] border-b border-[#E4DBCA]">
+                  <td className="border-r border-[#E4DBCA] p-1.5 md:p-2 sticky left-0 z-10 bg-[#FCFBF7] font-bold text-[#5F5A50] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
                     備考
                   </td>
                   {days.map(day => {
@@ -875,7 +890,7 @@ function App() {
                     return (
                       <td
                         key={day}
-                        className="h-10 max-w-[45px] border-r border-amber-100 px-1 py-1 text-center text-[10px] leading-tight text-amber-900 cursor-pointer hover:bg-amber-100 transition-colors"
+                        className="h-10 max-w-[45px] border-r border-[#E4DBCA] px-1 py-1 text-center text-[10px] leading-tight text-[#5F5A50] cursor-pointer hover:bg-[#F5F1E9] transition-colors"
                         onClick={() => handleNoteEdit(day)}
                         title={note || holidayName || 'クリックして備考を入力'}
                       >
@@ -885,6 +900,7 @@ function App() {
                   })}
                 </tr>
                 {staff.map(s => {
+                  const staffBadge = getStaffBadge(s);
                   return (
                     <tr key={s.id} className="hover:bg-gradient-to-r hover:from-pink-50 hover:via-white hover:to-yellow-50 transition-all duration-200">
                       <td className="border-r border-pink-100 p-1.5 md:p-2 sticky left-0 z-10 bg-white font-medium text-gray-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
@@ -893,7 +909,11 @@ function App() {
                             <div className="text-sm md:text-base font-semibold truncate">{s.name}</div>
                             <div className="text-[10px] md:text-xs text-gray-400 hidden sm:block">{s.position}</div>
                           </div>
-                          {isCookingStaff(s) && <span className="text-[10px] md:text-xs bg-[#FFE66D] text-[#7C5800] px-1.5 md:px-2 py-0.5 rounded-full font-medium ml-1">調</span>}
+                          {staffBadge && (
+                            <span className={`text-[10px] md:text-xs min-w-5 text-center px-1.5 md:px-2 py-0.5 rounded-full font-bold ml-1 ${staffBadge.className}`}>
+                              {staffBadge.label}
+                            </span>
+                          )}
                         </div>
                       </td>
                       {days.map(day => {
