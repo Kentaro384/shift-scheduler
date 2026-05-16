@@ -232,7 +232,7 @@ function App() {
     setShowSettingsMenu(false);
 
     try {
-      await firestoreStorage.clearMonthData(dateStrings);
+      await firestoreStorage.clearMonthData(dateStrings, staff);
       toast.success('当月を白紙に戻しました', `${year}年${month}月の入力を削除しました`);
     } catch {
       toast.error('削除に失敗しました', '通信状態を確認してもう一度試してください');

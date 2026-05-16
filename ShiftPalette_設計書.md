@@ -310,7 +310,7 @@ type TimeRangeSchedule = Record<string, Record<number, TimeRange>>;
 
 職員設定、シフトパターン、祝日、園設定は残す。
 
-Firestore保存は `merge` のため、単にローカルオブジェクトから日付キーを削除して保存してもクラウド側のネストキーが残る。強制白紙化では `deleteField()` を使い、`schedule.YYYY-MM-DD`、`timeRangeSchedule.YYYY-MM-DD`、`manualShifts.YYYY-MM-DD` を明示的に削除する。
+Firestore保存は `merge` のため、単にローカルオブジェクトから日付キーを削除して保存してもクラウド側のネストキーが残る。強制白紙化では `deleteField()` を使い、`schedule.YYYY-MM-DD`、`timeRangeSchedule.YYYY-MM-DD`、`manualShifts.YYYY-MM-DD` を明示的に削除する。また、職員設定保存直後に強制白紙化した場合でも古い購読データで戻らないよう、白紙化更新時に現在の `staff` も同時に保存する。
 
 ### 5.8 Excel出力
 

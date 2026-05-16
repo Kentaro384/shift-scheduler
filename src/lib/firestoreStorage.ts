@@ -112,8 +112,9 @@ export const firestoreStorage = {
         await this.saveAll({ timeRangeSchedule });
     },
 
-    async clearMonthData(dateStrings: string[]): Promise<void> {
+    async clearMonthData(dateStrings: string[], currentStaff: Staff[]): Promise<void> {
         const updates: Record<string, unknown> = {
+            staff: currentStaff,
             updatedAt: Date.now(),
         };
 
