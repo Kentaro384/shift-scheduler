@@ -290,7 +290,7 @@ export class ShiftGenerator {
             }
 
             const shift = this.getShift(day, s.id);
-            if (countsAsFullDayStaffingShift(shift)) {
+            if (countsAsFullDayStaffingShift(shift, dateStr)) {
                 count++;
                 continue;
             }
@@ -429,7 +429,7 @@ export class ShiftGenerator {
 
             // Assign selected shift pattern to selected Regulars
             selected.forEach(s => {
-                this.setShift(day, s.id, saturdayPattern);
+                this.setShift(day, s.id, '出');
                 satCounts[s.id]++;
 
                 // Assign Compensatory Off ('振') in the same week (Mon-Fri)

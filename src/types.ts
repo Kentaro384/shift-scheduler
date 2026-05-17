@@ -183,8 +183,8 @@ export const HOLIDAY_PATTERNS = [
     { id: '有', name: '有給', color: 'bg-pink-200' },
     { id: '半有', name: '半日有給', color: 'bg-rose-100' },
     { id: '研', name: '研修', color: 'bg-emerald-100' },
-    { id: '出', name: '出張・外出', color: 'bg-sky-100' },
-    { id: '保', name: '保留・その他', color: 'bg-slate-100' },
+    { id: '出', name: '出勤', color: 'bg-sky-100' },
+    { id: '保', name: '保育', color: 'bg-slate-100' },
     { id: '休', name: '公休', color: 'bg-gray-100' },
 ];
 
@@ -199,12 +199,16 @@ export function isWorkShiftId(shift: ShiftPatternId | undefined | null): shift i
     return !!shift && !HOLIDAY_SHIFT_IDS.includes(shift);
 }
 
-export function countsAsFullDayStaffingShift(shift: ShiftPatternId | undefined | null): boolean {
-    return shift === '保';
+function isSaturdayDateString(dateStr: string | undefined): boolean {
+    return !!dateStr && new Date(`${dateStr}T00:00:00`).getDay() === 6;
 }
 
-export function countsAsStaffingShift(shift: ShiftPatternId | undefined | null): boolean {
-    return countsAsFullDayStaffingShift(shift) || isWorkShiftId(shift);
+export function countsAsFullDayStaffingShift(shift: ShiftPatternId | undefined | null, dateStr?: string): boolean {
+    return shift === '保' || (shift === '出' && isSaturdayDateString(dateStr));
+}
+
+export function countsAsStaffingShift(shift: ShiftPatternId | undefined | null, dateStr?: string): boolean {
+    return countsAsFullDayStaffingShift(shift, dateStr) || isWorkShiftId(shift);
 }
 
 export function getDefaultPatternKind(id: ShiftPatternId): ShiftPatternKind {

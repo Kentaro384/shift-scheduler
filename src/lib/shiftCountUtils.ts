@@ -121,7 +121,7 @@ export function countWorkingStaff(
 
         // Regular staff: check for work shift
         const shift = schedule[dateStr]?.[s.id];
-        if (countsAsStaffingShift(shift)) {
+        if (countsAsStaffingShift(shift, dateStr)) {
             count++;
         }
     });

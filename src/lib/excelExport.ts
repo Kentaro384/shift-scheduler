@@ -323,7 +323,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
             if (shift) {
                 const effectiveShift = getEffectiveWorkShiftId(shift) || shift;
                 if (counts[effectiveShift] !== undefined) counts[effectiveShift]++;
-                if (countsAsStaffingShift(shift)) totalWorkDays++;
+                if (countsAsStaffingShift(shift, dateStr)) totalWorkDays++;
             } else if (timeRange) {
                 totalWorkDays++;
             }

@@ -139,7 +139,7 @@ function countWeeklyWorkDays(ctx: ConstraintContext, staffId: number, day: numbe
 
     for (let d = startOfWeek; d <= endOfWeek; d++) {
         if (d < 1 || d > daysInMonth || d === day) continue;
-        if (countsAsStaffingShift(getShift(ctx, d, staffId))) count++;
+        if (countsAsStaffingShift(getShift(ctx, d, staffId), getFormattedDate(ctx.year, ctx.month, d))) count++;
     }
 
     return count;
@@ -150,7 +150,7 @@ function countConsecutiveWorkDays(ctx: ConstraintContext, staffId: number, day: 
 
     let d = day - 1;
     while (d >= 1) {
-        if (!countsAsStaffingShift(getShift(ctx, d, staffId))) break;
+        if (!countsAsStaffingShift(getShift(ctx, d, staffId), getFormattedDate(ctx.year, ctx.month, d))) break;
         count++;
         d--;
     }
@@ -158,7 +158,7 @@ function countConsecutiveWorkDays(ctx: ConstraintContext, staffId: number, day: 
     const daysInMonth = getDaysInMonth(ctx.year, ctx.month);
     d = day + 1;
     while (d <= daysInMonth) {
-        if (!countsAsStaffingShift(getShift(ctx, d, staffId))) break;
+        if (!countsAsStaffingShift(getShift(ctx, d, staffId), getFormattedDate(ctx.year, ctx.month, d))) break;
         count++;
         d++;
     }

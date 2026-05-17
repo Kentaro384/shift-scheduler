@@ -71,8 +71,9 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
 
             for (let i = 0; i < days.length; i++) {
                 const day = days[i];
-                const shift = schedule[getDateStr(day)]?.[s.id];
-                const isWorking = countsAsStaffingShift(shift);
+                const dateStr = getDateStr(day);
+                const shift = schedule[dateStr]?.[s.id];
+                const isWorking = countsAsStaffingShift(shift, dateStr);
 
                 if (isWorking) {
                     if (consecutiveDays === 0) startDay = day;

@@ -98,7 +98,7 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
 
             // Regular staff with shift pattern
             const shiftId = schedule[dateStr]?.[s.id];
-            if (countsAsFullDayStaffingShift(shiftId)) {
+            if (countsAsFullDayStaffingShift(shiftId, dateStr)) {
                 result.push({
                     staffId: s.id,
                     name: s.name,
