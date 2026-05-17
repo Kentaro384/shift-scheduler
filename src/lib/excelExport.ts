@@ -158,7 +158,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         { width: 2 },
         ...Array.from({ length: summaryPatternIds.length + summaryFixedIds.length + 1 }, () => ({ width: 4 })),
     ];
-    worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 4, topLeftCell: 'B5', showGridLines: false }];
+    worksheet.views = [{ showGridLines: false }];
     worksheet.pageSetup = {
         orientation: 'landscape',
         paperSize: 9,
@@ -279,7 +279,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
 
         const staffCell = worksheet.getCell(currentRow, 1);
         staffCell.value = s.name;
-        staffCell.font = font(11);
+        staffCell.font = font(14);
         staffCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
         setSolidFill(staffCell, COLORS.white);
         applyThinBorder(staffCell);
@@ -299,7 +299,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
                 cell.font = font(8);
             } else if (shift) {
                 cell.value = shift;
-                cell.font = font(shift.length > 1 ? 9 : 11);
+                cell.font = font(16);
             } else {
                 cell.value = '';
             }
