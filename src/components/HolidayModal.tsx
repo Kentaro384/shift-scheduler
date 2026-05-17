@@ -22,7 +22,7 @@ export const HolidayModal: React.FC<HolidayModalProps> = ({ year, month, holiday
         if (exists) {
             onUpdate(holidays.filter(h => h.date !== dateStr));
         } else {
-            onUpdate([...holidays, { date: dateStr, name: '休日' }]);
+            onUpdate([...holidays, { date: dateStr, name: '' }]);
         }
     };
 

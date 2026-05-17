@@ -104,11 +104,8 @@ function font(size: number, bold = false, color = 'FF000000'): Partial<ExcelJS.F
     return { name: 'メイリオ', family: 2, charset: 128, size, bold: bold || undefined, color: { argb: color } };
 }
 
-function getNoteText(dateStr: string, notes: DailyNotes, holidays: Holiday[]): string {
-    const note = (notes[dateStr] || '').trim();
-    const holidayName = holidays.find(h => h.date === dateStr)?.name || '';
-    if (note && holidayName && note !== holidayName) return `${holidayName}\n${note}`;
-    return note || holidayName;
+function getNoteText(dateStr: string, notes: DailyNotes): string {
+    return (notes[dateStr] || '').trim();
 }
 
 function toVerticalText(value: string): string {
@@ -243,9 +240,9 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         const date = new Date(year, month - 1, day);
         const dow = date.getDay();
         const dateStr = getFormattedDate(year, month, day);
-        const holidayName = holidays.find(h => h.date === dateStr)?.name || '';
+        const isHoliday = holidays.some(h => h.date === dateStr);
         const dayFill = getDayFill(year, month, day, holidays);
-        const dayFontColor = dow === 0 || holidayName ? 'FFC00000' : dow === 6 ? 'FF0070C0' : 'FF000000';
+        const dayFontColor = dow === 0 || isHoliday ? 'FFC00000' : dow === 6 ? 'FF0070C0' : 'FF000000';
 
         const dateCell = worksheet.getCell(dateRow, col);
         dateCell.value = day;
@@ -258,7 +255,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         weekdayCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
         const noteCell = worksheet.getCell(noteRow, col);
-        noteCell.value = toVerticalText(getNoteText(dateStr, notes, holidays));
+        noteCell.value = toVerticalText(getNoteText(dateStr, notes));
         noteCell.font = font(8);
         noteCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
 

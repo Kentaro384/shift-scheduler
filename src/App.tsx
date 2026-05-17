@@ -574,9 +574,8 @@ function App() {
 
   const handleNoteEdit = (day: number) => {
     const dateStr = getFormattedDate(year, month, day);
-    const holidayName = holidays.find(h => h.date === dateStr)?.name || '';
     const currentNote = notes[dateStr] || '';
-    const input = window.prompt(`${month}/${day} の備考を入力してください`, currentNote || holidayName);
+    const input = window.prompt(`${month}/${day} の備考を入力してください`, currentNote);
     if (input === null) return;
 
     const newNotes = { ...notes, [dateStr]: input.trim() };
@@ -897,16 +896,15 @@ function App() {
                   </td>
                   {days.map(day => {
                     const dateStr = getFormattedDate(year, month, day);
-                    const holidayName = holidays.find(h => h.date === dateStr)?.name || '';
                     const note = notes[dateStr] || '';
                     return (
                       <td
                         key={day}
                         className="h-10 max-w-[45px] border-r border-[#E4DBCA] px-1 py-1 text-center text-[10px] leading-tight text-[#5F5A50] cursor-pointer hover:bg-[#F5F1E9] transition-colors"
                         onClick={() => handleNoteEdit(day)}
-                        title={note || holidayName || 'クリックして備考を入力'}
+                        title={note || 'クリックして備考を入力'}
                       >
-                        <div className="line-clamp-2 break-words">{note || holidayName || ''}</div>
+                        <div className="line-clamp-2 break-words">{note}</div>
                       </td>
                     );
                   })}
