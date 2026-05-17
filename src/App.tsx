@@ -259,7 +259,7 @@ function App() {
           if (currentShift === manualShift) {
             return;
           }
-          if (isProtectedShiftId(currentShift) && currentShift !== '振') {
+          if (isProtectedShiftId(currentShift) && currentShift !== '振' && currentShift !== '出') {
             return;
           }
           // Clear others

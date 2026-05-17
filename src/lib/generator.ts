@@ -1,6 +1,6 @@
 import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, TimeRangeSchedule, ShiftPatternDefinition, StaffAgeRole } from '../types';
 import { getDaysInMonth, getDayOfWeek, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
-import { SHIFT_PATTERNS, countsAsFullDayStaffingShift, countsForStaffing, getEffectiveWorkShiftId, getStaffAgeGroup, getShiftPatternKind, isCookingStaff, isProtectedShiftId, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns, parseHalfDayLeaveShiftId } from '../types';
+import { SHIFT_PATTERNS, countsAsFullDayStaffingShift, countsAsStaffingShift, countsForStaffing, getEffectiveWorkShiftId, getStaffAgeGroup, getShiftPatternKind, isCookingStaff, isProtectedShiftId, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns, parseHalfDayLeaveShiftId } from '../types';
 import { countEffectiveShift, countWorkingStaff as countWorkingStaffUtil } from './shiftCountUtils';
 import { canAssignShift, createConstraintContext, type ConstraintCode } from './constraintChecker';
 
@@ -44,6 +44,7 @@ export class ShiftGenerator {
     private holidays: Holiday[];
     private settings: Settings;
     private patterns: ShiftPatternDefinition[];
+    private manualShifts: ShiftSchedule;
     private year: number;
     private month: number;
     private daysInMonth: number;
@@ -59,6 +60,7 @@ export class ShiftGenerator {
         this.daysInMonth = getDaysInMonth(year, month);
         this.schedule = {};
         this.initialSchedule = currentSchedule;
+        this.manualShifts = manualShifts;
         this.timeRangeSchedule = timeRangeSchedule;
 
         // Initialize schedule structure with current schedule
@@ -77,7 +79,7 @@ export class ShiftGenerator {
                     const manualDay = (manualShifts[dateStr] || {}) as Record<string | number, ShiftPatternId>;
                     const manualShift = manualDay[s.id] || manualDay[String(s.id)];
                     const isManualShift = existingShift && existingShift === manualShift;
-                    const shouldPreserveShift = isManualShift || (isProtectedShiftId(existingShift) && existingShift !== '振');
+                    const shouldPreserveShift = isManualShift || (isProtectedShiftId(existingShift) && existingShift !== '振' && existingShift !== '出');
 
                     // Regular/Chief/Director: preserve user-entered cells, but auto-generated transfer offs are cleared.
                     if (shouldPreserveShift) {
@@ -162,9 +164,11 @@ export class ShiftGenerator {
         if (!this.schedule[dateStr]) this.schedule[dateStr] = {};
 
         const current = this.schedule[dateStr][staffId];
+        const manualDay = (this.manualShifts[dateStr] || {}) as Record<string | number, ShiftPatternId>;
+        const manualShift = manualDay[staffId] || manualDay[String(staffId)];
 
-        // CRITICAL: Never overwrite fixed plans or pre-entered manual shifts.
-        if (isProtectedShiftId(current) || (current && this.initialSchedule[dateStr]?.[staffId] === current)) {
+        // CRITICAL: Never overwrite fixed plans or manual shifts preserved during initialization.
+        if (isProtectedShiftId(current) || (current && current === manualShift)) {
             return; // Absolutely protected
         }
 
@@ -390,13 +394,14 @@ export class ShiftGenerator {
         saturdays.forEach(day => {
             const dateStr = getFormattedDate(this.year, this.month, day);
 
-            // 1. Count existing time-range staff (Manual inputs from schedule OR timeRangeSchedule)
+            // 1. Count existing manual staff (manual regular shifts and time-range staff)
             let partTimeCount = 0;
+            let existingRegularCount = 0;
             this.staff.forEach(s => {
                 if (isTimeRangeStaff(s)) {
                     // Check schedule first
                     const shift = this.getShift(day, s.id);
-                    if (isWorkShiftId(shift)) {
+                    if (countsAsStaffingShift(shift, dateStr)) {
                         partTimeCount++;
                         return;
                     }
@@ -405,18 +410,27 @@ export class ShiftGenerator {
                     if (timeRange) {
                         partTimeCount++;
                     }
+                    return;
+                }
+
+                if (!isManualOnlyStaff(s)) {
+                    const shift = this.getShift(day, s.id);
+                    if (countsAsStaffingShift(shift, dateStr)) {
+                        existingRegularCount++;
+                    }
                 }
             });
 
             // 2. Calculate how many Regulars are needed (use settings, not hardcoded 3)
             const targetTotal = this.settings.saturdayStaffCount;
-            const targetRegularCount = Math.max(0, targetTotal - partTimeCount);
+            const targetRegularCount = Math.max(0, targetTotal - partTimeCount - existingRegularCount);
 
             // 3. Select Regulars
             // Sort qualified regulars by Saturday count, with saturdayOnly staff first.
             // Shuffle first for fairness
             const saturdayPattern = this.settings.saturdayShiftPattern;
             const candidates = [...qualifiedRegulars]
+                .filter(s => !countsAsStaffingShift(this.getShift(day, s.id), dateStr))
                 .filter(s => this.canAssignByConstraints(s, day, saturdayPattern))
                 .sort(() => Math.random() - 0.5)
                 .sort((a, b) => {
