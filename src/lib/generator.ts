@@ -76,11 +76,11 @@ export class ShiftGenerator {
                 } else {
                     const manualDay = (manualShifts[dateStr] || {}) as Record<string | number, ShiftPatternId>;
                     const manualShift = manualDay[s.id] || manualDay[String(s.id)];
-                    const isManualProtectedShift = existingShift && existingShift === manualShift && isProtectedShiftId(existingShift);
-                    const shouldPreserveProtectedShift = isManualProtectedShift || (isProtectedShiftId(existingShift) && existingShift !== '振' && existingShift !== '出');
+                    const isManualShift = existingShift && existingShift === manualShift;
+                    const shouldPreserveShift = isManualShift || (isProtectedShiftId(existingShift) && existingShift !== '振');
 
-                    // Regular/Chief/Director: preserve fixed plans, but auto-generated transfer offs are cleared.
-                    if (shouldPreserveProtectedShift) {
+                    // Regular/Chief/Director: preserve user-entered cells, but auto-generated transfer offs are cleared.
+                    if (shouldPreserveShift) {
                         this.schedule[dateStr][s.id] = existingShift;
                     } else {
                         this.schedule[dateStr][s.id] = '';
@@ -163,8 +163,8 @@ export class ShiftGenerator {
 
         const current = this.schedule[dateStr][staffId];
 
-        // CRITICAL: Never overwrite fixed plans.
-        if (isProtectedShiftId(current)) {
+        // CRITICAL: Never overwrite fixed plans or pre-entered manual shifts.
+        if (isProtectedShiftId(current) || (current && this.initialSchedule[dateStr]?.[staffId] === current)) {
             return; // Absolutely protected
         }
 

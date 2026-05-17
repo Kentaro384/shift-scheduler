@@ -187,7 +187,7 @@ function App() {
 
   const saveManualShiftMarker = (dateStr: string, staffId: number, shiftId: ShiftPatternId) => {
     const newManualShifts: ShiftSchedule = { ...manualShifts };
-    if (isProtectedShiftId(shiftId)) {
+    if (shiftId) {
       newManualShifts[dateStr] = { ...(newManualShifts[dateStr] || {}), [staffId]: shiftId };
     } else if (newManualShifts[dateStr]?.[staffId]) {
       newManualShifts[dateStr] = { ...newManualShifts[dateStr] };
@@ -256,8 +256,10 @@ function App() {
         } else if (s.shiftType === 'regular' || s.position === '主任') {
           const manualDay = (manualShifts[dateStr] || {}) as Record<string | number, ShiftPatternId>;
           const manualShift = manualDay[s.id] || manualDay[String(s.id)];
-          const isManualProtectedShift = currentShift === manualShift && isProtectedShiftId(currentShift);
-          if (isProtectedShiftId(currentShift) && (isManualProtectedShift || (currentShift !== '振' && currentShift !== '出'))) {
+          if (currentShift === manualShift) {
+            return;
+          }
+          if (isProtectedShiftId(currentShift) && currentShift !== '振') {
             return;
           }
           // Clear others
