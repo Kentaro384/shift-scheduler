@@ -27,6 +27,26 @@ import { checkConstraints, createConstraintContext } from './lib/constraintCheck
 import { getShiftCardClass, getShiftChipClass, getShiftMarker } from './lib/shiftPalette';
 
 const getMonthKey = (year: number, month: number) => `${year}-${String(month).padStart(2, '0')}`;
+const SELECTED_MONTH_STORAGE_KEY = 'shiftPalette.selectedMonth';
+
+const getInitialCurrentDate = () => {
+  const today = new Date();
+  const fallback = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  try {
+    const savedMonth = localStorage.getItem(SELECTED_MONTH_STORAGE_KEY);
+    const match = savedMonth?.match(/^(\d{4})-(\d{2})$/);
+    if (!match) return fallback;
+
+    const savedYear = Number(match[1]);
+    const savedMonthIndex = Number(match[2]) - 1;
+    if (savedMonthIndex < 0 || savedMonthIndex > 11) return fallback;
+
+    return new Date(savedYear, savedMonthIndex, 1);
+  } catch {
+    return fallback;
+  }
+};
 
 const formatExportedAt = (date: Date) => {
   const yyyy = date.getFullYear();
@@ -59,7 +79,7 @@ function App() {
   const [dataLoading, setDataLoading] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
 
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(getInitialCurrentDate);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [schedule, setSchedule] = useState<ShiftSchedule>({});
   const [manualShifts, setManualShifts] = useState<ShiftSchedule>({});
@@ -152,6 +172,14 @@ function App() {
   useEffect(() => {
     setLastExcelExportedAt(excelExportLog[getMonthKey(year, month)] || '');
   }, [excelExportLog, year, month]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SELECTED_MONTH_STORAGE_KEY, getMonthKey(year, month));
+    } catch {
+      // If localStorage is unavailable, the app still works and falls back to the current month.
+    }
+  }, [year, month]);
 
   const changeMonth = (offset: number) => {
     setCurrentDate(new Date(year, month - 1 + offset, 1));
