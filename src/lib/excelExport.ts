@@ -1,8 +1,7 @@
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import type { Staff, ShiftSchedule, ShiftPatternDefinition, Holiday, TimeRangeSchedule, TimeRange, DailyNotes } from '../types';
-import { HOLIDAY_PATTERNS, getStaffAgeGroup, isCookingStaff, isTimeRangeStaff, isWorkShiftId } from '../types';
-import { isSaturdayWorkMarker } from './shiftCountUtils';
+import { HOLIDAY_PATTERNS, countsAsStaffingShift, getEffectiveWorkShiftId, getStaffAgeGroup, isCookingStaff, isTimeRangeStaff, isWorkShiftId, parseHalfDayLeaveShiftId } from '../types';
 import { getDaysInMonth, getFormattedDate } from './utils';
 
 interface ExportOptions {
@@ -70,7 +69,7 @@ function getTimeRangeForStaff(
 }
 
 function getShiftFill(shift: string, patterns: ShiftPatternDefinition[]): string | null {
-    const pattern = patterns.find(p => p.id === shift);
+    const pattern = patterns.find(p => p.id === (getEffectiveWorkShiftId(shift) || shift));
     if (pattern) return getTailwindFill(pattern.color, COLORS.legendBg);
     const fixed = HOLIDAY_PATTERNS.find(p => p.id === shift);
     if (fixed && shift !== '休') return getTailwindFill(fixed.color, COLORS.fixedBg);
@@ -298,8 +297,11 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
                 cell.value = `${timeRange.start}\n${timeRange.end}`;
                 cell.font = font(8);
             } else if (shift) {
-                cell.value = shift;
-                cell.font = font(16);
+                const halfDayLeave = parseHalfDayLeaveShiftId(shift);
+                cell.value = halfDayLeave
+                    ? `${halfDayLeave.baseShift}\n${halfDayLeave.leavePeriod === 'morning' ? '午前休' : '午後休'}`
+                    : shift;
+                cell.font = font(halfDayLeave ? 9 : 16);
             } else {
                 cell.value = '';
             }
@@ -319,8 +321,9 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
             const shift = schedule[dateStr]?.[s.id];
             const timeRange = getTimeRangeForStaff(timeRangeSchedule, dateStr, s.id);
             if (shift) {
-                if (counts[shift] !== undefined) counts[shift]++;
-                if (isWorkShiftId(shift) || isSaturdayWorkMarker(dateStr, shift)) totalWorkDays++;
+                const effectiveShift = getEffectiveWorkShiftId(shift) || shift;
+                if (counts[effectiveShift] !== undefined) counts[effectiveShift]++;
+                if (countsAsStaffingShift(shift)) totalWorkDays++;
             } else if (timeRange) {
                 totalWorkDays++;
             }

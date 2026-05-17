@@ -1,4 +1,5 @@
 import type { ShiftPatternDefinition, ShiftPatternId } from '../types';
+import { getEffectiveWorkShiftId, parseHalfDayLeaveShiftId } from '../types';
 
 type PaletteEntry = {
   accent: string;
@@ -123,8 +124,9 @@ export const getShiftPaletteEntry = (
   shiftId: ShiftPatternId | string,
   patterns: ShiftPatternDefinition[] = []
 ): PaletteEntry => {
-  const patternIndex = patterns.findIndex(pattern => pattern.id === shiftId);
-  const namedIndex = NAMED_SHIFT_INDEX[shiftId];
+  const effectiveShiftId = getEffectiveWorkShiftId(shiftId) || shiftId;
+  const patternIndex = patterns.findIndex(pattern => pattern.id === effectiveShiftId);
+  const namedIndex = NAMED_SHIFT_INDEX[effectiveShiftId];
   const paletteIndex = patternIndex >= 0 ? patternIndex : namedIndex ?? 0;
   return WORK_SHIFT_PALETTE[paletteIndex % WORK_SHIFT_PALETTE.length];
 };
@@ -134,6 +136,8 @@ export const getShiftCardClass = (
   patterns: ShiftPatternDefinition[] = []
 ): string => {
   if (!shiftId) return 'bg-[#FDFDFD] border border-[#E5E7EB] text-[#D1D5DB]';
+  const halfDayLeave = parseHalfDayLeaveShiftId(shiftId);
+  if (halfDayLeave) return `${getShiftPaletteEntry(halfDayLeave.baseShift, patterns).card} font-medium`;
   const fixed = FIXED_SHIFT_STYLES[shiftId];
   if (fixed) return fixed.card;
   return `${getShiftPaletteEntry(shiftId, patterns).card} font-medium`;
@@ -144,6 +148,8 @@ export const getShiftChipClass = (
   patterns: ShiftPatternDefinition[] = []
 ): string => {
   if (!shiftId) return 'bg-[#FAFAFA] text-[#A1A1AA] border border-[#E5E7EB]';
+  const halfDayLeave = parseHalfDayLeaveShiftId(shiftId);
+  if (halfDayLeave) return getShiftPaletteEntry(halfDayLeave.baseShift, patterns).chip;
   const fixed = FIXED_SHIFT_STYLES[shiftId];
   if (fixed) return fixed.chip;
   return getShiftPaletteEntry(shiftId, patterns).chip;
@@ -154,6 +160,8 @@ export const getShiftSolidClass = (
   patterns: ShiftPatternDefinition[] = []
 ): string => {
   if (!shiftId) return 'bg-[#E5E7EB] text-[#6B7280]';
+  const halfDayLeave = parseHalfDayLeaveShiftId(shiftId);
+  if (halfDayLeave) return getShiftPaletteEntry(halfDayLeave.baseShift, patterns).solid;
   const fixed = FIXED_SHIFT_STYLES[shiftId];
   if (fixed) return fixed.solid;
   return getShiftPaletteEntry(shiftId, patterns).solid;
@@ -165,6 +173,9 @@ export const getShiftAccentColor = (
 ): string => getShiftPaletteEntry(shiftId, patterns).accent;
 
 export const getShiftMarker = (shiftId: ShiftPatternId | string): string => {
+  const halfDayLeave = parseHalfDayLeaveShiftId(shiftId);
+  if (halfDayLeave) return halfDayLeave.leavePeriod === 'morning' ? 'PM' : 'AM';
+
   const markers: Record<string, string> = {
     A: '●',
     B: '■',

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { X, Clock } from 'lucide-react';
 import type { Staff, ShiftSchedule, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
-import { countsForStaffing, isCookingStaff, isTimeRangeStaff, isWorkShiftId } from '../types';
+import { countsAsFullDayStaffingShift, countsForStaffing, getEffectiveWorkShiftId, isCookingStaff, isTimeRangeStaff, isWorkShiftId, parseHalfDayLeaveShiftId } from '../types';
 import { getFormattedDate } from '../lib/utils';
 
 interface HourlyStaffChartProps {
@@ -32,6 +32,7 @@ function parseTimeToMinutes(time: string): number {
 const START_HOUR = 7;
 const END_HOUR = 19;
 const TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60;
+const HALF_DAY_BOUNDARY_MINUTES = parseTimeToMinutes('12:00');
 
 interface StaffWorkTime {
     staffId: number;
@@ -97,19 +98,45 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
 
             // Regular staff with shift pattern
             const shiftId = schedule[dateStr]?.[s.id];
+            if (countsAsFullDayStaffingShift(shiftId)) {
+                result.push({
+                    staffId: s.id,
+                    name: s.name,
+                    isQualified: countsForStaffing(s) && s.hasQualification,
+                    isPartTime: false,
+                    startMinutes: START_HOUR * 60,
+                    endMinutes: END_HOUR * 60,
+                    label: shiftId,
+                    originalIndex: index
+                });
+                return;
+            }
+
             if (!isWorkShiftId(shiftId)) return;
 
-            const pattern = patterns.find(p => p.id === shiftId);
+            const effectiveShift = getEffectiveWorkShiftId(shiftId);
+            const pattern = patterns.find(p => p.id === effectiveShift);
             if (!pattern) return;
 
+            const halfDayLeave = parseHalfDayLeaveShiftId(shiftId);
             const [startStr, endStr] = pattern.timeRange.split('-');
+            const patternStart = parseTimeToMinutes(startStr);
+            const patternEnd = parseTimeToMinutes(endStr);
+            const startMinutes = halfDayLeave?.leavePeriod === 'morning'
+                ? Math.max(patternStart, HALF_DAY_BOUNDARY_MINUTES)
+                : patternStart;
+            const endMinutes = halfDayLeave?.leavePeriod === 'afternoon'
+                ? Math.min(patternEnd, HALF_DAY_BOUNDARY_MINUTES)
+                : patternEnd;
+            if (startMinutes >= endMinutes) return;
+
             result.push({
                 staffId: s.id,
                 name: s.name,
                 isQualified: countsForStaffing(s) && s.hasQualification,
                 isPartTime: false,
-                startMinutes: parseTimeToMinutes(startStr),
-                endMinutes: parseTimeToMinutes(endStr),
+                startMinutes,
+                endMinutes,
                 label: shiftId,
                 originalIndex: index
             });

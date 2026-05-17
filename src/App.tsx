@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId, TimeRangeSchedule, TimeRange, DailyNotes } from './types';
-import { HOLIDAY_PATTERNS, countsForStaffing, getStaffAgeGroup, getStaffTimeRangeForWeekday, isCookingStaff, isProtectedShiftId, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId } from './types';
+import { HOLIDAY_PATTERNS, countsForStaffing, getStaffAgeGroup, getStaffTimeRangeForWeekday, isCookingStaff, isProtectedShiftId, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId, parseHalfDayLeaveShiftId } from './types';
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
-import { countAllPatterns, isSaturdayWorkMarker } from './lib/shiftCountUtils';
+import { countAllPatterns, countWorkingStaff } from './lib/shiftCountUtils';
 import { exportToExcel } from './lib/excelExport';
 import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, DatabaseBackup, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { StaffList } from './components/StaffList';
@@ -543,25 +543,7 @@ function App() {
   // Calculate daily staff counts (including part-timers with time ranges)
   const dailyCounts = days.map(day => {
     const dateStr = getFormattedDate(year, month, day);
-    let count = 0;
-    staff.forEach(s => {
-      if (!countsForStaffing(s)) return;
-
-      // For time-range workers, check if they have a time range entry
-      if (isTimeRangeStaff(s)) {
-        const timeRange = timeRangeSchedule[dateStr]?.[s.id];
-        if (timeRange) {
-          count++; // Time-range staff is working
-        }
-        return;
-      }
-
-      const shift = schedule[dateStr]?.[s.id];
-      if (isWorkShiftId(shift) || isSaturdayWorkMarker(dateStr, shift)) {
-        count++;
-      }
-    });
-    return count;
+    return countWorkingStaff(staff, schedule, timeRangeSchedule, dateStr);
   });
 
   // Calculate daily qualified staff counts per shift pattern
@@ -951,6 +933,7 @@ function App() {
                         const dateRanges = (timeRangeSchedule[dateStr] || {}) as Record<string | number, TimeRange>;
                         const partTimeRange = dateRanges[s.id] || dateRanges[String(s.id)];
                         const isPartTime = isTimeRangeStaff(s);
+                        const halfDayLeave = parseHalfDayLeaveShiftId(shiftId);
 
 
                         return (
@@ -997,8 +980,17 @@ function App() {
                                   w-7 h-6 md:w-9 md:h-8 mx-auto flex items-center justify-center gap-0.5 rounded-md text-xs md:text-sm shadow-sm transition-all duration-150 hover:scale-110 hover:shadow-md active:scale-95
                                   ${getShiftCardClass(shiftId, patterns)}
                                 `}>
-                                <span className="text-[8px] md:text-[10px] opacity-80">{getShiftMarker(shiftId)}</span>
-                                <span className="font-medium">{shiftId}</span>
+                                {halfDayLeave ? (
+                                  <div className="flex flex-col items-center leading-none">
+                                    <span className="font-semibold text-[10px] md:text-xs">{halfDayLeave.baseShift}</span>
+                                    <span className="text-[7px] md:text-[8px] opacity-80">{halfDayLeave.leavePeriod === 'morning' ? '午前休' : '午後休'}</span>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <span className="text-[8px] md:text-[10px] opacity-80">{getShiftMarker(shiftId)}</span>
+                                    <span className="font-medium">{shiftId}</span>
+                                  </>
+                                )}
                               </div>
                             ) : isPartTime ? (
                               /* Part-timer with no assignment - show dash */

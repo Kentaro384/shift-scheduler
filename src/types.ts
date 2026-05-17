@@ -1,5 +1,6 @@
 export type ShiftPatternId = string;
 export type ShiftPatternKind = 'opening' | 'early' | 'standard' | 'late' | 'closing';
+export type HalfDayLeavePeriod = 'morning' | 'afternoon';
 
 export const SHIFT_PATTERN_KIND_LABELS: Record<ShiftPatternKind, string> = {
     opening: '開園・早番',
@@ -107,9 +108,32 @@ export function getStaffTimeRangeForWeekday(staff: Staff, weekday: number): Time
     return weeklyRanges?.[weekday] || weeklyRanges?.[String(weekday)] || staff.defaultTimeRange;
 }
 
+export function createHalfDayLeaveShiftId(baseShift: ShiftPatternId, leavePeriod: HalfDayLeavePeriod): ShiftPatternId {
+    return `${baseShift}${leavePeriod === 'morning' ? '午前休' : '午後休'}`;
+}
+
+export function parseHalfDayLeaveShiftId(
+    shift: ShiftPatternId | undefined | null
+): { baseShift: ShiftPatternId; leavePeriod: HalfDayLeavePeriod } | null {
+    if (!shift) return null;
+    if (shift.endsWith('午前休')) {
+        return { baseShift: shift.slice(0, -3), leavePeriod: 'morning' };
+    }
+    if (shift.endsWith('午後休')) {
+        return { baseShift: shift.slice(0, -3), leavePeriod: 'afternoon' };
+    }
+    return null;
+}
+
+export function getEffectiveWorkShiftId(shift: ShiftPatternId | undefined | null): ShiftPatternId | null {
+    const halfDayLeave = parseHalfDayLeaveShiftId(shift);
+    return halfDayLeave?.baseShift || (isWorkShiftId(shift) ? shift : null);
+}
+
 export function staffAllowsShift(staff: Staff, shift: ShiftPatternId): boolean {
     const preferredShifts = staff.preferredShifts || [];
-    return preferredShifts.length === 0 || preferredShifts.includes(shift);
+    const effectiveShift = getEffectiveWorkShiftId(shift) || shift;
+    return preferredShifts.length === 0 || preferredShifts.includes(effectiveShift);
 }
 
 export interface Settings {
@@ -168,11 +192,19 @@ export const PROTECTED_SHIFT_IDS: ShiftPatternId[] = ['振', '有', '半有', '�
 export const HOLIDAY_SHIFT_IDS: ShiftPatternId[] = [...PROTECTED_SHIFT_IDS, '休', ''];
 
 export function isProtectedShiftId(shift: ShiftPatternId | undefined | null): boolean {
-    return !!shift && PROTECTED_SHIFT_IDS.includes(shift);
+    return !!shift && (PROTECTED_SHIFT_IDS.includes(shift) || parseHalfDayLeaveShiftId(shift) !== null);
 }
 
 export function isWorkShiftId(shift: ShiftPatternId | undefined | null): shift is ShiftPatternId {
     return !!shift && !HOLIDAY_SHIFT_IDS.includes(shift);
+}
+
+export function countsAsFullDayStaffingShift(shift: ShiftPatternId | undefined | null): boolean {
+    return shift === '保';
+}
+
+export function countsAsStaffingShift(shift: ShiftPatternId | undefined | null): boolean {
+    return countsAsFullDayStaffingShift(shift) || isWorkShiftId(shift);
 }
 
 export function getDefaultPatternKind(id: ShiftPatternId): ShiftPatternKind {
@@ -198,7 +230,8 @@ export function getShiftPatternKind(
     shift: ShiftPatternId | undefined | null,
     patterns: ShiftPatternDefinition[]
 ): ShiftPatternKind | null {
-    if (!isWorkShiftId(shift)) return null;
-    const pattern = patterns.find(p => p.id === shift);
-    return pattern?.kind ?? getDefaultPatternKind(shift);
+    const effectiveShift = getEffectiveWorkShiftId(shift);
+    if (!effectiveShift) return null;
+    const pattern = patterns.find(p => p.id === effectiveShift);
+    return pattern?.kind ?? getDefaultPatternKind(effectiveShift);
 }

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, Bell, Calendar, Users, Clock, X } from 'lucide-react';
 import type { Staff, ShiftSchedule, Holiday, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
-import { countsForStaffing, getShiftPatternKind, isTimeRangeStaff, isWorkShiftId } from '../types';
+import { countsAsStaffingShift, countsForStaffing, getShiftPatternKind, isTimeRangeStaff } from '../types';
 import { countWorkingStaff } from '../lib/shiftCountUtils';
 
 interface AlertBadgeProps {
@@ -72,7 +72,7 @@ export const AlertBadge: React.FC<AlertBadgeProps> = ({
             for (let i = 0; i < days.length; i++) {
                 const day = days[i];
                 const shift = schedule[getDateStr(day)]?.[s.id];
-                const isWorking = isWorkShiftId(shift);
+                const isWorking = countsAsStaffingShift(shift);
 
                 if (isWorking) {
                     if (consecutiveDays === 0) startDay = day;

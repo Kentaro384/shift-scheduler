@@ -7,15 +7,7 @@
  */
 
 import type { Staff, ShiftSchedule, TimeRangeSchedule, ShiftPatternId } from '../types';
-import { SHIFT_PATTERNS, countsForStaffing, isTimeRangeStaff, isWorkShiftId } from '../types';
-
-function isSaturday(dateStr: string): boolean {
-    return new Date(`${dateStr}T00:00:00`).getDay() === 6;
-}
-
-export function isSaturdayWorkMarker(dateStr: string, shift: ShiftPatternId | undefined | null): boolean {
-    return shift === '出' && isSaturday(dateStr);
-}
+import { SHIFT_PATTERNS, countsAsStaffingShift, countsForStaffing, getEffectiveWorkShiftId, isTimeRangeStaff } from '../types';
 
 /**
  * Count effective staff for a specific shift pattern on a given date.
@@ -50,7 +42,7 @@ export function countEffectiveShift(
         // Regular staff: check schedule
         if (qualifiedOnly && !s.hasQualification) return;
 
-        if (schedule[dateStr]?.[s.id] === pattern) {
+        if (getEffectiveWorkShiftId(schedule[dateStr]?.[s.id]) === pattern) {
             count++;
         }
     });
@@ -129,7 +121,7 @@ export function countWorkingStaff(
 
         // Regular staff: check for work shift
         const shift = schedule[dateStr]?.[s.id];
-        if (isWorkShiftId(shift) || isSaturdayWorkMarker(dateStr, shift)) {
+        if (countsAsStaffingShift(shift)) {
             count++;
         }
     });

@@ -6,7 +6,7 @@
  */
 
 import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, ShiftPatternDefinition } from '../types';
-import { getShiftPatternKind, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns, SHIFT_PATTERNS, staffAllowsShift } from '../types';
+import { countsAsStaffingShift, getEffectiveWorkShiftId, getShiftPatternKind, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns, SHIFT_PATTERNS, staffAllowsShift } from '../types';
 import { getDaysInMonth, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
 
 // ============================================
@@ -122,7 +122,7 @@ function countMonthlyPattern(ctx: ConstraintContext, staffId: number, pattern: S
     const daysInMonth = getDaysInMonth(ctx.year, ctx.month);
     let count = 0;
     for (let d = 1; d <= daysInMonth; d++) {
-        if (getShift(ctx, d, staffId) === pattern) count++;
+        if (getEffectiveWorkShiftId(getShift(ctx, d, staffId)) === pattern) count++;
     }
     return count;
 }
@@ -139,7 +139,7 @@ function countWeeklyWorkDays(ctx: ConstraintContext, staffId: number, day: numbe
 
     for (let d = startOfWeek; d <= endOfWeek; d++) {
         if (d < 1 || d > daysInMonth || d === day) continue;
-        if (isWorkShiftId(getShift(ctx, d, staffId))) count++;
+        if (countsAsStaffingShift(getShift(ctx, d, staffId))) count++;
     }
 
     return count;
@@ -150,7 +150,7 @@ function countConsecutiveWorkDays(ctx: ConstraintContext, staffId: number, day: 
 
     let d = day - 1;
     while (d >= 1) {
-        if (!isWorkShiftId(getShift(ctx, d, staffId))) break;
+        if (!countsAsStaffingShift(getShift(ctx, d, staffId))) break;
         count++;
         d--;
     }
@@ -158,7 +158,7 @@ function countConsecutiveWorkDays(ctx: ConstraintContext, staffId: number, day: 
     const daysInMonth = getDaysInMonth(ctx.year, ctx.month);
     d = day + 1;
     while (d <= daysInMonth) {
-        if (!isWorkShiftId(getShift(ctx, d, staffId))) break;
+        if (!countsAsStaffingShift(getShift(ctx, d, staffId))) break;
         count++;
         d++;
     }
@@ -182,7 +182,7 @@ function countDayPattern(ctx: ConstraintContext, day: number, pattern: ShiftPatt
     const dateStr = getFormattedDate(ctx.year, ctx.month, day);
     let count = 0;
     for (const staffId in ctx.schedule[dateStr] || {}) {
-        if (ctx.schedule[dateStr][Number(staffId)] === pattern) count++;
+        if (getEffectiveWorkShiftId(ctx.schedule[dateStr][Number(staffId)]) === pattern) count++;
     }
     return count;
 }
@@ -303,7 +303,8 @@ function checkSameFloorViolation(ctx: ConstraintContext, day: number, staffId: n
         s.floor !== 'none'
     );
 
-    const conflictStaff = sameFloorStaff.find(s => ctx.schedule[dateStr]?.[s.id] === shift);
+    const effectiveShift = getEffectiveWorkShiftId(shift);
+    const conflictStaff = sameFloorStaff.find(s => getEffectiveWorkShiftId(ctx.schedule[dateStr]?.[s.id]) === effectiveShift);
     if (!conflictStaff) return null;
 
     return {
@@ -430,19 +431,22 @@ function checkMinCountViolation(
     const previousShift = options.previousShift ?? getShift(ctx, day, staffId);
     if (!previousShift || previousShift === newShift || !isWorkShiftId(previousShift)) return null;
 
-    const pattern = ctx.patterns.find(p => p.id === previousShift);
+    const previousEffectiveShift = getEffectiveWorkShiftId(previousShift);
+    if (!previousEffectiveShift) return null;
+
+    const pattern = ctx.patterns.find(p => p.id === previousEffectiveShift);
     const minCount = pattern?.minCount || 0;
     if (minCount <= 0) return null;
 
     const currentCellShift = getShift(ctx, day, staffId);
     const alreadyChanged = currentCellShift === newShift;
-    const remainingCount = countDayPattern(ctx, day, previousShift) - (alreadyChanged ? 0 : 1);
+    const remainingCount = countDayPattern(ctx, day, previousEffectiveShift) - (alreadyChanged ? 0 : 1);
 
     if (remainingCount < minCount) {
         return {
             type: 'hard',
-            code: isOpeningShift(ctx, previousShift) ? 'MIN_COUNT_A' : 'MIN_COUNT_J',
-            message: `${previousShift}枠が${remainingCount}名に減少`
+            code: isOpeningShift(ctx, previousEffectiveShift) ? 'MIN_COUNT_A' : 'MIN_COUNT_J',
+            message: `${previousEffectiveShift}枠が${remainingCount}名に減少`
         };
     }
 

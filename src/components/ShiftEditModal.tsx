@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Palette, AlertTriangle, CheckCircle, Users, ArrowLeftRight } from 'lucide-react';
 import type { ShiftPatternDefinition, ShiftPatternId, Staff, ShiftSchedule, Holiday, Settings } from '../types';
-import { HOLIDAY_PATTERNS } from '../types';
+import { HOLIDAY_PATTERNS, createHalfDayLeaveShiftId } from '../types';
 import {
     checkConstraints,
     evaluateCandidates,
@@ -68,7 +68,7 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
 
     const dateStr = `${month}/${day}`;
 
-    const workShiftOptions: { id: ShiftPatternId; label: string; color: string; marker: string }[] = useMemo(
+    const workShiftOptions: { id: ShiftPatternId; label: string; color: string; marker: string; displayId?: string }[] = useMemo(
         () => patterns.map((pattern) => ({
             id: pattern.id,
             label: pattern.name || pattern.id,
@@ -78,9 +78,30 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
         [patterns]
     );
 
-    const shiftOptions: { id: ShiftPatternId; label: string; color: string; marker: string }[] = useMemo(
+    const halfDayLeaveOptions: { id: ShiftPatternId; label: string; color: string; marker: string; displayId?: string }[] = useMemo(
+        () => patterns.flatMap((pattern) => [
+            {
+                id: createHalfDayLeaveShiftId(pattern.id, 'morning'),
+                displayId: `${pattern.id}午前休`,
+                label: `${pattern.name || pattern.id}・午後勤務`,
+                color: getShiftChipClass(pattern.id, patterns),
+                marker: 'PM',
+            },
+            {
+                id: createHalfDayLeaveShiftId(pattern.id, 'afternoon'),
+                displayId: `${pattern.id}午後休`,
+                label: `${pattern.name || pattern.id}・午前勤務`,
+                color: getShiftChipClass(pattern.id, patterns),
+                marker: 'AM',
+            },
+        ]),
+        [patterns]
+    );
+
+    const shiftOptions: { id: ShiftPatternId; label: string; color: string; marker: string; displayId?: string }[] = useMemo(
         () => [
             ...workShiftOptions,
+            ...halfDayLeaveOptions,
             ...HOLIDAY_PATTERNS.map(pattern => ({
                 id: pattern.id,
                 label: pattern.name,
@@ -88,7 +109,7 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
                 marker: getShiftMarker(pattern.id),
             })),
         ],
-        [patterns, workShiftOptions]
+        [patterns, workShiftOptions, halfDayLeaveOptions]
     );
 
     // Check constraints for each shift option
@@ -205,7 +226,7 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
                                                     </div>
                                                 )}
                                                 <span className="text-xs opacity-80">{option.marker}</span>
-                                                <span className="text-xl font-bold">{option.id || '-'}</span>
+                                                <span className="text-lg font-bold leading-tight text-center">{option.displayId || option.id || '-'}</span>
                                                 <span className="text-xs font-medium opacity-90">{option.label}</span>
                                             </button>
 

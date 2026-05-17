@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart3, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, RefreshCcw, Heart } from 'lucide-react';
 import type { Staff, ShiftSchedule, ShiftPatternId, ShiftPatternDefinition } from '../types';
-import { countsForStaffing, getShiftPatternKind, isTimeRangeStaff, isWorkShiftId } from '../types';
+import { countsForStaffing, getEffectiveWorkShiftId, getShiftPatternKind, isTimeRangeStaff, isWorkShiftId } from '../types';
 import { getShiftAccentColor, getShiftChipClass } from '../lib/shiftPalette';
 
 interface ShiftBalanceDashboardProps {
@@ -43,9 +43,10 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
         days.forEach(day => {
             const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const shift = schedule[dateStr]?.[staffMember.id];
+            const effectiveShift = getEffectiveWorkShiftId(shift);
             if (shift) {
-                if (shiftOrder.includes(shift as ShiftPatternId)) {
-                    counts[shift] = (counts[shift] || 0) + 1;
+                if (effectiveShift && shiftOrder.includes(effectiveShift as ShiftPatternId)) {
+                    counts[effectiveShift] = (counts[effectiveShift] || 0) + 1;
                 } else if (shift === '振') {
                     counts['振'] = (counts['振'] || 0) + 1;
                 } else if (shift === '有') {

@@ -1,6 +1,6 @@
 import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, TimeRangeSchedule, ShiftPatternDefinition, StaffAgeRole } from '../types';
 import { getDaysInMonth, getDayOfWeek, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
-import { SHIFT_PATTERNS, countsForStaffing, getStaffAgeGroup, getShiftPatternKind, isCookingStaff, isProtectedShiftId, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns } from '../types';
+import { SHIFT_PATTERNS, countsAsFullDayStaffingShift, countsForStaffing, getEffectiveWorkShiftId, getStaffAgeGroup, getShiftPatternKind, isCookingStaff, isProtectedShiftId, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns, parseHalfDayLeaveShiftId } from '../types';
 import { countEffectiveShift, countWorkingStaff as countWorkingStaffUtil } from './shiftCountUtils';
 import { canAssignShift, createConstraintContext, type ConstraintCode } from './constraintChecker';
 
@@ -17,6 +17,23 @@ function parsePatternRange(pattern: ShiftPatternDefinition): { start: number; en
     const [start, end] = pattern.timeRange.split('-');
     if (!start || !end) return null;
     return { start: parseTimeToMinutes(start), end: parseTimeToMinutes(end) };
+}
+
+function applyHalfDayLeaveRange(
+    range: { start: number; end: number },
+    shift: ShiftPatternId | undefined
+): { start: number; end: number } | null {
+    const halfDayLeave = parseHalfDayLeaveShiftId(shift);
+    if (!halfDayLeave) return range;
+
+    const noon = parseTimeToMinutes('12:00');
+    if (halfDayLeave.leavePeriod === 'morning') {
+        const start = Math.max(range.start, noon);
+        return start < range.end ? { start, end: range.end } : null;
+    }
+
+    const end = Math.min(range.end, noon);
+    return range.start < end ? { start: range.start, end } : null;
 }
 
 export class ShiftGenerator {
@@ -273,8 +290,15 @@ export class ShiftGenerator {
             }
 
             const shift = this.getShift(day, s.id);
-            const pattern = this.patterns.find(p => p.id === shift);
-            const range = pattern ? parsePatternRange(pattern) : null;
+            if (countsAsFullDayStaffingShift(shift)) {
+                count++;
+                continue;
+            }
+
+            const effectiveShift = getEffectiveWorkShiftId(shift);
+            const pattern = this.patterns.find(p => p.id === effectiveShift);
+            const patternRange = pattern ? parsePatternRange(pattern) : null;
+            const range = patternRange ? applyHalfDayLeaveRange(patternRange, shift) : null;
             if (range && minute >= range.start && minute < range.end) count++;
         }
 
@@ -405,7 +429,7 @@ export class ShiftGenerator {
 
             // Assign selected shift pattern to selected Regulars
             selected.forEach(s => {
-                this.setShift(day, s.id, '出');
+                this.setShift(day, s.id, saturdayPattern);
                 satCounts[s.id]++;
 
                 // Assign Compensatory Off ('振') in the same week (Mon-Fri)
@@ -455,7 +479,7 @@ export class ShiftGenerator {
     private countTotalShifts(staffId: number, pattern: ShiftPatternId): number {
         let count = 0;
         for (let d = 1; d <= this.daysInMonth; d++) {
-            if (this.getShift(d, staffId) === pattern) {
+            if (getEffectiveWorkShiftId(this.getShift(d, staffId)) === pattern) {
                 count++;
             }
         }
