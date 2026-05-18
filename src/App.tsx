@@ -1097,6 +1097,7 @@ function App() {
         <ShiftBalanceDashboard
           staff={staff}
           schedule={schedule}
+          timeRangeSchedule={timeRangeSchedule}
           days={days}
           year={year}
           month={month}

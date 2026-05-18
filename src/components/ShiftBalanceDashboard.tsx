@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { BarChart3, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, RefreshCcw, Heart } from 'lucide-react';
-import type { Staff, ShiftSchedule, ShiftPatternId, ShiftPatternDefinition } from '../types';
-import { HOLIDAY_PATTERNS, countsForStaffing, getEffectiveWorkShiftId, getShiftPatternKind, isTimeRangeStaff, isWorkShiftId } from '../types';
+import type { Staff, ShiftSchedule, ShiftPatternId, ShiftPatternDefinition, TimeRange, TimeRangeSchedule } from '../types';
+import { HOLIDAY_PATTERNS, countsAsStaffingShift, getEffectiveWorkShiftId, getShiftPatternKind, isCookingStaff, isTimeRangeStaff, isWorkShiftId, parseHalfDayLeaveShiftId } from '../types';
 import { getShiftAccentColor, getShiftChipClass } from '../lib/shiftPalette';
 
 interface ShiftBalanceDashboardProps {
     staff: Staff[];
     schedule: ShiftSchedule;
+    timeRangeSchedule: TimeRangeSchedule;
     days: number[];
     year: number;
     month: number;
@@ -16,6 +17,7 @@ interface ShiftBalanceDashboardProps {
 export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
     staff,
     schedule,
+    timeRangeSchedule,
     days,
     year,
     month,
@@ -24,31 +26,56 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
     const [isExpanded, setIsExpanded] = useState(true);
     const shiftOrder = patterns.map(pattern => pattern.id).filter(isWorkShiftId);
 
-    // Filter to only regular/backup staff (not cooking, not no_shift)
+    const summaryHolidayIds = HOLIDAY_PATTERNS.map(pattern => pattern.id).filter(id => id !== '半有');
+
+    const getTimeRangeForStaff = (dateStr: string, staffId: number): TimeRange | undefined => {
+        const dateRanges = (timeRangeSchedule[dateStr] || {}) as Record<string | number, TimeRange>;
+        return dateRanges[staffId] || dateRanges[String(staffId)];
+    };
+
+    const formatCount = (count: number): string => Number.isInteger(count) ? String(count) : count.toFixed(1);
+
+    // Filter to regular/backup staff and time-range workers, excluding cooking.
     const targetStaff = staff.filter(s =>
-        countsForStaffing(s) && (s.shiftType === 'regular' || s.shiftType === 'backup' || isTimeRangeStaff(s))
+        !isCookingStaff(s) && (s.shiftType === 'regular' || s.shiftType === 'backup' || isTimeRangeStaff(s))
     );
 
     // Calculate shift counts for each staff member (including leave types)
     const getStaffShiftCounts = (staffMember: Staff): Record<string, number> => {
         const counts: Record<string, number> = {};
         shiftOrder.forEach(shift => counts[shift] = 0);
-        HOLIDAY_PATTERNS.forEach(pattern => counts[pattern.id] = 0);
+        summaryHolidayIds.forEach(id => counts[id] = 0);
+        counts.totalWorkDays = 0;
 
         days.forEach(day => {
             const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const shift = schedule[dateStr]?.[staffMember.id];
+            const timeRange = getTimeRangeForStaff(dateStr, staffMember.id);
             const effectiveShift = getEffectiveWorkShiftId(shift);
+
             if (shift) {
                 if (effectiveShift && shiftOrder.includes(effectiveShift as ShiftPatternId)) {
                     counts[effectiveShift] = (counts[effectiveShift] || 0) + 1;
-                } else if (shift === '振') {
-                    counts['振'] = (counts['振'] || 0) + 1;
+                }
+
+                if (parseHalfDayLeaveShiftId(shift) || shift === '半有') {
+                    counts['有'] = (counts['有'] || 0) + 0.5;
                 } else if (shift === '有') {
                     counts['有'] = (counts['有'] || 0) + 1;
-                } else if (HOLIDAY_PATTERNS.some(pattern => pattern.id === shift)) {
+                } else if (summaryHolidayIds.includes(shift)) {
                     counts[shift] = (counts[shift] || 0) + 1;
                 }
+
+                if (countsAsStaffingShift(shift, dateStr)) {
+                    counts.totalWorkDays += 1;
+                }
+            } else if (timeRange) {
+                counts.totalWorkDays += 1;
+                timeRange.countAsShifts?.forEach(shiftId => {
+                    if (shiftOrder.includes(shiftId)) {
+                        counts[shiftId] = (counts[shiftId] || 0) + 1;
+                    }
+                });
             }
         });
 
@@ -168,12 +195,12 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                         <div className="space-y-2">
                             {targetStaff.map(s => {
                                 const counts = getStaffShiftCounts(s);
-                                const total = shiftOrder.reduce((sum, shift) => sum + (counts[shift] || 0), 0);
+                                const total = counts.totalWorkDays || 0;
                                 const furikyu = counts['振'] || 0;
                                 const yukyu = counts['有'] || 0;
                                 const summerLeave = counts['夏休'] || 0;
                                 const birthdayLeave = counts['誕生日休'] || 0;
-                                const fixedPlans = (counts['半有'] || 0) + (counts['研'] || 0) + (counts['出'] || 0) + (counts['保'] || 0);
+                                const fixedPlans = counts['研'] || 0;
 
                                 return (
                                     <div key={s.id} className="flex items-center gap-2">
@@ -215,7 +242,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                             {yukyu > 0 && (
                                                 <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold rounded-full ${getShiftChipClass('有', patterns)}`} title="有給休暇">
                                                     <Heart size={10} />
-                                            {yukyu}
+                                            {formatCount(yukyu)}
                                         </span>
                                     )}
                                     {summerLeave > 0 && (
@@ -230,7 +257,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                     )}
                                     {fixedPlans > 0 && (
                                         <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold rounded-full bg-slate-100 text-slate-700 border border-slate-300" title="その他固定予定">
-                                            {fixedPlans}
+                                            {formatCount(fixedPlans)}
                                         </span>
                                     )}
                                         </div>

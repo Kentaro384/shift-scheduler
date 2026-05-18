@@ -136,7 +136,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
     const daysInMonth = getDaysInMonth(year, month);
     const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
     const summaryPatternIds = patterns.filter(p => isWorkShiftId(p.id)).map(p => p.id);
-    const summaryFixedIds = HOLIDAY_PATTERNS.map(p => p.id);
+    const summaryFixedIds = HOLIDAY_PATTERNS.map(p => p.id).filter(id => id !== '半有');
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(`${year}年${month}月`);
@@ -321,8 +321,14 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
             if (shift) {
                 const effectiveShift = getEffectiveWorkShiftId(shift) || shift;
                 if (counts[effectiveShift] !== undefined) counts[effectiveShift]++;
+                if (parseHalfDayLeaveShiftId(shift) || shift === '半有') {
+                    counts['有'] = (counts['有'] || 0) + 0.5;
+                }
                 if (countsAsStaffingShift(shift, dateStr)) totalWorkDays++;
             } else if (timeRange) {
+                timeRange.countAsShifts?.forEach(shiftId => {
+                    if (counts[shiftId] !== undefined) counts[shiftId]++;
+                });
                 totalWorkDays++;
             }
         });
