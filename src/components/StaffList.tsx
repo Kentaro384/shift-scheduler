@@ -14,6 +14,7 @@ const POSITIONS: StaffPosition[] = ['園長', '主任', '保育士', 'パート'
 const SHIFT_TYPES: StaffShiftType[] = ['no_shift', 'backup', 'regular', 'part_time', 'cooking'];
 const ROLES: (Exclude<StaffRole, null> | 'null')[] = ['age1', 'age2', 'age3', 'free', 'cooking', 'null'];
 const FLOORS: FloorType[] = ['1F', '2F', '3F', 'free', 'none'];
+const BIRTH_MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
 
 function generateTimeOptions(): string[] {
     const options: string[] = [];
@@ -263,6 +264,17 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                                 <label className="block text-xs text-gray-500 mb-1">週勤務上限</label>
                                                 <input type="number" className="w-full border rounded p-2" value={editForm.weeklyDays} onChange={e => handleChange('weeklyDays', parseInt(e.target.value))} />
                                             </div>
+                                            <div className="col-span-2">
+                                                <label className="block text-xs text-gray-500 mb-1">誕生月</label>
+                                                <select
+                                                    className="w-full border rounded p-2"
+                                                    value={editForm.birthMonth ?? ''}
+                                                    onChange={e => handleChange('birthMonth', e.target.value ? Number(e.target.value) : null)}
+                                                >
+                                                    <option value="">未設定</option>
+                                                    {BIRTH_MONTHS.map(month => <option key={month} value={month}>{month}月</option>)}
+                                                </select>
+                                            </div>
                                         </div>
 
                                         <div className="flex items-center space-x-6">
@@ -447,6 +459,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                                 <span>タイプ: {SHIFT_TYPE_LABELS[s.shiftType]}</span>
                                                 <span>担当: {getStaffRoleLabel(s.role)}</span>
                                                 <span>週: {s.weeklyDays}日</span>
+                                                <span>誕生月: {s.birthMonth ? `${s.birthMonth}月` : '未設定'}</span>
                                                 <span>曜日: {getStaffAvailableWeekdays(s).map(day => STAFF_WEEKDAY_LABELS[day]).join('')}</span>
                                             </div>
                                             {(s.preferredShifts.length > 0 || s.incompatibleWith.length > 0) && (

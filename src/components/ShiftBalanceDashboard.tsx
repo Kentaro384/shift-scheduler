@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart3, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, RefreshCcw, Heart } from 'lucide-react';
 import type { Staff, ShiftSchedule, ShiftPatternId, ShiftPatternDefinition } from '../types';
-import { countsForStaffing, getEffectiveWorkShiftId, getShiftPatternKind, isTimeRangeStaff, isWorkShiftId } from '../types';
+import { HOLIDAY_PATTERNS, countsForStaffing, getEffectiveWorkShiftId, getShiftPatternKind, isTimeRangeStaff, isWorkShiftId } from '../types';
 import { getShiftAccentColor, getShiftChipClass } from '../lib/shiftPalette';
 
 interface ShiftBalanceDashboardProps {
@@ -33,12 +33,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
     const getStaffShiftCounts = (staffMember: Staff): Record<string, number> => {
         const counts: Record<string, number> = {};
         shiftOrder.forEach(shift => counts[shift] = 0);
-        counts['振'] = 0;
-        counts['有'] = 0;
-        counts['半有'] = 0;
-        counts['研'] = 0;
-        counts['出'] = 0;
-        counts['保'] = 0;
+        HOLIDAY_PATTERNS.forEach(pattern => counts[pattern.id] = 0);
 
         days.forEach(day => {
             const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -51,7 +46,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                     counts['振'] = (counts['振'] || 0) + 1;
                 } else if (shift === '有') {
                     counts['有'] = (counts['有'] || 0) + 1;
-                } else if (shift === '半有' || shift === '研' || shift === '出' || shift === '保') {
+                } else if (HOLIDAY_PATTERNS.some(pattern => pattern.id === shift)) {
                     counts[shift] = (counts[shift] || 0) + 1;
                 }
             }
@@ -176,6 +171,8 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                 const total = shiftOrder.reduce((sum, shift) => sum + (counts[shift] || 0), 0);
                                 const furikyu = counts['振'] || 0;
                                 const yukyu = counts['有'] || 0;
+                                const summerLeave = counts['夏休'] || 0;
+                                const birthdayLeave = counts['誕生日休'] || 0;
                                 const fixedPlans = (counts['半有'] || 0) + (counts['研'] || 0) + (counts['出'] || 0) + (counts['保'] || 0);
 
                                 return (
@@ -219,6 +216,16 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
                                                 <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold rounded-full ${getShiftChipClass('有', patterns)}`} title="有給休暇">
                                                     <Heart size={10} />
                                             {yukyu}
+                                        </span>
+                                    )}
+                                    {summerLeave > 0 && (
+                                        <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold rounded-full ${getShiftChipClass('夏休', patterns)}`} title="夏休">
+                                            夏{summerLeave}
+                                        </span>
+                                    )}
+                                    {birthdayLeave > 0 && (
+                                        <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold rounded-full ${getShiftChipClass('誕生日休', patterns)}`} title="誕生日休">
+                                            誕{birthdayLeave}
                                         </span>
                                     )}
                                     {fixedPlans > 0 && (

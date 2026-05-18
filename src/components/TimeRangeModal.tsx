@@ -149,6 +149,8 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
         if (shiftId === '振') return 'bg-[#F3F4F6] border-[#10B981] text-[#10B981]';
         if (shiftId === '有') return 'bg-[#F3F4F6] border-[#F472B6] text-[#F472B6]';
         if (shiftId === '半有') return 'bg-[#FFF1F2] border-[#FB7185] text-[#BE123C]';
+        if (shiftId === '夏休') return 'bg-[#FEFCE8] border-[#EAB308] text-[#854D0E]';
+        if (shiftId === '誕生日休') return 'bg-[#FDF4FF] border-[#D946EF] text-[#86198F]';
         if (shiftId === '研') return 'bg-[#ECFDF5] border-[#34D399] text-[#047857]';
         if (shiftId === '出') return 'bg-[#EFF6FF] border-[#60A5FA] text-[#1D4ED8]';
         if (shiftId === '保') return 'bg-[#F1F5F9] border-[#64748B] text-[#475569]';

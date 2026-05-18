@@ -41,6 +41,8 @@ const TAILWIND_BG_COLORS: Record<string, string> = {
     'bg-emerald-100': 'D1FAE5',
     'bg-pink-200': 'FBCFE8',
     'bg-rose-100': 'FFE4E6',
+    'bg-yellow-100': 'FEF9C3',
+    'bg-fuchsia-100': 'FAE8FF',
     'bg-sky-100': 'E0F2FE',
     'bg-slate-100': 'F1F5F9',
     'bg-gray-100': 'F3F4F6',
@@ -106,13 +108,6 @@ function font(size: number, bold = false, color = 'FF000000'): Partial<ExcelJS.F
 
 function getNoteText(dateStr: string, notes: DailyNotes): string {
     return (notes[dateStr] || '').trim();
-}
-
-function toVerticalText(value: string): string {
-    return value
-        .split(/\r?\n/)
-        .map(line => Array.from(line).join('\n'))
-        .join('\n');
 }
 
 function getColumnLetter(col: number): string {
@@ -212,9 +207,14 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         { row: noteRow, label: '備考', height: 82 },
     ].forEach(({ row, label, height }) => {
         const labelCell = worksheet.getCell(row, 1);
-        labelCell.value = row === noteRow ? toVerticalText(label) : label;
+        labelCell.value = label;
         labelCell.font = font(11);
-        labelCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: row === noteRow || undefined };
+        labelCell.alignment = {
+            horizontal: 'center',
+            vertical: 'middle',
+            wrapText: row === noteRow || undefined,
+            textRotation: row === noteRow ? 'vertical' : undefined,
+        };
         setNoFill(labelCell);
         applyThinBorder(labelCell);
         worksheet.getRow(row).height = height;
@@ -255,9 +255,9 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         weekdayCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
         const noteCell = worksheet.getCell(noteRow, col);
-        noteCell.value = toVerticalText(getNoteText(dateStr, notes));
+        noteCell.value = getNoteText(dateStr, notes);
         noteCell.font = font(8);
-        noteCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        noteCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true, textRotation: 'vertical' };
 
         [dateCell, weekdayCell, noteCell].forEach(cell => {
             if (dayFill) setSolidFill(cell, dayFill);

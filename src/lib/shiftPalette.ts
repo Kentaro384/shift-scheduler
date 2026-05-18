@@ -98,6 +98,16 @@ const FIXED_SHIFT_STYLES: Record<string, Pick<PaletteEntry, 'card' | 'chip' | 's
     chip: 'bg-[#FDF9FA] text-[#9B4D57] border border-dashed border-[#E9A5AD]',
     solid: 'bg-[#D9828E] text-white',
   },
+  '夏休': {
+    card: 'bg-[#FFFDF4] border border-dashed border-[#E8D889] border-l-[4px] border-l-[#D7BE4A] text-[#6B6548]',
+    chip: 'bg-[#FFFDF4] text-[#806A12] border border-dashed border-[#E8D889]',
+    solid: 'bg-[#D7BE4A] text-[#2F2A12]',
+  },
+  '誕生日休': {
+    card: 'bg-[#FDF7FC] border border-dashed border-[#E7A8DE] border-l-[4px] border-l-[#D77BCC] text-[#6B5A68]',
+    chip: 'bg-[#FDF7FC] text-[#94508C] border border-dashed border-[#E7A8DE]',
+    solid: 'bg-[#D77BCC] text-white',
+  },
   '研': {
     card: 'bg-[#FDFBF4] border border-dashed border-[#D9BF76] border-l-[4px] border-l-[#C9A84F] text-[#6B6252]',
     chip: 'bg-[#FDFBF4] text-[#7A6432] border border-dashed border-[#D9BF76]',
@@ -188,6 +198,8 @@ export const getShiftMarker = (shiftId: ShiftPatternId | string): string => {
     '振': '○',
     '有': '◇',
     '半有': '◐',
+    '夏休': '夏',
+    '誕生日休': '誕',
     '研': '✎',
     '出': '↗',
     '保': '□',

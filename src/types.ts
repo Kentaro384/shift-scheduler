@@ -75,6 +75,7 @@ export interface Staff {
     defaultTimeRange?: TimeRange; // Default work hours for part-time workers
     weeklyTimeRanges?: Partial<Record<StaffWeekday, TimeRange>>; // Optional per-weekday default work hours
     floor?: FloorType; // フロア担当（同一フロアのスタッフはシフトを分ける）
+    birthMonth?: number | null; // 誕生日休を取得できる月（1-12）
 }
 
 export function isTimeRangeStaff(staff: Staff): boolean {
@@ -182,13 +183,15 @@ export const HOLIDAY_PATTERNS = [
     { id: '振', name: '振休', color: 'bg-purple-200' },
     { id: '有', name: '有給', color: 'bg-pink-200' },
     { id: '半有', name: '半日有給', color: 'bg-rose-100' },
+    { id: '夏休', name: '夏休', color: 'bg-yellow-100' },
+    { id: '誕生日休', name: '誕生日休', color: 'bg-fuchsia-100' },
     { id: '研', name: '研修', color: 'bg-emerald-100' },
     { id: '出', name: '出勤', color: 'bg-sky-100' },
     { id: '保', name: '保育', color: 'bg-slate-100' },
     { id: '休', name: '公休', color: 'bg-gray-100' },
 ];
 
-export const PROTECTED_SHIFT_IDS: ShiftPatternId[] = ['振', '有', '半有', '研', '出', '保'];
+export const PROTECTED_SHIFT_IDS: ShiftPatternId[] = ['振', '有', '半有', '夏休', '誕生日休', '研', '出', '保'];
 export const HOLIDAY_SHIFT_IDS: ShiftPatternId[] = [...PROTECTED_SHIFT_IDS, '休', ''];
 
 export function isProtectedShiftId(shift: ShiftPatternId | undefined | null): boolean {

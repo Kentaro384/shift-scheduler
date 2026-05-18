@@ -32,6 +32,9 @@ export type ConstraintCode =
     | 'MIN_COUNT_J'      // J枠減少
     | 'STAFF_CONDITION'  // 職員ごとの勤務条件
     | 'MIN_TOTAL'        // 総人数不足
+    | 'SUMMER_LEAVE_LIMIT' // 夏休の年度上限
+    | 'BIRTHDAY_LEAVE_LIMIT' // 誕生日休の年度上限
+    | 'BIRTHDAY_MONTH'   // 誕生月以外の誕生日休
     // Soft constraints
     | 'EARLY_LIMIT'      // 早番制限超過
     | 'FAIRNESS_A'       // A回数偏り
@@ -115,6 +118,32 @@ function getNextWorkDay(ctx: ConstraintContext, day: number): number {
         d++;
     }
     return 0;
+}
+
+function getFiscalYear(dateStr: string): number | null {
+    const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(dateStr);
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    return month >= 4 ? year : year - 1;
+}
+
+function getScheduledShiftForStaff(schedule: ShiftSchedule, dateStr: string, staffId: number): ShiftPatternId {
+    const daySchedule = (schedule[dateStr] || {}) as Record<string | number, ShiftPatternId>;
+    return daySchedule[staffId] || daySchedule[String(staffId)] || '';
+}
+
+function countFiscalYearLeave(
+    ctx: ConstraintContext,
+    staffId: number,
+    leaveShift: ShiftPatternId,
+    fiscalYear: number,
+    excludeDateStr: string
+): number {
+    return Object.keys(ctx.schedule).reduce((count, dateStr) => {
+        if (dateStr === excludeDateStr || getFiscalYear(dateStr) !== fiscalYear) return count;
+        return getScheduledShiftForStaff(ctx.schedule, dateStr, staffId) === leaveShift ? count + 1 : count;
+    }, 0);
 }
 
 // Count pattern for a staff member in the entire month
@@ -368,6 +397,54 @@ function checkStaffConditionViolation(ctx: ConstraintContext, day: number, staff
     return null;
 }
 
+function checkLimitedLeaveViolation(ctx: ConstraintContext, day: number, staffId: number, shift: ShiftPatternId): ConstraintViolation | null {
+    if (shift !== '夏休' && shift !== '誕生日休') return null;
+
+    const dateStr = getFormattedDate(ctx.year, ctx.month, day);
+    const fiscalYear = getFiscalYear(dateStr);
+    if (fiscalYear === null) return null;
+
+    if (shift === '夏休') {
+        const usedDays = countFiscalYearLeave(ctx, staffId, shift, fiscalYear, dateStr);
+        if (usedDays >= 3) {
+            return {
+                type: 'hard',
+                code: 'SUMMER_LEAVE_LIMIT',
+                message: `夏休は年度3日までです（使用済み${usedDays}日）`
+            };
+        }
+        return null;
+    }
+
+    const targetStaff = ctx.staff.find(s => s.id === staffId);
+    if (!targetStaff?.birthMonth) {
+        return {
+            type: 'hard',
+            code: 'BIRTHDAY_MONTH',
+            message: '職員設定で誕生月を設定してください'
+        };
+    }
+
+    if (targetStaff.birthMonth !== ctx.month) {
+        return {
+            type: 'hard',
+            code: 'BIRTHDAY_MONTH',
+            message: `誕生日休は誕生月（${targetStaff.birthMonth}月）のみ取得できます`
+        };
+    }
+
+    const usedDays = countFiscalYearLeave(ctx, staffId, shift, fiscalYear, dateStr);
+    if (usedDays >= 1) {
+        return {
+            type: 'hard',
+            code: 'BIRTHDAY_LEAVE_LIMIT',
+            message: '誕生日休は年度1日までです'
+        };
+    }
+
+    return null;
+}
+
 function checkSixConsecutiveViolation(ctx: ConstraintContext, day: number, staffId: number, shift: ShiftPatternId): ConstraintViolation | null {
     if (!isWorkShiftId(shift)) return null;
 
@@ -534,6 +611,9 @@ export function checkConstraints(
 
     const staffCondition = checkStaffConditionViolation(ctx, day, staffId, newShift);
     if (staffCondition) violations.push(staffCondition);
+
+    const limitedLeave = checkLimitedLeaveViolation(ctx, day, staffId, newShift);
+    if (limitedLeave) violations.push(limitedLeave);
 
     const weeklyLimit = checkWeeklyAJLimitViolation(ctx, day, staffId, newShift);
     if (weeklyLimit) violations.push(weeklyLimit);
