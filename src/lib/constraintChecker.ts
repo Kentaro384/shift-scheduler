@@ -8,6 +8,7 @@
 import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, ShiftPatternDefinition } from '../types';
 import { countsAsStaffingShift, getEffectiveWorkShiftId, getShiftPatternKind, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns, SHIFT_PATTERNS, staffAllowsShift } from '../types';
 import { getDaysInMonth, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
+import { countFiscalYearLeave } from './leaveUtils';
 
 // ============================================
 // Types
@@ -118,32 +119,6 @@ function getNextWorkDay(ctx: ConstraintContext, day: number): number {
         d++;
     }
     return 0;
-}
-
-function getFiscalYear(dateStr: string): number | null {
-    const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(dateStr);
-    if (!match) return null;
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    return month >= 4 ? year : year - 1;
-}
-
-function getScheduledShiftForStaff(schedule: ShiftSchedule, dateStr: string, staffId: number): ShiftPatternId {
-    const daySchedule = (schedule[dateStr] || {}) as Record<string | number, ShiftPatternId>;
-    return daySchedule[staffId] || daySchedule[String(staffId)] || '';
-}
-
-function countFiscalYearLeave(
-    ctx: ConstraintContext,
-    staffId: number,
-    leaveShift: ShiftPatternId,
-    fiscalYear: number,
-    excludeDateStr: string
-): number {
-    return Object.keys(ctx.schedule).reduce((count, dateStr) => {
-        if (dateStr === excludeDateStr || getFiscalYear(dateStr) !== fiscalYear) return count;
-        return getScheduledShiftForStaff(ctx.schedule, dateStr, staffId) === leaveShift ? count + 1 : count;
-    }, 0);
 }
 
 // Count pattern for a staff member in the entire month
@@ -401,11 +376,9 @@ function checkLimitedLeaveViolation(ctx: ConstraintContext, day: number, staffId
     if (shift !== '夏休' && shift !== '誕生日休') return null;
 
     const dateStr = getFormattedDate(ctx.year, ctx.month, day);
-    const fiscalYear = getFiscalYear(dateStr);
-    if (fiscalYear === null) return null;
 
     if (shift === '夏休') {
-        const usedDays = countFiscalYearLeave(ctx, staffId, shift, fiscalYear, dateStr);
+        const usedDays = countFiscalYearLeave(ctx.schedule, staffId, shift, dateStr, dateStr);
         if (usedDays >= 3) {
             return {
                 type: 'hard',
@@ -433,7 +406,7 @@ function checkLimitedLeaveViolation(ctx: ConstraintContext, day: number, staffId
         };
     }
 
-    const usedDays = countFiscalYearLeave(ctx, staffId, shift, fiscalYear, dateStr);
+    const usedDays = countFiscalYearLeave(ctx.schedule, staffId, shift, dateStr, dateStr);
     if (usedDays >= 1) {
         return {
             type: 'hard',

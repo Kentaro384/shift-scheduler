@@ -23,11 +23,17 @@ import { firestoreStorage } from './lib/firestoreStorage';
 import type { OrganizationData } from './lib/firestoreStorage';
 import { storage } from './lib/storage';
 import { useToast } from './components/Toast';
-import { checkConstraints, createConstraintContext } from './lib/constraintChecker';
+import { checkConstraints, createConstraintContext, type ConstraintViolation } from './lib/constraintChecker';
 import { getShiftCardClass, getShiftChipClass, getShiftMarker } from './lib/shiftPalette';
+import { getShiftDisplayLabel } from './lib/leaveUtils';
 
 const getMonthKey = (year: number, month: number) => `${year}-${String(month).padStart(2, '0')}`;
 const SELECTED_MONTH_STORAGE_KEY = 'shiftPalette.selectedMonth';
+const BLOCKING_LEAVE_CODES = new Set<ConstraintViolation['code']>([
+  'SUMMER_LEAVE_LIMIT',
+  'BIRTHDAY_LEAVE_LIMIT',
+  'BIRTHDAY_MONTH',
+]);
 
 const getInitialCurrentDate = () => {
   const today = new Date();
@@ -405,6 +411,13 @@ function App() {
     }
   };
 
+  const alertBlockingLeaveViolation = (violations: ConstraintViolation[]): boolean => {
+    const blockingViolations = violations.filter(v => v.type === 'hard' && BLOCKING_LEAVE_CODES.has(v.code));
+    if (blockingViolations.length === 0) return false;
+    window.alert(blockingViolations.map(v => v.message).join('\n'));
+    return true;
+  };
+
   const handleShiftUpdate = (shiftId: ShiftPatternId) => {
     if (!editingCell) return;
     const { staffId, day } = editingCell;
@@ -424,6 +437,7 @@ function App() {
     const ctx = createConstraintContext(newSchedule, staff, holidays, settings, year, month, patterns);
     const violations = checkConstraints(ctx, day, staffId, shiftId, { previousShift: prevShift });
     const hardViolations = violations.filter(v => v.type === 'hard');
+    if (alertBlockingLeaveViolation(violations)) return;
 
     // Apply changes
     setSchedule(newSchedule);
@@ -472,6 +486,7 @@ function App() {
     const ctx = createConstraintContext(newSchedule, staff, holidays, settings, year, month, patterns);
     const violations = checkConstraints(ctx, day, targetStaffId, shiftId, { previousShift: prevShift });
     const hardViolations = violations.filter(v => v.type === 'hard');
+    if (alertBlockingLeaveViolation(violations)) return;
 
     // Apply changes
     setSchedule(newSchedule);
@@ -934,6 +949,8 @@ function App() {
                         const partTimeRange = dateRanges[s.id] || dateRanges[String(s.id)];
                         const isPartTime = isTimeRangeStaff(s);
                         const halfDayLeave = parseHalfDayLeaveShiftId(shiftId);
+                        const displayShift = getShiftDisplayLabel(shiftId, schedule, s.id, dateStr);
+                        const compactFixedShift = displayShift.length > 2;
 
 
                         return (
@@ -950,8 +967,8 @@ function App() {
                                   －
                                 </div>
                               ) : (
-                                <div className={`w-7 h-6 md:w-9 md:h-8 mx-auto flex items-center justify-center gap-0.5 rounded-md text-xs md:text-sm shadow-sm ${getShiftCardClass(shiftId, patterns)}`}>
-                                  <span className="font-medium">{shiftId}</span>
+                                <div className={`${compactFixedShift ? 'min-w-12 px-1' : 'w-7 md:w-9'} h-6 md:h-8 mx-auto flex items-center justify-center gap-0.5 rounded-md text-xs md:text-sm shadow-sm ${getShiftCardClass(shiftId, patterns)}`}>
+                                  <span className="font-medium">{displayShift}</span>
                                 </div>
                               )
                             ) : isPartTime && partTimeRange ? (
@@ -988,7 +1005,7 @@ function App() {
                                 ) : (
                                   <>
                                     <span className="text-[8px] md:text-[10px] opacity-80">{getShiftMarker(shiftId)}</span>
-                                    <span className="font-medium">{shiftId}</span>
+                                    <span className="font-medium">{displayShift}</span>
                                   </>
                                 )}
                               </div>
@@ -1239,6 +1256,11 @@ function App() {
                 newSchedule[dateStr] = { ...newSchedule[dateStr] }; // Deep copy
               }
               newSchedule[dateStr][editingPartTime.staffId] = shiftId;
+              const prevShift = schedule[dateStr]?.[editingPartTime.staffId] || '休';
+              const ctx = createConstraintContext(newSchedule, staff, holidays, settings, year, month, patterns);
+              const violations = checkConstraints(ctx, editingPartTime.day, editingPartTime.staffId, shiftId, { previousShift: prevShift });
+              if (alertBlockingLeaveViolation(violations)) return;
+
               setSchedule(newSchedule);
               firestoreStorage.saveSchedule(newSchedule);
               saveManualShiftMarker(dateStr, editingPartTime.staffId, shiftId);

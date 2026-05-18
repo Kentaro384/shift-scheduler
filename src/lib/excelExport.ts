@@ -3,6 +3,7 @@ import { saveAs } from 'file-saver';
 import type { Staff, ShiftSchedule, ShiftPatternDefinition, Holiday, TimeRangeSchedule, TimeRange, DailyNotes } from '../types';
 import { HOLIDAY_PATTERNS, countsAsStaffingShift, getEffectiveWorkShiftId, getStaffAgeGroup, isCookingStaff, isTimeRangeStaff, isWorkShiftId, parseHalfDayLeaveShiftId } from '../types';
 import { getDaysInMonth, getFormattedDate } from './utils';
+import { getShiftDisplayLabel } from './leaveUtils';
 
 interface ExportOptions {
     year: number;
@@ -297,8 +298,8 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
                 const halfDayLeave = parseHalfDayLeaveShiftId(shift);
                 cell.value = halfDayLeave
                     ? `${halfDayLeave.baseShift}\n${halfDayLeave.leavePeriod === 'morning' ? '午前休' : '午後休'}`
-                    : shift;
-                cell.font = font(halfDayLeave ? 9 : 16);
+                    : getShiftDisplayLabel(shift, schedule, s.id, dateStr);
+                cell.font = font(halfDayLeave ? 9 : shift === '夏休' ? 12 : 16);
             } else {
                 cell.value = '';
             }
