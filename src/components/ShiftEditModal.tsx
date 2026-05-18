@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Palette, AlertTriangle, CheckCircle, Users, ArrowLeftRight } from 'lucide-react';
 import type { ShiftPatternDefinition, ShiftPatternId, Staff, ShiftSchedule, Holiday, Settings } from '../types';
-import { HOLIDAY_PATTERNS, createHalfDayLeaveShiftId } from '../types';
+import { HOLIDAY_PATTERNS, createHalfDayLeaveShiftId, parseHalfDayLeaveShiftId } from '../types';
 import {
     checkConstraints,
     evaluateCandidates,
@@ -28,6 +28,8 @@ interface ShiftEditModalProps {
     onSwap: (staffAId: number, staffBId: number) => void;
     onClose: () => void;
 }
+
+type ShiftOption = { id: ShiftPatternId; label: string; color: string; marker: string; displayId?: string };
 
 // Constraint badge component
 function ConstraintBadge({ violation }: { violation: ConstraintViolation }) {
@@ -59,6 +61,9 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
 }) => {
     const [activeTab, setActiveTab] = useState<'select' | 'candidates' | 'swap'>('select');
     const [selectedShiftForCandidates, setSelectedShiftForCandidates] = useState<ShiftPatternId>(patterns[0]?.id || 'A');
+    const currentHalfDayLeave = parseHalfDayLeaveShiftId(currentShift);
+    const initialHalfDayBaseShift = currentHalfDayLeave?.baseShift || (patterns.some(pattern => pattern.id === currentShift) ? currentShift : patterns[0]?.id || 'A');
+    const [selectedHalfDayBaseShift, setSelectedHalfDayBaseShift] = useState<ShiftPatternId>(initialHalfDayBaseShift);
 
     // Create constraint context
     const ctx = useMemo(() =>
@@ -68,7 +73,7 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
 
     const dateStr = `${month}/${day}`;
 
-    const workShiftOptions: { id: ShiftPatternId; label: string; color: string; marker: string; displayId?: string }[] = useMemo(
+    const workShiftOptions: ShiftOption[] = useMemo(
         () => patterns.map((pattern) => ({
             id: pattern.id,
             label: pattern.name || pattern.id,
@@ -78,38 +83,38 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
         [patterns]
     );
 
-    const halfDayLeaveOptions: { id: ShiftPatternId; label: string; color: string; marker: string; displayId?: string }[] = useMemo(
-        () => patterns.flatMap((pattern) => [
-            {
-                id: createHalfDayLeaveShiftId(pattern.id, 'morning'),
-                displayId: `${pattern.id}午前休`,
-                label: `${pattern.name || pattern.id}・午後勤務`,
-                color: getShiftChipClass(pattern.id, patterns),
-                marker: 'PM',
-            },
-            {
-                id: createHalfDayLeaveShiftId(pattern.id, 'afternoon'),
-                displayId: `${pattern.id}午後休`,
-                label: `${pattern.name || pattern.id}・午前勤務`,
-                color: getShiftChipClass(pattern.id, patterns),
-                marker: 'AM',
-            },
-        ]),
-        [patterns]
-    );
-
-    const shiftOptions: { id: ShiftPatternId; label: string; color: string; marker: string; displayId?: string }[] = useMemo(
+    const shiftOptions: ShiftOption[] = useMemo(
         () => [
             ...workShiftOptions,
-            ...halfDayLeaveOptions,
             ...HOLIDAY_PATTERNS.map(pattern => ({
                 id: pattern.id,
+                displayId: pattern.id === '誕生日休' ? '誕' : undefined,
                 label: pattern.name,
                 color: getShiftChipClass(pattern.id, patterns),
                 marker: getShiftMarker(pattern.id),
             })),
         ],
-        [patterns, workShiftOptions, halfDayLeaveOptions]
+        [patterns, workShiftOptions]
+    );
+
+    const halfDayLeaveOptions: ShiftOption[] = useMemo(
+        () => [
+            {
+                id: createHalfDayLeaveShiftId(selectedHalfDayBaseShift, 'morning'),
+                displayId: `${selectedHalfDayBaseShift}午前休`,
+                label: '午後勤務',
+                color: getShiftChipClass(selectedHalfDayBaseShift, patterns),
+                marker: 'PM',
+            },
+            {
+                id: createHalfDayLeaveShiftId(selectedHalfDayBaseShift, 'afternoon'),
+                displayId: `${selectedHalfDayBaseShift}午後休`,
+                label: '午前勤務',
+                color: getShiftChipClass(selectedHalfDayBaseShift, patterns),
+                marker: 'AM',
+            },
+        ],
+        [patterns, selectedHalfDayBaseShift]
     );
 
     // Check constraints for each shift option
@@ -120,6 +125,16 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
         }
         return violations;
     }, [ctx, day, staffId, shiftOptions]);
+
+    const halfDayViolations = useMemo(() => {
+        const violations: Record<string, ConstraintViolation[]> = {};
+        for (const opt of halfDayLeaveOptions) {
+            violations[opt.id] = checkConstraints(ctx, day, staffId, opt.id);
+        }
+        return violations;
+    }, [ctx, day, staffId, halfDayLeaveOptions]);
+
+    const currentShiftViolations = shiftViolations[currentShift] || halfDayViolations[currentShift] || [];
 
     // Get candidates for selected shift
     const candidates = useMemo(() =>
@@ -245,14 +260,68 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
                                 })}
                             </div>
 
+                            <div className="mt-5 rounded-xl border border-rose-100 bg-rose-50/50 p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div>
+                                        <div className="text-sm font-bold text-gray-700">半休</div>
+                                        <div className="text-xs text-gray-500">対象シフト</div>
+                                    </div>
+                                    <div className="flex flex-wrap justify-end gap-1.5">
+                                        {workShiftOptions.map(option => (
+                                            <button
+                                                key={option.id}
+                                                type="button"
+                                                onClick={() => setSelectedHalfDayBaseShift(option.id)}
+                                                title={option.label}
+                                                className={`min-w-9 h-8 rounded-lg border px-2 text-sm font-bold transition-all ${selectedHalfDayBaseShift === option.id
+                                                    ? `${option.color} ring-2 ring-[#FF6B6B] ring-offset-1`
+                                                    : 'bg-white text-gray-600 border-gray-200 hover:border-[#FF6B6B]'
+                                                    }`}
+                                            >
+                                                {option.id}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                    {halfDayLeaveOptions.map(option => {
+                                        const violations = halfDayViolations[option.id] || [];
+                                        const hasHardViolation = violations.some(v => v.type === 'hard');
+                                        const tooltipText = violations.length > 0
+                                            ? violations.map(v => `${v.type === 'hard' ? '⚠️' : '⚡'} ${v.message}`).join('\n')
+                                            : '問題なし ✓';
+
+                                        return (
+                                            <button
+                                                key={option.id}
+                                                type="button"
+                                                onClick={() => handleShiftSelect(option.id)}
+                                                title={tooltipText}
+                                                className={`relative rounded-xl border p-3 text-left transition-all ${option.color} ${currentShift === option.id ? 'ring-2 ring-[#FF6B6B] ring-offset-2' : 'hover:shadow-md'} ${hasHardViolation ? 'opacity-50' : ''}`}
+                                            >
+                                                {violations.length > 0 && (
+                                                    <div className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs ${hasHardViolation ? 'bg-red-500 text-white' : 'bg-amber-400 text-white'}`}>
+                                                        {violations.length}
+                                                    </div>
+                                                )}
+                                                <span className="text-xs font-bold opacity-70">{option.marker}</span>
+                                                <div className="text-lg font-bold leading-tight">{option.displayId}</div>
+                                                <div className="text-xs font-medium opacity-80">{option.label}</div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
                             {/* Current shift violations detail */}
-                            {shiftViolations[currentShift]?.length > 0 && (
+                            {currentShiftViolations.length > 0 && (
                                 <div className="mt-4 p-3 bg-gray-50 rounded-xl">
                                     <p className="text-xs font-medium text-gray-600 mb-2">
                                         現在のシフト「{currentShift}」の制約状況:
                                     </p>
                                     <div className="flex flex-wrap gap-1">
-                                        {shiftViolations[currentShift].map((v, i) => (
+                                        {currentShiftViolations.map((v, i) => (
                                             <ConstraintBadge key={i} violation={v} />
                                         ))}
                                     </div>

@@ -299,7 +299,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
                 cell.value = halfDayLeave
                     ? `${halfDayLeave.baseShift}\n${halfDayLeave.leavePeriod === 'morning' ? '午前休' : '午後休'}`
                     : getShiftDisplayLabel(shift, schedule, s.id, dateStr);
-                cell.font = font(halfDayLeave ? 9 : shift === '夏休' ? 12 : 16);
+                cell.font = font(halfDayLeave ? 9 : shift === '夏休' ? 11 : 16);
             } else {
                 cell.value = '';
             }

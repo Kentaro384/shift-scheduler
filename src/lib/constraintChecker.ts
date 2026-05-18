@@ -34,8 +34,7 @@ export type ConstraintCode =
     | 'STAFF_CONDITION'  // 職員ごとの勤務条件
     | 'MIN_TOTAL'        // 総人数不足
     | 'SUMMER_LEAVE_LIMIT' // 夏休の年度上限
-    | 'BIRTHDAY_LEAVE_LIMIT' // 誕生日休の年度上限
-    | 'BIRTHDAY_MONTH'   // 誕生月以外の誕生日休
+    | 'SUMMER_LEAVE_MONTH' // 夏休の取得月制限
     // Soft constraints
     | 'EARLY_LIMIT'      // 早番制限超過
     | 'FAIRNESS_A'       // A回数偏り
@@ -373,45 +372,24 @@ function checkStaffConditionViolation(ctx: ConstraintContext, day: number, staff
 }
 
 function checkLimitedLeaveViolation(ctx: ConstraintContext, day: number, staffId: number, shift: ShiftPatternId): ConstraintViolation | null {
-    if (shift !== '夏休' && shift !== '誕生日休') return null;
+    if (shift !== '夏休') return null;
 
     const dateStr = getFormattedDate(ctx.year, ctx.month, day);
 
-    if (shift === '夏休') {
-        const usedDays = countFiscalYearLeave(ctx.schedule, staffId, shift, dateStr, dateStr);
-        if (usedDays >= 3) {
-            return {
-                type: 'hard',
-                code: 'SUMMER_LEAVE_LIMIT',
-                message: `夏休は年度3日までです（使用済み${usedDays}日）`
-            };
-        }
-        return null;
-    }
-
-    const targetStaff = ctx.staff.find(s => s.id === staffId);
-    if (!targetStaff?.birthMonth) {
+    if (ctx.month < 6 || ctx.month > 8) {
         return {
             type: 'hard',
-            code: 'BIRTHDAY_MONTH',
-            message: '職員設定で誕生月を設定してください'
-        };
-    }
-
-    if (targetStaff.birthMonth !== ctx.month) {
-        return {
-            type: 'hard',
-            code: 'BIRTHDAY_MONTH',
-            message: `誕生日休は誕生月（${targetStaff.birthMonth}月）のみ取得できます`
+            code: 'SUMMER_LEAVE_MONTH',
+            message: '夏休は6月・7月・8月のみ取得できます'
         };
     }
 
     const usedDays = countFiscalYearLeave(ctx.schedule, staffId, shift, dateStr, dateStr);
-    if (usedDays >= 1) {
+    if (usedDays >= 3) {
         return {
             type: 'hard',
-            code: 'BIRTHDAY_LEAVE_LIMIT',
-            message: '誕生日休は年度1日までです'
+            code: 'SUMMER_LEAVE_LIMIT',
+            message: `夏休は年度3日までです（使用済み${usedDays}日）`
         };
     }
 

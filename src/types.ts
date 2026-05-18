@@ -75,7 +75,6 @@ export interface Staff {
     defaultTimeRange?: TimeRange; // Default work hours for part-time workers
     weeklyTimeRanges?: Partial<Record<StaffWeekday, TimeRange>>; // Optional per-weekday default work hours
     floor?: FloorType; // フロア担当（同一フロアのスタッフはシフトを分ける）
-    birthMonth?: number | null; // 誕生日休を取得できる月（1-12）
 }
 
 export function isTimeRangeStaff(staff: Staff): boolean {

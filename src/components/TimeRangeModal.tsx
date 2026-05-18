@@ -37,6 +37,10 @@ function generateTimeOptions(): string[] {
 
 const TIME_OPTIONS = generateTimeOptions();
 
+function getHolidayDisplayId(shiftId: ShiftPatternId): string {
+    return shiftId === '誕生日休' ? '誕' : shiftId;
+}
+
 // Get day of week name
 function getDayName(year: number, month: number, day: number): string {
     const date = new Date(year, month - 1, day);
@@ -350,7 +354,7 @@ export const TimeRangeModal: React.FC<TimeRangeModalProps> = ({
                                             : 'bg-white border-gray-200 hover:border-gray-300'
                                             }`}
                                     >
-                                        <span className="text-xl font-bold">{opt.id}</span>
+                                        <span className="text-xl font-bold">{getHolidayDisplayId(opt.id)}</span>
                                         <p className="text-xs mt-1">{opt.name}</p>
                                     </button>
                                 ))}

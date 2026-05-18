@@ -31,8 +31,7 @@ const getMonthKey = (year: number, month: number) => `${year}-${String(month).pa
 const SELECTED_MONTH_STORAGE_KEY = 'shiftPalette.selectedMonth';
 const BLOCKING_LEAVE_CODES = new Set<ConstraintViolation['code']>([
   'SUMMER_LEAVE_LIMIT',
-  'BIRTHDAY_LEAVE_LIMIT',
-  'BIRTHDAY_MONTH',
+  'SUMMER_LEAVE_MONTH',
 ]);
 
 const getInitialCurrentDate = () => {

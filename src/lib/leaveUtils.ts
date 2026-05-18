@@ -60,5 +60,6 @@ export function getShiftDisplayLabel(
     dateStr: string
 ): string {
     if (shift === '夏休') return formatSummerLeaveOrdinal(getSummerLeaveOrdinal(schedule, staffId, dateStr));
+    if (shift === '誕生日休') return '誕';
     return shift || '';
 }
