@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId, TimeRangeSchedule, TimeRange } from './types';
+import type { Staff, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId, TimeRange, TimeRangeSchedule } from './types';
 import { HOLIDAY_PATTERNS, countsForStaffing, getActiveStaffForDate, getActiveStaffForMonth, getStaffAgeGroup, getStaffTimeRangeForWeekday, isCookingStaff, isProtectedShiftId, isStaffActiveOnDate, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId, parseHalfDayLeaveShiftId } from './types';
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
@@ -21,17 +21,41 @@ import { signOut } from './lib/auth';
 import { firestoreStorage } from './lib/firestoreStorage';
 import { storage } from './lib/storage';
 import { useToast } from './components/Toast';
-import { checkConstraints, createConstraintContext, type ConstraintViolation } from './lib/constraintChecker';
 import { getShiftCardClass, getShiftChipClass, getShiftMarker } from './lib/shiftPalette';
 import { getShiftDisplayLabel } from './lib/leaveUtils';
 import { useFirestoreSync } from './hooks/useFirestoreSync';
+import { useScheduleActions, type SaveWithToastOptions } from './hooks/useScheduleActions';
+import { useTimeRangeActions } from './hooks/useTimeRangeActions';
 
 const getMonthKey = (year: number, month: number) => `${year}-${String(month).padStart(2, '0')}`;
 const SELECTED_MONTH_STORAGE_KEY = 'shiftPalette.selectedMonth';
-const BLOCKING_LEAVE_CODES = new Set<ConstraintViolation['code']>([
-  'SUMMER_LEAVE_LIMIT',
-  'SUMMER_LEAVE_MONTH',
-]);
+const GENERATION_SEED_OFFSETS_STORAGE_KEY = 'shiftPalette.generationSeedOffsets';
+
+const getDefaultGenerationSeed = (year: number, month: number) => year * 100 + month;
+
+const getInitialGenerationSeedOffsets = (): Record<string, number> => {
+  try {
+    const savedOffsets = localStorage.getItem(GENERATION_SEED_OFFSETS_STORAGE_KEY);
+    if (!savedOffsets) return {};
+    const parsed = JSON.parse(savedOffsets) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value >= 0)
+    ) as Record<string, number>;
+  } catch {
+    return {};
+  }
+};
+
+const saveGenerationSeedOffsets = (offsets: Record<string, number>) => {
+  try {
+    localStorage.setItem(GENERATION_SEED_OFFSETS_STORAGE_KEY, JSON.stringify(offsets));
+  } catch {
+    // If localStorage is unavailable, the current session still gets a fresh seed offset.
+  }
+};
 
 const getInitialCurrentDate = () => {
   const today = new Date();
@@ -119,6 +143,7 @@ function App() {
   // UX States
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationSeedOffsets, setGenerationSeedOffsets] = useState(getInitialGenerationSeedOffsets);
   const [lastExcelExportedAt, setLastExcelExportedAt] = useState('');
 
   // Toast notifications
@@ -147,49 +172,21 @@ function App() {
     setCurrentDate(new Date(year, month - 1 + offset, 1));
   };
 
-  const saveWithToast = async (label: string, save: () => Promise<void>): Promise<boolean> => {
+  const saveWithToast = async (label: string, save: () => Promise<void>, options: SaveWithToastOptions = {}): Promise<boolean> => {
     try {
       await save();
       return true;
     } catch (error) {
       console.error(`Failed to save ${label}:`, error);
+      options.rollback?.();
       toast.error(
         `${label}の保存に失敗しました`,
-        '通信状態を確認してもう一度試してください。画面表示は変更済みですが、クラウドには保存されていない可能性があります。'
+        options.rollback
+          ? '通信状態を確認してもう一度試してください。変更内容を元に戻しました。'
+          : '通信状態を確認してもう一度試してください。画面表示は変更済みですが、クラウドには保存されていない可能性があります。'
       );
       return false;
     }
-  };
-
-  const saveManualShiftMarker = async (dateStr: string, staffId: number, shiftId: ShiftPatternId): Promise<boolean> => {
-    const newManualShifts: ShiftSchedule = { ...manualShifts };
-    if (shiftId) {
-      newManualShifts[dateStr] = { ...(newManualShifts[dateStr] || {}), [staffId]: shiftId };
-    } else if (newManualShifts[dateStr]?.[staffId]) {
-      newManualShifts[dateStr] = { ...newManualShifts[dateStr] };
-      delete newManualShifts[dateStr][staffId];
-      if (Object.keys(newManualShifts[dateStr]).length === 0) {
-        delete newManualShifts[dateStr];
-      }
-    } else {
-      return true;
-    }
-
-    setManualShifts(newManualShifts);
-    return saveWithToast('手動固定予定', () => firestoreStorage.saveManualShifts(newManualShifts));
-  };
-
-  const removeManualShiftMarker = async (dateStr: string, staffId: number): Promise<boolean> => {
-    if (!manualShifts[dateStr]?.[staffId]) return true;
-
-    const newManualShifts: ShiftSchedule = { ...manualShifts, [dateStr]: { ...manualShifts[dateStr] } };
-    delete newManualShifts[dateStr][staffId];
-    if (Object.keys(newManualShifts[dateStr]).length === 0) {
-      delete newManualShifts[dateStr];
-    }
-
-    setManualShifts(newManualShifts);
-    return saveWithToast('手動固定予定', () => firestoreStorage.saveManualShifts(newManualShifts));
   };
 
   const handleGenerate = async () => {
@@ -198,11 +195,21 @@ function App() {
       // Small delay to show loading animation (Doherty threshold - 0.4s)
       await new Promise(resolve => setTimeout(resolve, 400));
 
-      const generator = new ShiftGenerator(visibleStaff, holidays, year, month, settings, schedule, timeRangeSchedule, patterns, manualShifts);
+      const monthKey = getMonthKey(year, month);
+      const seedOffset = generationSeedOffsets[monthKey] ?? 0;
+      const effectiveSeedOffset = hasGeneratedShift && seedOffset === 0 ? 1 : seedOffset;
+      const generationSeed = getDefaultGenerationSeed(year, month) + effectiveSeedOffset;
+      const generator = new ShiftGenerator(visibleStaff, holidays, year, month, settings, schedule, timeRangeSchedule, patterns, manualShifts, { seed: generationSeed });
       const newSchedule = generator.generate();
       const generationWarnings = generator.getWarnings();
       setSchedule(newSchedule);
-      await saveWithToast('自動生成シフト', () => firestoreStorage.saveSchedule(newSchedule));
+      const saved = await saveWithToast('自動生成シフト', () => firestoreStorage.saveSchedule(newSchedule), {
+        rollback: () => setSchedule(schedule),
+      });
+      if (!saved) return;
+      const nextSeedOffsets = { ...generationSeedOffsets, [monthKey]: effectiveSeedOffset + 1 };
+      setGenerationSeedOffsets(nextSeedOffsets);
+      saveGenerationSeedOffsets(nextSeedOffsets);
       if (generationWarnings.length > 0) {
         toast.warning(
           `振休未配置が${generationWarnings.length}件あります`,
@@ -219,7 +226,8 @@ function App() {
       return;
     }
 
-    const newSchedule = { ...schedule };
+    const previousSchedule = schedule;
+    const newSchedule = structuredClone(schedule);
 
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = getFormattedDate(year, month, d);
@@ -251,7 +259,9 @@ function App() {
     }
 
     setSchedule(newSchedule);
-    await saveWithToast('リセット結果', () => firestoreStorage.saveSchedule(newSchedule));
+    await saveWithToast('リセット結果', () => firestoreStorage.saveSchedule(newSchedule), {
+      rollback: () => setSchedule(previousSchedule),
+    });
   };
 
   const handleForceClearMonth = async () => {
@@ -261,6 +271,10 @@ function App() {
     );
     if (input !== confirmText) return;
 
+    const previousSchedule = schedule;
+    const previousTimeRangeSchedule = timeRangeSchedule;
+    const previousManualShifts = manualShifts;
+    const previousNotes = notes;
     const newSchedule = { ...schedule };
     const newTimeRangeSchedule = { ...timeRangeSchedule };
     const newManualShifts = { ...manualShifts };
@@ -283,7 +297,12 @@ function App() {
     try {
       await firestoreStorage.clearMonthData(dateStrings, staff);
       toast.success('当月を白紙に戻しました', `${year}年${month}月の入力を削除しました`);
-    } catch {
+    } catch (error) {
+      console.error('Failed to clear month data:', error);
+      setSchedule(previousSchedule);
+      setTimeRangeSchedule(previousTimeRangeSchedule);
+      setManualShifts(previousManualShifts);
+      setNotes(previousNotes);
       toast.error('削除に失敗しました', '通信状態を確認してもう一度試してください');
     }
   };
@@ -349,32 +368,47 @@ function App() {
       return;
     }
 
+    const previousTimeRangeSchedule = timeRangeSchedule;
     setTimeRangeSchedule(newTimeRangeSchedule);
-    const saved = await saveWithToast('固定勤務', () => firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule));
+    const saved = await saveWithToast('固定勤務', () => firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule), {
+      rollback: () => setTimeRangeSchedule(previousTimeRangeSchedule),
+    });
     if (saved) {
       toast.success('固定勤務を反映しました', `${appliedCount}件を追加、${skippedCount}件を保持しました`);
     }
   };
 
   const handleUpdateStaff = async (newStaff: Staff[]) => {
+    const previousStaff = staff;
     setStaff(newStaff);
-    await saveWithToast('職員設定', () => firestoreStorage.saveStaff(newStaff));
+    await saveWithToast('職員設定', () => firestoreStorage.saveStaff(newStaff), {
+      rollback: () => setStaff(previousStaff),
+    });
   };
 
   const handleUpdateSettings = async (newSettings: Settings) => {
+    const previousSettings = settings;
     setSettings(newSettings);
-    await saveWithToast('シフト設定', () => firestoreStorage.saveSettings(newSettings));
+    await saveWithToast('シフト設定', () => firestoreStorage.saveSettings(newSettings), {
+      rollback: () => setSettings(previousSettings),
+    });
   };
 
   const handleUpdateHolidays = async (newHolidays: Holiday[]) => {
+    const previousHolidays = holidays;
     setHolidays(newHolidays);
-    await saveWithToast('祝日設定', () => firestoreStorage.saveHolidays(newHolidays));
+    await saveWithToast('祝日設定', () => firestoreStorage.saveHolidays(newHolidays), {
+      rollback: () => setHolidays(previousHolidays),
+    });
   };
 
   const handleUpdatePatterns = async (newPatterns: ShiftPatternDefinition[]) => {
     const normalizedPatterns = firestoreStorage.normalizePatterns(newPatterns);
+    const previousPatterns = patterns;
     setPatterns(normalizedPatterns);
-    await saveWithToast('シフトパターン', () => firestoreStorage.savePatterns(normalizedPatterns));
+    await saveWithToast('シフトパターン', () => firestoreStorage.savePatterns(normalizedPatterns), {
+      rollback: () => setPatterns(previousPatterns),
+    });
   };
 
   const handleCellClick = (staffId: number, day: number) => {
@@ -389,146 +423,56 @@ function App() {
     }
   };
 
-  const alertBlockingLeaveViolation = (violations: ConstraintViolation[]): boolean => {
-    const blockingViolations = violations.filter(v => v.type === 'hard' && BLOCKING_LEAVE_CODES.has(v.code));
-    if (blockingViolations.length === 0) return false;
-    window.alert(blockingViolations.map(v => v.message).join('\n'));
-    return true;
-  };
+  const {
+    handleShiftUpdate,
+    handleSelectStaff,
+    handleSwap,
+    handleCandidateSelect,
+  } = useScheduleActions({
+    editingCell,
+    setEditingCell,
+    candidateSearch,
+    setCandidateSearch,
+    schedule,
+    setSchedule,
+    manualShifts,
+    setManualShifts,
+    staff,
+    getActiveStaffForDay,
+    holidays,
+    settings,
+    year,
+    month,
+    patterns,
+    toast,
+    saveWithToast,
+  });
 
-  const handleShiftUpdate = async (shiftId: ShiftPatternId) => {
-    if (!editingCell) return;
-    const { staffId, day } = editingCell;
-    const dateStr = getFormattedDate(year, month, day);
-
-    // Save previous state for undo
-    const prevSchedule = structuredClone(schedule);
-    const prevManualShifts = structuredClone(manualShifts);
-    const prevShift = schedule[dateStr]?.[staffId] || '休';
-
-    // Create new schedule
-    const newSchedule = { ...schedule };
-    if (!newSchedule[dateStr]) newSchedule[dateStr] = {};
-    newSchedule[dateStr][staffId] = shiftId;
-
-    // Check for constraint violations
-    const ctx = createConstraintContext(newSchedule, getActiveStaffForDay(day), holidays, settings, year, month, patterns);
-    const violations = checkConstraints(ctx, day, staffId, shiftId, { previousShift: prevShift });
-    const hardViolations = violations.filter(v => v.type === 'hard');
-    if (alertBlockingLeaveViolation(violations)) return;
-
-    // Apply changes
-    setSchedule(newSchedule);
-    await saveWithToast('シフト', () => firestoreStorage.saveSchedule(newSchedule));
-    await saveManualShiftMarker(dateStr, staffId, shiftId);
-    setEditingCell(null);
-
-    // Show toast with undo option if there are violations
-    const staffMember = staff.find(s => s.id === staffId);
-    if (hardViolations.length > 0) {
-      toast.warning(
-        `制約違反があります`,
-        hardViolations.map(v => v.message).join('、'),
-        () => {
-          setSchedule(prevSchedule);
-          void saveWithToast('取り消し後のシフト', () => firestoreStorage.saveSchedule(prevSchedule));
-          setManualShifts(prevManualShifts);
-          void saveWithToast('取り消し後の手動固定予定', () => firestoreStorage.saveManualShifts(prevManualShifts));
-        }
-      );
-    } else if (violations.length > 0) {
-      toast.info(
-        `${staffMember?.name}: ${prevShift} → ${shiftId}`,
-        `推奨外: ${violations.map(v => v.message).join('、')}`
-      );
-    }
-  };
-
-  // Handler for assigning a shift to a different staff member (from candidate search)
-  const handleSelectStaff = async (targetStaffId: number, shiftId: ShiftPatternId) => {
-    if (!editingCell) return;
-    const { day } = editingCell;
-    const dateStr = getFormattedDate(year, month, day);
-
-    // Save previous state for undo
-    const prevSchedule = structuredClone(schedule);
-    const prevManualShifts = structuredClone(manualShifts);
-    const prevShift = schedule[dateStr]?.[targetStaffId] || '';
-
-    // Create new schedule
-    const newSchedule = { ...schedule };
-    if (!newSchedule[dateStr]) newSchedule[dateStr] = {};
-    newSchedule[dateStr][targetStaffId] = shiftId;
-
-    // Check for constraint violations
-    const ctx = createConstraintContext(newSchedule, getActiveStaffForDay(day), holidays, settings, year, month, patterns);
-    const violations = checkConstraints(ctx, day, targetStaffId, shiftId, { previousShift: prevShift });
-    const hardViolations = violations.filter(v => v.type === 'hard');
-    if (alertBlockingLeaveViolation(violations)) return;
-
-    // Apply changes
-    setSchedule(newSchedule);
-    await saveWithToast('シフト', () => firestoreStorage.saveSchedule(newSchedule));
-    await saveManualShiftMarker(dateStr, targetStaffId, shiftId);
-    setEditingCell(null);
-
-    // Show toast
-    const staffMember = staff.find(s => s.id === targetStaffId);
-    if (hardViolations.length > 0) {
-      toast.warning(
-        `制約違反があります`,
-        `${staffMember?.name}: ${hardViolations.map(v => v.message).join('、')}`,
-        () => {
-          setSchedule(prevSchedule);
-          void saveWithToast('取り消し後のシフト', () => firestoreStorage.saveSchedule(prevSchedule));
-          setManualShifts(prevManualShifts);
-          void saveWithToast('取り消し後の手動固定予定', () => firestoreStorage.saveManualShifts(prevManualShifts));
-        }
-      );
-    } else {
-      toast.success(
-        `${staffMember?.name} → ${shiftId}`,
-        `${month}/${day} に配置しました`
-      );
-    }
-  };
-
-  // Handler for swapping two staff members' shifts
-  const handleSwap = async (staffAId: number, staffBId: number) => {
-    if (!editingCell) return;
-    const { day } = editingCell;
-    const dateStr = getFormattedDate(year, month, day);
-
-    // Save previous state for undo
-    const prevSchedule = structuredClone(schedule);
-
-    // Get current shifts
-    const shiftA = schedule[dateStr]?.[staffAId] || '';
-    const shiftB = schedule[dateStr]?.[staffBId] || '';
-
-    // Create new schedule with swapped shifts
-    const newSchedule = { ...schedule };
-    if (!newSchedule[dateStr]) newSchedule[dateStr] = {};
-    newSchedule[dateStr][staffAId] = shiftB;
-    newSchedule[dateStr][staffBId] = shiftA;
-
-    // Apply changes
-    setSchedule(newSchedule);
-    await saveWithToast('シフト入替', () => firestoreStorage.saveSchedule(newSchedule));
-    setEditingCell(null);
-
-    // Show toast with undo option
-    const staffMemberA = staff.find(s => s.id === staffAId);
-    const staffMemberB = staff.find(s => s.id === staffBId);
-    toast.warning(
-      `シフト入替完了`,
-      `${staffMemberA?.name}(${shiftA}→${shiftB}) ⇄ ${staffMemberB?.name}(${shiftB}→${shiftA})`,
-      () => {
-        setSchedule(prevSchedule);
-        void saveWithToast('取り消し後のシフト', () => firestoreStorage.saveSchedule(prevSchedule));
-      }
-    );
-  };
+  const {
+    handleSaveTimeRange,
+    handleSaveShift,
+    handleSaveAsDefault,
+    handleClearTimeRange,
+  } = useTimeRangeActions({
+    editingPartTime,
+    setEditingPartTime,
+    schedule,
+    setSchedule,
+    timeRangeSchedule,
+    setTimeRangeSchedule,
+    manualShifts,
+    setManualShifts,
+    staff,
+    setStaff,
+    getActiveStaffForDay,
+    holidays,
+    settings,
+    year,
+    month,
+    patterns,
+    toast,
+    saveWithToast,
+  });
 
   const isHoliday = (day: number) => {
     const dateStr = getFormattedDate(year, month, day);
@@ -548,32 +492,46 @@ function App() {
   });
 
   const handleDownloadExcel = async () => {
-    await exportToExcel({
-      year,
-      month,
-      staff: visibleStaff,
-      schedule,
-      timeRangeSchedule,
-      patterns,
-      holidays,
-      notes,
-    });
+    try {
+      await exportToExcel({
+        year,
+        month,
+        staff: visibleStaff,
+        schedule,
+        timeRangeSchedule,
+        patterns,
+        holidays,
+        notes,
+      });
+    } catch (error) {
+      console.error('Failed to export Excel:', error);
+      toast.error('Excel出力に失敗しました', '画面をリロードしてもう一度試してください。');
+      return;
+    }
+
     const exportedAt = formatExportedAt(new Date());
     const log = { ...excelExportLog, [getMonthKey(year, month)]: exportedAt };
+    const previousExcelExportLog = excelExportLog;
     setExcelExportLog(log);
-    await saveWithToast('Excel出力履歴', () => firestoreStorage.saveExcelExportLog(log));
+    const saved = await saveWithToast('Excel出力履歴', () => firestoreStorage.saveExcelExportLog(log), {
+      rollback: () => setExcelExportLog(previousExcelExportLog),
+    });
+    if (!saved) return;
     setLastExcelExportedAt(exportedAt);
   };
 
-  const handleNoteEdit = (day: number) => {
+  const handleNoteEdit = async (day: number) => {
     const dateStr = getFormattedDate(year, month, day);
     const currentNote = notes[dateStr] || '';
     const input = window.prompt(`${month}/${day} の備考を入力してください`, currentNote);
     if (input === null) return;
 
+    const previousNotes = notes;
     const newNotes = { ...notes, [dateStr]: input.trim() };
     setNotes(newNotes);
-    void saveWithToast('備考', () => firestoreStorage.saveNotes(newNotes));
+    await saveWithToast('備考', () => firestoreStorage.saveNotes(newNotes), {
+      rollback: () => setNotes(previousNotes),
+    });
   };
 
   const monthDateStrings = days.map(day => getFormattedDate(year, month, day));
@@ -742,21 +700,20 @@ function App() {
                     {storage.hasData() && (
                       <button
                         onClick={async () => {
-                          if (!window.confirm('LocalStorageのデータをクラウドに移行しますか？\n\n現在のクラウドデータは上書きされます。')) return;
-                          const data = storage.getAllForMigration();
-                          const saved = await saveWithToast('LocalStorage移行データ', () => firestoreStorage.saveAll(data));
-                          setStaff(data.staff);
-                          setSchedule(data.schedule);
-                          setManualShifts(data.manualShifts || {});
+	                          if (!window.confirm('LocalStorageのデータをクラウドに移行しますか？\n\n現在のクラウドデータは上書きされます。')) return;
+	                          const data = storage.getAllForMigration();
+	                          const saved = await saveWithToast('LocalStorage移行データ', () => firestoreStorage.saveAll(data));
+	                          if (!saved) return;
+	                          setStaff(data.staff);
+	                          setSchedule(data.schedule);
+	                          setManualShifts(data.manualShifts || {});
                           setSettings(firestoreStorage.normalizeSettings(data.settings));
                           setHolidays(data.holidays);
-                          setPatterns(data.patterns);
-                          setNotes(data.notes || {});
-                          setShowSettingsMenu(false);
-                          if (saved) {
-                            toast.success('データを移行しました', 'LocalStorageの内容をクラウドに保存しました');
-                          }
-                        }}
+	                          setPatterns(data.patterns);
+	                          setNotes(data.notes || {});
+	                          setShowSettingsMenu(false);
+	                          toast.success('データを移行しました', 'LocalStorageの内容をクラウドに保存しました');
+	                        }}
                         className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-blue-50 transition-colors text-blue-600 border-t border-gray-50"
                       >
                         <DatabaseBackup size={18} />
@@ -1154,26 +1111,7 @@ function App() {
           holidays={holidays}
           settings={settings}
           patterns={patterns}
-          onSelectCandidate={async (staffId, shiftPattern) => {
-            const dateStr = getFormattedDate(year, month, candidateSearch.day);
-
-            // Update schedule
-            const newSchedule = { ...schedule };
-            if (!newSchedule[dateStr]) newSchedule[dateStr] = {};
-            newSchedule[dateStr][staffId] = shiftPattern;
-
-            setSchedule(newSchedule);
-            await saveWithToast('シフト', () => firestoreStorage.saveSchedule(newSchedule));
-            await saveManualShiftMarker(dateStr, staffId, shiftPattern);
-            setCandidateSearch(null);
-
-            // Show toast
-            const staffMember = staff.find(s => s.id === staffId);
-            toast.success(
-              `${staffMember?.name} → ${shiftPattern}`,
-              `${month}/${candidateSearch.day} に配置しました`
-            );
-          }}
+          onSelectCandidate={handleCandidateSelect}
           onClose={() => setCandidateSearch(null)}
         />
       )}
@@ -1210,100 +1148,10 @@ function App() {
             disableShiftCounting={staffMember ? !countsForStaffing(staffMember) : false}
             holidayOptions={HOLIDAY_PATTERNS}
             patterns={patterns}
-            onSaveTimeRange={async (timeRange: TimeRange) => {
-              // Save time range to timeRangeSchedule with deep copy
-              const newTimeRangeSchedule = { ...timeRangeSchedule };
-              if (!newTimeRangeSchedule[dateStr]) {
-                newTimeRangeSchedule[dateStr] = {};
-              } else {
-                newTimeRangeSchedule[dateStr] = { ...newTimeRangeSchedule[dateStr] }; // Deep copy
-              }
-              newTimeRangeSchedule[dateStr][editingPartTime.staffId] = timeRange;
-              setTimeRangeSchedule(newTimeRangeSchedule);
-              await saveWithToast('時間指定勤務', () => firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule));
-
-              // ALWAYS clear schedule entry - set to empty string for Firestore merge
-              const newSchedule = { ...schedule };
-              if (!newSchedule[dateStr]) newSchedule[dateStr] = {};
-              newSchedule[dateStr] = { ...newSchedule[dateStr] }; // Deep copy
-              // Use empty string instead of delete - Firestore merge won't remove deleted keys
-              newSchedule[dateStr][editingPartTime.staffId] = '' as ShiftPatternId;
-              setSchedule(newSchedule);
-              await saveWithToast('シフト', () => firestoreStorage.saveSchedule(newSchedule));
-              await removeManualShiftMarker(dateStr, editingPartTime.staffId);
-
-              setEditingPartTime(null);
-              toast.success(`${staffMember?.name}`, `${timeRange.start}-${timeRange.end} に設定しました`);
-            }}
-            onSaveShift={async (shiftId: ShiftPatternId) => {
-              // Save holiday shift  
-              const newSchedule = { ...schedule };
-              if (!newSchedule[dateStr]) {
-                newSchedule[dateStr] = {};
-              } else {
-                newSchedule[dateStr] = { ...newSchedule[dateStr] }; // Deep copy
-              }
-              newSchedule[dateStr][editingPartTime.staffId] = shiftId;
-              const prevShift = schedule[dateStr]?.[editingPartTime.staffId] || '休';
-              const ctx = createConstraintContext(newSchedule, getActiveStaffForDay(editingPartTime.day), holidays, settings, year, month, patterns);
-              const violations = checkConstraints(ctx, editingPartTime.day, editingPartTime.staffId, shiftId, { previousShift: prevShift });
-              if (alertBlockingLeaveViolation(violations)) return;
-
-              setSchedule(newSchedule);
-              await saveWithToast('シフト', () => firestoreStorage.saveSchedule(newSchedule));
-              await saveManualShiftMarker(dateStr, editingPartTime.staffId, shiftId);
-
-              // Clear any existing time range
-              const newTimeRangeSchedule = { ...timeRangeSchedule };
-              if (newTimeRangeSchedule[dateStr]) {
-                newTimeRangeSchedule[dateStr] = { ...newTimeRangeSchedule[dateStr] }; // Deep copy!
-                delete newTimeRangeSchedule[dateStr][editingPartTime.staffId];
-                if (Object.keys(newTimeRangeSchedule[dateStr]).length === 0) {
-                  delete newTimeRangeSchedule[dateStr];
-                }
-              }
-              setTimeRangeSchedule(newTimeRangeSchedule);
-              await saveWithToast('時間指定勤務', () => firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule));
-
-              setEditingPartTime(null);
-              toast.success(`${staffMember?.name}`, `${shiftId} に変更しました`);
-            }}
-            onSaveAsDefault={async (timeRange: TimeRange) => {
-              // Save time range as staff's default
-              const newStaff = staff.map(s =>
-                s.id === editingPartTime.staffId
-                  ? { ...s, defaultTimeRange: timeRange }
-                  : s
-              );
-              setStaff(newStaff);
-              await saveWithToast('職員設定', () => firestoreStorage.saveStaff(newStaff));
-              toast.success(`${staffMember?.name}`, `${timeRange.start}-${timeRange.end} をデフォルトに設定しました`);
-            }}
-            onClear={async () => {
-              // Clear both time range and shift
-              const newSchedule = { ...schedule };
-              if (newSchedule[dateStr]?.[editingPartTime.staffId]) {
-                newSchedule[dateStr] = { ...newSchedule[dateStr] };
-                delete newSchedule[dateStr][editingPartTime.staffId];
-                if (Object.keys(newSchedule[dateStr]).length === 0) {
-                  delete newSchedule[dateStr];
-                }
-                setSchedule(newSchedule);
-                await saveWithToast('シフト', () => firestoreStorage.saveSchedule(newSchedule));
-                await removeManualShiftMarker(dateStr, editingPartTime.staffId);
-              }
-              const newTimeRangeSchedule = { ...timeRangeSchedule };
-              if (newTimeRangeSchedule[dateStr]?.[editingPartTime.staffId]) {
-                newTimeRangeSchedule[dateStr] = { ...newTimeRangeSchedule[dateStr] };
-                delete newTimeRangeSchedule[dateStr][editingPartTime.staffId];
-                if (Object.keys(newTimeRangeSchedule[dateStr]).length === 0) {
-                  delete newTimeRangeSchedule[dateStr];
-                }
-                setTimeRangeSchedule(newTimeRangeSchedule);
-                await saveWithToast('時間指定勤務', () => firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule));
-              }
-              setEditingPartTime(null);
-            }}
+            onSaveTimeRange={handleSaveTimeRange}
+            onSaveShift={handleSaveShift}
+            onSaveAsDefault={handleSaveAsDefault}
+            onClear={handleClearTimeRange}
             onClose={() => setEditingPartTime(null)}
           />
         );

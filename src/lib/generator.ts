@@ -51,7 +51,18 @@ export class ShiftGenerator {
     private warnings: string[] = [];
     private rng: () => number;
 
-    constructor(staff: Staff[], holidays: Holiday[], year: number, month: number, settings: Settings, currentSchedule: ShiftSchedule = {}, timeRangeSchedule: TimeRangeSchedule = {}, patterns: ShiftPatternDefinition[] = SHIFT_PATTERNS, manualShifts: ShiftSchedule = {}) {
+    constructor(
+        staff: Staff[],
+        holidays: Holiday[],
+        year: number,
+        month: number,
+        settings: Settings,
+        currentSchedule: ShiftSchedule = {},
+        timeRangeSchedule: TimeRangeSchedule = {},
+        patterns: ShiftPatternDefinition[] = SHIFT_PATTERNS,
+        manualShifts: ShiftSchedule = {},
+        options: { seed?: number } = {},
+    ) {
         this.staff = staff.filter(s => isStaffActiveInMonth(s, year, month));
         this.holidays = holidays;
         this.settings = settings;
@@ -59,7 +70,7 @@ export class ShiftGenerator {
         this.year = year;
         this.month = month;
         this.daysInMonth = getDaysInMonth(year, month);
-        this.rng = createSeededRandom(year * 100 + month);
+        this.rng = createSeededRandom(options.seed ?? year * 100 + month);
         this.schedule = {};
         this.initialSchedule = currentSchedule;
         this.manualShifts = manualShifts;

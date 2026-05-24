@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { DailyNotes, Holiday, Settings, ShiftPatternDefinition, ShiftSchedule, Staff, TimeRangeSchedule } from '../types';
 import { onAuthStateChange, signOut, type AuthUser } from '../lib/auth';
 import { firestoreStorage, type OrganizationData } from '../lib/firestoreStorage';
@@ -19,19 +19,32 @@ export function useFirestoreSync() {
     const [notes, setNotes] = useState<DailyNotes>({});
     const [excelExportLog, setExcelExportLog] = useState<Record<string, string>>({});
 
+    const resetData = useCallback(() => {
+        setStaff([]);
+        setSchedule({});
+        setManualShifts({});
+        setSettings(firestoreStorage.getDefaultSettings());
+        setHolidays([]);
+        setPatterns(firestoreStorage.normalizePatterns());
+        setTimeRangeSchedule({});
+        setNotes({});
+        setExcelExportLog({});
+    }, []);
+
     useEffect(() => {
         const unsubscribe = onAuthStateChange((authUser) => {
             if (authUser) {
                 setAccessDenied(false);
                 setDataLoading(true);
             } else {
+                resetData();
                 setDataLoading(false);
             }
             setUser(authUser);
             setAuthLoading(false);
         });
         return () => unsubscribe();
-    }, []);
+    }, [resetData]);
 
     useEffect(() => {
         if (!user) {
@@ -42,6 +55,7 @@ export function useFirestoreSync() {
             if (error) {
                 if (error.code === 'permission-denied') {
                     setAccessDenied(true);
+                    resetData();
                     void signOut();
                 }
                 setDataLoading(false);
@@ -59,14 +73,13 @@ export function useFirestoreSync() {
                 setNotes(data.notes || {});
                 setExcelExportLog(data.excelExportLog || {});
             } else {
-                setPatterns(firestoreStorage.normalizePatterns());
-                setSettings(firestoreStorage.getDefaultSettings());
+                resetData();
             }
             setDataLoading(false);
         });
 
         return () => unsubscribe();
-    }, [user]);
+    }, [resetData, user]);
 
     return {
         user,

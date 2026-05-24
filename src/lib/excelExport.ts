@@ -71,6 +71,30 @@ function getTimeRangeForStaff(
     return dateRanges[staffId] || dateRanges[String(staffId)];
 }
 
+export function getExcelStaffDayValue(
+    staff: Staff,
+    dateStr: string,
+    schedule: ShiftSchedule,
+    timeRangeSchedule: TimeRangeSchedule
+): string {
+    if (!isStaffActiveOnDate(staff, dateStr)) return '';
+
+    const shift = schedule[dateStr]?.[staff.id] || '';
+    if (shift === '休') return '';
+
+    const timeRange = getTimeRangeForStaff(timeRangeSchedule, dateStr, staff.id);
+    if (!shift && isTimeRangeStaff(staff) && timeRange) {
+        return `${timeRange.start}\n${timeRange.end}`;
+    }
+
+    if (!shift) return '';
+
+    const halfDayLeave = parseHalfDayLeaveShiftId(shift);
+    return halfDayLeave
+        ? `${halfDayLeave.baseShift}\n${halfDayLeave.leavePeriod === 'morning' ? '午前休' : '午後休'}`
+        : getShiftDisplayLabel(shift, schedule, staff.id, dateStr);
+}
+
 function getShiftFill(shift: string, patterns: ShiftPatternDefinition[]): string | null {
     const pattern = patterns.find(p => p.id === (getEffectiveWorkShiftId(shift) || shift));
     if (pattern) return getTailwindFill(pattern.color, COLORS.legendBg);
@@ -286,26 +310,16 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
             const dateStr = getFormattedDate(year, month, day);
             const isActive = isStaffActiveOnDate(s, dateStr);
             const shift = schedule[dateStr]?.[s.id] || '';
-            const timeRange = getTimeRangeForStaff(timeRangeSchedule, dateStr, s.id);
+            const cellValue = getExcelStaffDayValue(s, dateStr, schedule, timeRangeSchedule);
             const cell = worksheet.getCell(currentRow, col);
             const dayFill = getDayFill(year, month, day, holidays);
 
-            if (!isActive) {
-                cell.value = '';
-            } else if (shift === '休') {
-                // Match the grid UI: an explicit off day hides any stale time-range entry.
-                cell.value = '';
-            } else if (!shift && isTimeRangeStaff(s) && timeRange) {
-                cell.value = `${timeRange.start}\n${timeRange.end}`;
+            cell.value = cellValue;
+            if (!shift && isActive && isTimeRangeStaff(s) && cellValue) {
                 cell.font = font(8);
             } else if (shift) {
                 const halfDayLeave = parseHalfDayLeaveShiftId(shift);
-                cell.value = halfDayLeave
-                    ? `${halfDayLeave.baseShift}\n${halfDayLeave.leavePeriod === 'morning' ? '午前休' : '午後休'}`
-                    : getShiftDisplayLabel(shift, schedule, s.id, dateStr);
                 cell.font = font(halfDayLeave ? 9 : shift === '夏休' ? 11 : 16);
-            } else {
-                cell.value = '';
             }
 
             if (dayFill) setSolidFill(cell, dayFill);

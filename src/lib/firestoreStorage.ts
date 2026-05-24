@@ -101,6 +101,10 @@ export const firestoreStorage = {
         await this.saveAll({ schedule });
     },
 
+    async saveScheduleAndManualShifts(schedule: ShiftSchedule, manualShifts: ShiftSchedule): Promise<void> {
+        await this.saveAll({ schedule, manualShifts });
+    },
+
     async saveSettings(settings: Settings): Promise<void> {
         await this.saveAll({ settings });
     },
@@ -119,6 +123,14 @@ export const firestoreStorage = {
 
     async saveTimeRangeSchedule(timeRangeSchedule: TimeRangeSchedule): Promise<void> {
         await this.saveAll({ timeRangeSchedule });
+    },
+
+    async saveScheduleTimeRangesAndManualShifts(
+        schedule: ShiftSchedule,
+        timeRangeSchedule: TimeRangeSchedule,
+        manualShifts: ShiftSchedule,
+    ): Promise<void> {
+        await this.saveAll({ schedule, timeRangeSchedule, manualShifts });
     },
 
     async saveNotes(notes: DailyNotes): Promise<void> {
