@@ -285,14 +285,15 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
             const col = 2 + idx;
             const dateStr = getFormattedDate(year, month, day);
             const isActive = isStaffActiveOnDate(s, dateStr);
-            let shift = schedule[dateStr]?.[s.id] || '';
+            const shift = schedule[dateStr]?.[s.id] || '';
             const timeRange = getTimeRangeForStaff(timeRangeSchedule, dateStr, s.id);
             const cell = worksheet.getCell(currentRow, col);
             const dayFill = getDayFill(year, month, day, holidays);
 
-            if (shift === '休') shift = '';
-
             if (!isActive) {
+                cell.value = '';
+            } else if (shift === '休') {
+                // Match the grid UI: an explicit off day hides any stale time-range entry.
                 cell.value = '';
             } else if (!shift && isTimeRangeStaff(s) && timeRange) {
                 cell.value = `${timeRange.start}\n${timeRange.end}`;
