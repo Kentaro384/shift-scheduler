@@ -7,7 +7,7 @@
  */
 
 import type { Staff, ShiftSchedule, TimeRangeSchedule, ShiftPatternId } from '../types';
-import { SHIFT_PATTERNS, countsAsStaffingShift, countsForStaffing, getEffectiveWorkShiftId, isTimeRangeStaff } from '../types';
+import { SHIFT_PATTERNS, countsAsStaffingShift, countsForStaffing, getEffectiveWorkShiftId, isStaffActiveOnDate, isTimeRangeStaff } from '../types';
 
 /**
  * Count effective staff for a specific shift pattern on a given date.
@@ -26,6 +26,7 @@ export function countEffectiveShift(
     let count = 0;
 
     staff.forEach(s => {
+        if (!isStaffActiveOnDate(s, dateStr)) return;
         if (!countsForStaffing(s)) return;
 
         // Time-range workers: check countAsShifts
@@ -84,6 +85,7 @@ export function countQualifiedPartTimers(
     let count = 0;
 
     staff.forEach(s => {
+        if (!isStaffActiveOnDate(s, dateStr)) return;
         if (!countsForStaffing(s)) return;
         if (!isTimeRangeStaff(s) || !s.hasQualification) return;
 
@@ -109,6 +111,7 @@ export function countWorkingStaff(
     let count = 0;
 
     staff.forEach(s => {
+        if (!isStaffActiveOnDate(s, dateStr)) return;
         if (!countsForStaffing(s)) return;
 
         // Time-range staff: check if they have a time range

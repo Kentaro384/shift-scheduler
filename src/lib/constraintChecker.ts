@@ -6,7 +6,7 @@
  */
 
 import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, ShiftPatternDefinition } from '../types';
-import { countsAsStaffingShift, getEffectiveWorkShiftId, getShiftPatternKind, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns, SHIFT_PATTERNS, staffAllowsShift } from '../types';
+import { countsAsStaffingShift, getEffectiveWorkShiftId, getShiftPatternKind, isStaffActiveOnDate, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns, SHIFT_PATTERNS, staffAllowsShift } from '../types';
 import { getDaysInMonth, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
 import { countFiscalYearLeave } from './leaveUtils';
 
@@ -335,6 +335,15 @@ function checkStaffConditionViolation(ctx: ConstraintContext, day: number, staff
     const targetStaff = ctx.staff.find(s => s.id === staffId);
     if (!targetStaff) return null;
 
+    const dateStr = getFormattedDate(ctx.year, ctx.month, day);
+    if (!isStaffActiveOnDate(targetStaff, dateStr)) {
+        return {
+            type: 'hard',
+            code: 'STAFF_CONDITION',
+            message: '在籍期間外です'
+        };
+    }
+
     const weekday = new Date(ctx.year, ctx.month - 1, day).getDay();
     if (!isStaffAvailableOnWeekday(targetStaff, weekday)) {
         return {
@@ -604,9 +613,11 @@ export function evaluateCandidates(
     targetShift: ShiftPatternId
 ): CandidateEvaluation[] {
     const candidates: CandidateEvaluation[] = [];
+    const dateStr = getFormattedDate(ctx.year, ctx.month, day);
 
     // Filter eligible staff (regular and backup only for main shifts)
     const eligibleStaff = ctx.staff.filter(s =>
+        isStaffActiveOnDate(s, dateStr) &&
         (s.shiftType === 'regular' || s.shiftType === 'backup') && !isTimeRangeStaff(s)
     );
 

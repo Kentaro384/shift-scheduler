@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart3, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, RefreshCcw, Heart } from 'lucide-react';
 import type { Staff, ShiftSchedule, ShiftPatternId, ShiftPatternDefinition, TimeRange, TimeRangeSchedule } from '../types';
-import { HOLIDAY_PATTERNS, countsAsStaffingShift, getEffectiveWorkShiftId, getShiftPatternKind, isCookingStaff, isTimeRangeStaff, isWorkShiftId, parseHalfDayLeaveShiftId } from '../types';
+import { HOLIDAY_PATTERNS, countsAsStaffingShift, getEffectiveWorkShiftId, getShiftPatternKind, isCookingStaff, isStaffActiveOnDate, isTimeRangeStaff, isWorkShiftId, parseHalfDayLeaveShiftId } from '../types';
 import { getShiftAccentColor, getShiftChipClass } from '../lib/shiftPalette';
 
 interface ShiftBalanceDashboardProps {
@@ -49,6 +49,7 @@ export const ShiftBalanceDashboard: React.FC<ShiftBalanceDashboardProps> = ({
 
         days.forEach(day => {
             const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            if (!isStaffActiveOnDate(staffMember, dateStr)) return;
             const shift = schedule[dateStr]?.[staffMember.id];
             const timeRange = getTimeRangeForStaff(dateStr, staffMember.id);
             const effectiveShift = getEffectiveWorkShiftId(shift);

@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import type { Staff, ShiftSchedule, ShiftPatternDefinition, Holiday, TimeRangeSchedule, TimeRange, DailyNotes } from '../types';
-import { HOLIDAY_PATTERNS, countsAsStaffingShift, getEffectiveWorkShiftId, getStaffAgeGroup, isCookingStaff, isTimeRangeStaff, isWorkShiftId, parseHalfDayLeaveShiftId } from '../types';
+import { HOLIDAY_PATTERNS, countsAsStaffingShift, getEffectiveWorkShiftId, getStaffAgeGroup, isCookingStaff, isStaffActiveOnDate, isTimeRangeStaff, isWorkShiftId, parseHalfDayLeaveShiftId } from '../types';
 import { getDaysInMonth, getFormattedDate } from './utils';
 import { getShiftDisplayLabel } from './leaveUtils';
 
@@ -284,6 +284,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         days.forEach((day, idx) => {
             const col = 2 + idx;
             const dateStr = getFormattedDate(year, month, day);
+            const isActive = isStaffActiveOnDate(s, dateStr);
             let shift = schedule[dateStr]?.[s.id] || '';
             const timeRange = getTimeRangeForStaff(timeRangeSchedule, dateStr, s.id);
             const cell = worksheet.getCell(currentRow, col);
@@ -291,7 +292,9 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
 
             if (shift === '休') shift = '';
 
-            if (!shift && isTimeRangeStaff(s) && timeRange) {
+            if (!isActive) {
+                cell.value = '';
+            } else if (!shift && isTimeRangeStaff(s) && timeRange) {
                 cell.value = `${timeRange.start}\n${timeRange.end}`;
                 cell.font = font(8);
             } else if (shift) {
@@ -316,6 +319,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
         let totalWorkDays = 0;
         days.forEach(day => {
             const dateStr = getFormattedDate(year, month, day);
+            if (!isStaffActiveOnDate(s, dateStr)) return;
             const shift = schedule[dateStr]?.[s.id];
             const timeRange = getTimeRangeForStaff(timeRangeSchedule, dateStr, s.id);
             if (shift) {

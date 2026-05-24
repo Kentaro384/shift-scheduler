@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, ShiftPatternId, TimeRangeSchedule, TimeRange, DailyNotes } from './types';
-import { HOLIDAY_PATTERNS, countsForStaffing, getStaffAgeGroup, getStaffTimeRangeForWeekday, isCookingStaff, isProtectedShiftId, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId, parseHalfDayLeaveShiftId } from './types';
+import { HOLIDAY_PATTERNS, countsForStaffing, getActiveStaffForDate, getActiveStaffForMonth, getStaffAgeGroup, getStaffTimeRangeForWeekday, isCookingStaff, isProtectedShiftId, isStaffActiveOnDate, isStaffAvailableOnWeekday, isTimeRangeStaff, isWorkShiftId, parseHalfDayLeaveShiftId } from './types';
 import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { countAllPatterns, countWorkingStaff } from './lib/shiftCountUtils';
@@ -173,6 +173,8 @@ function App() {
   const month = currentDate.getMonth() + 1;
   const daysInMonth = getDaysInMonth(year, month);
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const visibleStaff = useMemo(() => getActiveStaffForMonth(staff, year, month), [staff, year, month]);
+  const getActiveStaffForDay = (day: number) => getActiveStaffForDate(staff, getFormattedDate(year, month, day));
 
   useEffect(() => {
     setLastExcelExportedAt(excelExportLog[getMonthKey(year, month)] || '');
@@ -226,7 +228,7 @@ function App() {
     // Small delay to show loading animation (Doherty threshold - 0.4s)
     await new Promise(resolve => setTimeout(resolve, 400));
 
-    const generator = new ShiftGenerator(staff, holidays, year, month, settings, schedule, timeRangeSchedule, patterns, manualShifts);
+    const generator = new ShiftGenerator(visibleStaff, holidays, year, month, settings, schedule, timeRangeSchedule, patterns, manualShifts);
     const newSchedule = generator.generate();
     const generationWarnings = generator.getWarnings();
     setSchedule(newSchedule);
@@ -251,7 +253,7 @@ function App() {
       const dateStr = getFormattedDate(year, month, d);
       if (!newSchedule[dateStr]) continue;
 
-      staff.forEach(s => {
+      visibleStaff.forEach(s => {
         const currentShift = newSchedule[dateStr][s.id];
         if (!currentShift) return;
 
@@ -315,7 +317,7 @@ function App() {
   };
 
   const handleApplyDefaultTimeRanges = () => {
-    const targetStaff = staff.filter(s => isTimeRangeStaff(s) && (s.defaultTimeRange || Object.keys(s.weeklyTimeRanges || {}).length > 0));
+    const targetStaff = visibleStaff.filter(s => isTimeRangeStaff(s) && (s.defaultTimeRange || Object.keys(s.weeklyTimeRanges || {}).length > 0));
     if (targetStaff.length === 0) {
       toast.info('固定勤務を反映できません', 'デフォルト勤務時間が設定された時間指定職員がいません');
       return;
@@ -338,6 +340,7 @@ function App() {
       if (holidays.some(h => h.date === dateStr)) continue;
 
       targetStaff.forEach(s => {
+        if (!isStaffActiveOnDate(s, dateStr)) return;
         if (!isStaffAvailableOnWeekday(s, weekday)) return;
         const defaultTimeRange = getStaffTimeRangeForWeekday(s, weekday);
         if (!defaultTimeRange) return;
@@ -402,6 +405,8 @@ function App() {
 
   const handleCellClick = (staffId: number, day: number) => {
     const staffMember = staff.find(s => s.id === staffId);
+    const dateStr = getFormattedDate(year, month, day);
+    if (!staffMember || !isStaffActiveOnDate(staffMember, dateStr)) return;
     // Time-range workers use TimeRangeModal instead of ShiftEditModal
     if (staffMember && isTimeRangeStaff(staffMember)) {
       setEditingPartTime({ staffId, day });
@@ -433,7 +438,7 @@ function App() {
     newSchedule[dateStr][staffId] = shiftId;
 
     // Check for constraint violations
-    const ctx = createConstraintContext(newSchedule, staff, holidays, settings, year, month, patterns);
+    const ctx = createConstraintContext(newSchedule, getActiveStaffForDay(day), holidays, settings, year, month, patterns);
     const violations = checkConstraints(ctx, day, staffId, shiftId, { previousShift: prevShift });
     const hardViolations = violations.filter(v => v.type === 'hard');
     if (alertBlockingLeaveViolation(violations)) return;
@@ -482,7 +487,7 @@ function App() {
     newSchedule[dateStr][targetStaffId] = shiftId;
 
     // Check for constraint violations
-    const ctx = createConstraintContext(newSchedule, staff, holidays, settings, year, month, patterns);
+    const ctx = createConstraintContext(newSchedule, getActiveStaffForDay(day), holidays, settings, year, month, patterns);
     const violations = checkConstraints(ctx, day, targetStaffId, shiftId, { previousShift: prevShift });
     const hardViolations = violations.filter(v => v.type === 'hard');
     if (alertBlockingLeaveViolation(violations)) return;
@@ -572,7 +577,7 @@ function App() {
     await exportToExcel({
       year,
       month,
-      staff,
+      staff: visibleStaff,
       schedule,
       timeRangeSchedule,
       patterns,
@@ -603,13 +608,13 @@ function App() {
   const hasManualFixedInput = monthDateStrings.some(dateStr => Object.keys(manualShifts[dateStr] || {}).length > 0);
   const isMonthBlank = !hasScheduleInput && !hasTimeRangeInput && !hasManualFixedInput;
   const hasGeneratedShift = monthDateStrings.some(dateStr =>
-    staff.some(s => {
+    visibleStaff.some(s => {
       if (isTimeRangeStaff(s) || isCookingStaff(s)) return false;
       const shift = schedule[dateStr]?.[s.id];
       return isWorkShiftId(shift);
     })
   );
-  const fixedDefaultStaffCount = staff.filter(s =>
+  const fixedDefaultStaffCount = visibleStaff.filter(s =>
     isTimeRangeStaff(s) && (s.defaultTimeRange || Object.keys(s.weeklyTimeRanges || {}).length > 0)
   ).length;
   const monthlyHolidayCount = monthDateStrings.filter(dateStr => holidays.some(h => h.date === dateStr)).length;
@@ -923,7 +928,7 @@ function App() {
                     );
                   })}
                 </tr>
-                {staff.map(s => {
+                {visibleStaff.map(s => {
                   const staffBadge = getStaffBadge(s);
                   return (
                     <tr key={s.id} className="hover:bg-gradient-to-r hover:from-pink-50 hover:via-white hover:to-yellow-50 transition-all duration-200">
@@ -942,6 +947,7 @@ function App() {
                       </td>
                       {days.map(day => {
                         const dateStr = getFormattedDate(year, month, day);
+                        const isActive = isStaffActiveOnDate(s, dateStr);
                         const shiftId = schedule[dateStr]?.[s.id] || '';
                         // Handle potential Firestore key type inconsistency (number vs string)
                         const dateRanges = (timeRangeSchedule[dateStr] || {}) as Record<string | number, TimeRange>;
@@ -955,11 +961,15 @@ function App() {
                         return (
                           <td
                             key={day}
-                            className="px-0.5 md:px-1 py-0.5 md:py-1 text-center border-r border-[#E5E7EB] relative group cursor-pointer hover:bg-[#F3F4F6] transition-all duration-150"
-                            onClick={() => handleCellClick(s.id, day)}
+                            className={`px-0.5 md:px-1 py-0.5 md:py-1 text-center border-r border-[#E5E7EB] relative group transition-all duration-150 ${isActive ? 'cursor-pointer hover:bg-[#F3F4F6]' : 'cursor-default bg-gray-50 text-gray-300'}`}
+                            onClick={() => isActive && handleCellClick(s.id, day)}
                           >
                             {/* Display priority: 1) Holiday shifts 2) Part-time time range 3) Other shifts 4) Empty */}
-                            {(shiftId && !isWorkShiftId(shiftId)) ? (
+                            {!isActive ? (
+                              <div className="w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center text-[#D1D5DB] font-medium text-sm opacity-70">
+                                －
+                              </div>
+                            ) : (shiftId && !isWorkShiftId(shiftId)) ? (
                               /* Holiday shifts - show for everyone including part-timers */
                               shiftId === '休' ? (
                                 <div className="w-6 h-6 md:w-8 md:h-8 mx-auto flex items-center justify-center text-[#9CA3AF] font-medium text-sm opacity-60">
@@ -1095,7 +1105,7 @@ function App() {
 
         {/* Shift Balance Dashboard */}
         <ShiftBalanceDashboard
-          staff={staff}
+          staff={visibleStaff}
           schedule={schedule}
           timeRangeSchedule={timeRangeSchedule}
           days={days}
@@ -1109,6 +1119,8 @@ function App() {
         <StaffList
           staff={staff}
           patterns={patterns}
+          year={year}
+          month={month}
           onUpdate={handleUpdateStaff}
           onClose={() => setShowStaffList(false)}
         />
@@ -1143,7 +1155,7 @@ function App() {
           month={month}
           currentShift={schedule[getFormattedDate(year, month, editingCell.day)]?.[editingCell.staffId] || ''}
           schedule={schedule}
-          staff={staff}
+          staff={getActiveStaffForDay(editingCell.day)}
           holidays={holidays}
           settings={settings}
           patterns={patterns}
@@ -1162,7 +1174,7 @@ function App() {
           month={month}
           shiftPattern={candidateSearch.shiftPattern}
           schedule={schedule}
-          staff={staff}
+          staff={getActiveStaffForDay(candidateSearch.day)}
           holidays={holidays}
           settings={settings}
           patterns={patterns}
@@ -1257,7 +1269,7 @@ function App() {
               }
               newSchedule[dateStr][editingPartTime.staffId] = shiftId;
               const prevShift = schedule[dateStr]?.[editingPartTime.staffId] || '休';
-              const ctx = createConstraintContext(newSchedule, staff, holidays, settings, year, month, patterns);
+              const ctx = createConstraintContext(newSchedule, getActiveStaffForDay(editingPartTime.day), holidays, settings, year, month, patterns);
               const violations = checkConstraints(ctx, editingPartTime.day, editingPartTime.staffId, shiftId, { previousShift: prevShift });
               if (alertBlockingLeaveViolation(violations)) return;
 
@@ -1316,7 +1328,7 @@ function App() {
           day={hourlyChartDay}
           year={year}
           month={month}
-          staff={staff}
+          staff={getActiveStaffForDay(hourlyChartDay)}
           schedule={schedule}
           timeRangeSchedule={timeRangeSchedule}
           patterns={patterns}

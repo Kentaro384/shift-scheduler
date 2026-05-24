@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import type { Staff, StaffPosition, StaffShiftType, StaffRole, ShiftPatternDefinition, ShiftPatternId, FloorType, StaffWeekday, TimeRange } from '../types';
-import { getStaffAvailableWeekdays, getStaffRoleLabel, normalizeStaffRole, STAFF_ROLE_LABELS, STAFF_WEEKDAY_LABELS, STAFF_WEEKDAYS } from '../types';
-import { X, Plus, Edit2, Trash2, Save, Users, ArrowUp, ArrowDown } from 'lucide-react';
+import { getStaffAvailableWeekdays, getStaffRoleLabel, isStaffActiveInMonth, normalizeStaffRole, STAFF_ROLE_LABELS, STAFF_WEEKDAY_LABELS, STAFF_WEEKDAYS } from '../types';
+import { X, Plus, Edit2, Trash2, Save, Users, ArrowUp, ArrowDown, UserPlus } from 'lucide-react';
 
 interface StaffListProps {
     staff: Staff[];
     patterns: ShiftPatternDefinition[];
+    year: number;
+    month: number;
     onUpdate: (staff: Staff[]) => void;
     onClose: () => void;
 }
@@ -37,11 +39,31 @@ const SHIFT_TYPE_LABELS: Record<StaffShiftType, string> = {
 
 const ROLE_LABELS: Record<Exclude<StaffRole, null> | 'null', string> = { ...STAFF_ROLE_LABELS, null: '指定なし' };
 
-export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate, onClose }) => {
+const getMonthStartDate = (year: number, month: number): string => `${year}-${String(month).padStart(2, '0')}-01`;
+
+const getDefaultStaffDraft = (year: number, month: number): Partial<Staff> => ({
+    name: '',
+    position: '保育士',
+    shiftType: 'regular',
+    preferredShifts: [],
+    weeklyDays: 5,
+    role: 'age1',
+    incompatibleWith: [],
+    earlyShiftLimit: null,
+    saturdayOnly: false,
+    hasQualification: true,
+    employmentStartDate: getMonthStartDate(year, month),
+});
+
+export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, year, month, onUpdate, onClose }) => {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editForm, setEditForm] = useState<Partial<Staff>>({});
+    const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [createForm, setCreateForm] = useState<Partial<Staff>>(() => getDefaultStaffDraft(year, month));
     const isTimeRangeEditable = editForm.shiftType === 'part_time' || editForm.position === '看護師' || editForm.position === '園長';
     const canCountAsShift = editForm.position !== '園長';
+    const isEditEmploymentRangeInvalid = Boolean(editForm.employmentStartDate && editForm.employmentEndDate && editForm.employmentStartDate > editForm.employmentEndDate);
+    const isCreateEmploymentRangeInvalid = Boolean(createForm.employmentStartDate && createForm.employmentEndDate && createForm.employmentStartDate > createForm.employmentEndDate);
 
     const removeShiftCounts = (timeRange?: TimeRange): TimeRange | undefined => {
         return timeRange ? { ...timeRange, countAsShifts: [] } : undefined;
@@ -59,22 +81,35 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
         setEditForm({ ...s });
     };
 
-    const handleSave = () => {
-        if (!editForm.name) return;
-        const normalizedForm = editForm.position === '看護師'
-            ? { ...editForm, shiftType: 'part_time' as const, role: null }
-            : editForm.position === '園長'
+    const normalizeStaffForm = (form: Partial<Staff>): Partial<Staff> => {
+        const normalizedName = form.name?.trim();
+        const normalizedForm = form.position === '看護師'
+            ? { ...form, shiftType: 'part_time' as const, role: null }
+            : form.position === '園長'
                 ? {
-                    ...editForm,
+                    ...form,
                     shiftType: 'no_shift' as const,
                     role: null,
                     hasQualification: false,
-                    defaultTimeRange: removeShiftCounts(editForm.defaultTimeRange),
-                    weeklyTimeRanges: removeWeeklyShiftCounts(editForm.weeklyTimeRanges),
+                    defaultTimeRange: removeShiftCounts(form.defaultTimeRange),
+                    weeklyTimeRanges: removeWeeklyShiftCounts(form.weeklyTimeRanges),
                 }
-            : editForm.position === '調理'
-                ? { ...editForm, shiftType: 'cooking' as const, role: 'cooking' as const, hasQualification: false }
-                : { ...editForm, role: normalizeStaffRole(editForm.role || null) };
+            : form.position === '調理'
+                ? { ...form, shiftType: 'cooking' as const, role: 'cooking' as const, hasQualification: false }
+                : { ...form, role: normalizeStaffRole(form.role || null) };
+
+        return {
+            ...normalizedForm,
+            name: normalizedName,
+            employmentStartDate: normalizedForm.employmentStartDate || '',
+            employmentEndDate: normalizedForm.employmentEndDate || '',
+        };
+    };
+
+    const handleSave = () => {
+        if (!editForm.name?.trim()) return;
+        if (isEditEmploymentRangeInvalid) return;
+        const normalizedForm = normalizeStaffForm(editForm);
 
         const newStaff = staff.map(s =>
             s.id === editingId ? { ...s, ...normalizedForm } as Staff : s
@@ -85,10 +120,21 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
     };
 
     const handleAdd = () => {
+        if (isCreateOpen) return;
+        setCreateForm(getDefaultStaffDraft(year, month));
+        setEditingId(null);
+        setEditForm({});
+        setIsCreateOpen(true);
+    };
+
+    const handleCreateSave = () => {
+        if (!createForm.name?.trim()) return;
+        if (isCreateEmploymentRangeInvalid) return;
         const newId = Math.max(...staff.map(s => s.id), 0) + 1;
+        const normalizedForm = normalizeStaffForm(createForm);
         const newStaffMember: Staff = {
             id: newId,
-            name: '新規職員',
+            name: normalizedForm.name || '',
             position: '保育士',
             shiftType: 'regular',
             preferredShifts: [],
@@ -98,8 +144,11 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
             earlyShiftLimit: null,
             saturdayOnly: false,
             hasQualification: true,
+            ...normalizedForm,
         };
         onUpdate([...staff, newStaffMember]);
+        setIsCreateOpen(false);
+        setCreateForm(getDefaultStaffDraft(year, month));
         handleEdit(newStaffMember);
     };
 
@@ -141,6 +190,35 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
             return;
         }
         setEditForm(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleCreateChange = <K extends keyof Staff>(field: K, value: Staff[K]) => {
+        if (field === 'position' && value === '園長') {
+            setCreateForm(prev => ({ ...prev, position: value, shiftType: 'no_shift', role: null, hasQualification: false }));
+            return;
+        }
+        if (field === 'position' && value === '調理') {
+            setCreateForm(prev => ({ ...prev, position: value, shiftType: 'cooking', role: 'cooking', hasQualification: false }));
+            return;
+        }
+        if (field === 'position' && value === '看護師') {
+            setCreateForm(prev => ({ ...prev, position: value, shiftType: 'part_time', role: null, hasQualification: true }));
+            return;
+        }
+        setCreateForm(prev => ({ ...prev, [field]: value }));
+    };
+
+    const getEmploymentStatus = (s: Staff): { label: string; className: string } => {
+        if (isStaffActiveInMonth(s, year, month)) {
+            return { label: '今月在籍', className: 'bg-emerald-50 text-emerald-700 border-emerald-100' };
+        }
+
+        const monthStart = getMonthStartDate(year, month);
+        if (s.employmentStartDate && s.employmentStartDate > monthStart) {
+            return { label: '未来入職', className: 'bg-sky-50 text-sky-700 border-sky-100' };
+        }
+
+        return { label: '期間外', className: 'bg-gray-50 text-gray-500 border-gray-100' };
     };
 
     const togglePreferredShift = (shiftId: ShiftPatternId) => {
@@ -263,7 +341,28 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                                 <label className="block text-xs text-gray-500 mb-1">週勤務上限</label>
                                                 <input type="number" className="w-full border rounded p-2" value={editForm.weeklyDays} onChange={e => handleChange('weeklyDays', parseInt(e.target.value))} />
                                             </div>
+                                            <div className="col-span-3">
+                                                <label className="block text-xs text-gray-500 mb-1">在籍開始日</label>
+                                                <input
+                                                    type="date"
+                                                    className="w-full border rounded p-2"
+                                                    value={editForm.employmentStartDate || ''}
+                                                    onChange={e => handleChange('employmentStartDate', e.target.value as Staff['employmentStartDate'])}
+                                                />
+                                            </div>
+                                            <div className="col-span-3">
+                                                <label className="block text-xs text-gray-500 mb-1">在籍終了日</label>
+                                                <input
+                                                    type="date"
+                                                    className="w-full border rounded p-2"
+                                                    value={editForm.employmentEndDate || ''}
+                                                    onChange={e => handleChange('employmentEndDate', e.target.value as Staff['employmentEndDate'])}
+                                                />
+                                            </div>
                                         </div>
+                                        {isEditEmploymentRangeInvalid && (
+                                            <p className="text-xs font-semibold text-red-600">在籍終了日は在籍開始日以降にしてください。</p>
+                                        )}
 
                                         <div className="flex items-center space-x-6">
                                             <label className="flex items-center space-x-2 cursor-pointer">
@@ -427,7 +526,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                             <button onClick={() => handleDelete(s.id)} className="p-2 text-[#FF6B6B] hover:bg-pink-50 rounded-full transition-all duration-300 hover:scale-110">
                                                 <Trash2 size={20} />
                                             </button>
-                                            <button onClick={handleSave} className="btn-primary">
+                                            <button onClick={handleSave} disabled={isEditEmploymentRangeInvalid} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
                                                 <Save size={18} />
                                                 <span>保存</span>
                                             </button>
@@ -440,6 +539,7 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                                 <span className="w-7 text-center text-xs font-bold text-gray-400 tabular-nums">{index + 1}</span>
                                                 <h3 className="font-bold text-lg">{s.name}</h3>
                                                 <span className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600">{s.position}</span>
+                                                <span className={`text-xs px-2 py-1 rounded border ${getEmploymentStatus(s).className}`}>{getEmploymentStatus(s).label}</span>
                                                 {s.hasQualification && <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-100">資格有</span>}
                                                 {s.saturdayOnly && <span className="text-xs bg-orange-50 text-orange-600 px-2 py-1 rounded border border-orange-100">土曜専門</span>}
                                             </div>
@@ -448,6 +548,9 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                                                 <span>担当: {getStaffRoleLabel(s.role)}</span>
                                                 <span>週: {s.weeklyDays}日</span>
                                                 <span>曜日: {getStaffAvailableWeekdays(s).map(day => STAFF_WEEKDAY_LABELS[day]).join('')}</span>
+                                                {(s.employmentStartDate || s.employmentEndDate) && (
+                                                    <span>在籍: {s.employmentStartDate || '指定なし'} - {s.employmentEndDate || '終了日なし'}</span>
+                                                )}
                                             </div>
                                             {(s.preferredShifts.length > 0 || s.incompatibleWith.length > 0) && (
                                                 <div className="flex space-x-4 mt-2">
@@ -494,10 +597,105 @@ export const StaffList: React.FC<StaffListProps> = ({ staff, patterns, onUpdate,
                     </div>
                 </div>
 
+                {isCreateOpen && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+                        <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+                            <div className="header-gradient flex items-center justify-between p-4">
+                                <h3 className="flex items-center gap-2 text-lg font-bold text-white">
+                                    <UserPlus size={20} />
+                                    職員を追加
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsCreateOpen(false)}
+                                    className="rounded-full bg-white/20 p-2 text-white transition-colors hover:bg-white/40"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+                            <div className="space-y-4 p-4">
+                                <div>
+                                    <label className="mb-1 block text-xs text-gray-500">氏名</label>
+                                    <input
+                                        className="w-full rounded border p-2 text-base"
+                                        value={createForm.name || ''}
+                                        onChange={e => handleCreateChange('name', e.target.value)}
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="mb-1 block text-xs text-gray-500">役職</label>
+                                        <select
+                                            className="w-full rounded border p-2"
+                                            value={createForm.position}
+                                            onChange={e => handleCreateChange('position', e.target.value as StaffPosition)}
+                                        >
+                                            {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-xs text-gray-500">職員タイプ</label>
+                                        <select
+                                            className="w-full rounded border p-2 disabled:bg-gray-100 disabled:text-gray-500"
+                                            value={createForm.position === '看護師' ? 'part_time' : createForm.position === '調理' ? 'cooking' : createForm.position === '園長' ? 'no_shift' : createForm.shiftType}
+                                            onChange={e => handleCreateChange('shiftType', e.target.value as StaffShiftType)}
+                                            disabled={createForm.position === '看護師' || createForm.position === '調理' || createForm.position === '園長'}
+                                        >
+                                            {SHIFT_TYPES.map(t => <option key={t} value={t}>{SHIFT_TYPE_LABELS[t]}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="mb-1 block text-xs text-gray-500">在籍開始日</label>
+                                        <input
+                                            type="date"
+                                            className="w-full rounded border p-2"
+                                            value={createForm.employmentStartDate || ''}
+                                            onChange={e => handleCreateChange('employmentStartDate', e.target.value as Staff['employmentStartDate'])}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-xs text-gray-500">在籍終了日</label>
+                                        <input
+                                            type="date"
+                                            className="w-full rounded border p-2"
+                                            value={createForm.employmentEndDate || ''}
+                                            onChange={e => handleCreateChange('employmentEndDate', e.target.value as Staff['employmentEndDate'])}
+                                        />
+                                    </div>
+                                </div>
+                                {isCreateEmploymentRangeInvalid && (
+                                    <p className="text-xs font-semibold text-red-600">在籍終了日は在籍開始日以降にしてください。</p>
+                                )}
+                                <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsCreateOpen(false)}
+                                        className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                                    >
+                                        キャンセル
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleCreateSave}
+                                        disabled={!createForm.name?.trim() || isCreateEmploymentRangeInvalid}
+                                        className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <Save size={18} />
+                                        <span>保存</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="p-5 border-t bg-gradient-to-r from-pink-50 to-yellow-50 flex justify-end rounded-b-3xl">
                     <button onClick={handleAdd} className="btn-primary">
                         <Plus size={18} />
-                        <span>職員を追加</span>
+                        <span>{isCreateOpen ? '職員を入力中' : '職員を追加'}</span>
                     </button>
                 </div>
             </div>

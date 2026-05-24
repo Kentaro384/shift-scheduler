@@ -75,6 +75,46 @@ export interface Staff {
     defaultTimeRange?: TimeRange; // Default work hours for part-time workers
     weeklyTimeRanges?: Partial<Record<StaffWeekday, TimeRange>>; // Optional per-weekday default work hours
     floor?: FloorType; // フロア担当（同一フロアのスタッフはシフトを分ける）
+    employmentStartDate?: string; // 在籍開始日 YYYY-MM-DD。未設定なら常時在籍
+    employmentEndDate?: string; // 在籍終了日 YYYY-MM-DD。未設定なら終了日なし
+}
+
+function normalizeDateKey(value: string | undefined | null): string | null {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+    return value;
+}
+
+export function getMonthDateRange(year: number, month: number): { start: string; end: string } {
+    const start = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = new Date(year, month, 0).getDate();
+    const end = `${year}-${String(month).padStart(2, '0')}-${String(endDate).padStart(2, '0')}`;
+    return { start, end };
+}
+
+export function isStaffActiveOnDate(staff: Staff, dateStr: string): boolean {
+    const dateKey = normalizeDateKey(dateStr);
+    if (!dateKey) return true;
+
+    const start = normalizeDateKey(staff.employmentStartDate);
+    const end = normalizeDateKey(staff.employmentEndDate);
+
+    return (!start || start <= dateKey) && (!end || dateKey <= end);
+}
+
+export function isStaffActiveInMonth(staff: Staff, year: number, month: number): boolean {
+    const { start: monthStart, end: monthEnd } = getMonthDateRange(year, month);
+    const start = normalizeDateKey(staff.employmentStartDate);
+    const end = normalizeDateKey(staff.employmentEndDate);
+
+    return (!start || start <= monthEnd) && (!end || monthStart <= end);
+}
+
+export function getActiveStaffForDate(staff: Staff[], dateStr: string): Staff[] {
+    return staff.filter(s => isStaffActiveOnDate(s, dateStr));
+}
+
+export function getActiveStaffForMonth(staff: Staff[], year: number, month: number): Staff[] {
+    return staff.filter(s => isStaffActiveInMonth(s, year, month));
 }
 
 export function isTimeRangeStaff(staff: Staff): boolean {
