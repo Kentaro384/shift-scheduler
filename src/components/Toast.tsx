@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { useState, useCallback, createContext, useContext, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, Info, X, Undo2 } from 'lucide-react';
 

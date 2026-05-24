@@ -1,6 +1,7 @@
 import type { Holiday, Settings, Staff, ShiftPatternDefinition, ShiftPatternId, ShiftSchedule } from '../types';
 import { isCookingStaff, isStaffActiveOnDate, isTimeRangeStaff, isWorkShiftId, SHIFT_PATTERNS } from '../types';
 import { checkConstraints, createConstraintContext, type ConstraintViolation } from './constraintChecker';
+import { getFormattedDate } from './utils';
 
 export interface SwapViolation {
     staffId: number;
@@ -10,12 +11,8 @@ export interface SwapViolation {
     severity: 'error' | 'warning';
 }
 
-function getFormattedDate(year: number, month: number, day: number): string {
-    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
-
 function cloneSchedule(schedule: ShiftSchedule): ShiftSchedule {
-    return JSON.parse(JSON.stringify(schedule)) as ShiftSchedule;
+    return structuredClone(schedule);
 }
 
 function toSwapViolation(staff: Staff, violation: ConstraintViolation): SwapViolation {

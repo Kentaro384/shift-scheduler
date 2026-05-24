@@ -60,12 +60,19 @@ export const firestoreStorage = {
 
     // Save all data
     async saveAll(data: Partial<OrganizationData>): Promise<void> {
+        const payload = {
+            ...data,
+            updatedAt: Date.now()
+        };
+
         try {
-            await setDoc(getDocRef(), {
-                ...data,
-                updatedAt: Date.now()
-            }, { merge: true });
+            await updateDoc(getDocRef(), payload);
         } catch (error) {
+            if ((error as FirestoreError).code === 'not-found') {
+                await setDoc(getDocRef(), payload, { merge: true });
+                return;
+            }
+
             console.error('Error saving to Firestore:', error);
             throw error;
         }

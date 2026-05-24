@@ -51,7 +51,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, patterns
         setForm({ ...form, [field]: Number.isFinite(parsed) ? parsed : fallback });
     };
 
-    const handlePatternChange = (index: number, field: keyof ShiftPatternDefinition, value: any) => {
+    const handlePatternChange = <K extends keyof ShiftPatternDefinition>(
+        index: number,
+        field: K,
+        value: ShiftPatternDefinition[K]
+    ) => {
         setPatternsForm(prev => prev.map((p, currentIndex) =>
             currentIndex === index ? { ...p, [field]: value } : p
         ));

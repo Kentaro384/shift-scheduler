@@ -2,6 +2,16 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
+/**
+ * Firebase Web Config.
+ *
+ * These values are public project identifiers required by the Firebase client SDK.
+ * Data access is protected by firestore.rules and the allowedUsers/{uid} gate,
+ * not by hiding this config. Keep the Firebase Console API key referrer
+ * restrictions and Auth authorized domains limited to the deployed app origins.
+ *
+ * See SECURITY.md for the operating policy.
+ */
 const firebaseConfig = {
     apiKey: "AIzaSyA8G6gJaEUVCd-Rl9SVho5pqPpyf1NFOBg",
     authDomain: "shiftpalette.firebaseapp.com",

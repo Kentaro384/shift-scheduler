@@ -467,7 +467,6 @@ score += 1 / (currentCoverage + 1)
 | 開園側連続禁止 | 前後勤務日で `opening` が連続しない | `generator.ts`, `constraintChecker.ts` |
 | 閉園側連続禁止 | 前後勤務日で `closing` が連続しない | `generator.ts`, `constraintChecker.ts` |
 | 相性NG | `incompatibleWith` の相手と同じシフトにしない | `generator.ts`, `constraintChecker.ts` |
-| 同一フロア同一シフト | 同一フロアの同一勤務を避ける | `generator.ts`, `constraintChecker.ts` |
 | 週内開園/閉園制限 | 同一週の開園側・閉園側負荷を制限 | `generator.ts`, `constraintChecker.ts` |
 | 6連勤以上 | 勤務が6日以上連続しない | `constraintChecker.ts` |
 | 最低人数維持 | 開園/閉園側から別シフトへ変更する際、最低人数を割らない | `constraintChecker.ts` |
@@ -484,17 +483,18 @@ score += 1 / (currentCoverage + 1)
 | 閉園側平準化 | 閉園側回数が平均より多い場合に候補評価で警告 | `constraintChecker.ts` |
 | 土曜回数分散 | 土曜出勤回数が少ない職員を優先 | `generator.ts`, `constraintChecker.ts` |
 | 固定予定分散 | 土曜出勤の振休は同日の休暇数が少ない日を優先 | `generator.ts` |
+| 同一フロア同一シフト | 同一フロアの同一勤務を避ける。人数不足時は緩和対象 | `generator.ts`, `constraintChecker.ts` |
 
 ### 7.3 アラート
 
-ヘッダーのアラートバッジでは次を検出する。
+現行UIではヘッダー常設のアラートバッジは使わず、次の導線で不足や偏りを確認する。
 
-| アラート | 条件 |
+| 導線 | 条件 |
 |---|---|
-| 連勤アラート | 6日以上連続勤務 |
-| 人員不足 | 必要出勤人数未満 |
-| 開園側連続 | `opening` が2日以上連続 |
-| 閉園側連続 | `closing` が2日以上連続 |
+| 今月の準備「不足確認」 | 必要出勤人数未満、または勤務パターン別資格者数の最低人数未満 |
+| `ShortageModal` | 不足日と不足数の一覧 |
+| `ShiftBalanceDashboard` | 月次の開園側・閉園側・土曜回数などの偏り |
+| セル編集時のToast | ハード/ソフト制約違反 |
 
 ---
 
@@ -616,7 +616,7 @@ flowchart TD
 | 園長 | 自動的に休扱い | 時間指定入力可。人数・資格者にはカウントしない |
 | 調理 | 自動生成対象 | 自動生成対象外。手入力を保持し、人数集計から除外 |
 | 看護師 | 未定義 | 役職として定義。時間指定入力対象 |
-| 固定予定 | `振`, `有`, `休` 中心 | `振`, `有`, `半有`, `研`, `出`, `保`, `休` |
+| 固定予定 | `振`, `有`, `休` 中心 | `振`, `有`, `半有`, `夏休`, `誕生日休`, `研`, `出`, `保`, `休` |
 | リセット | 振休クリアの記述あり | `振`, `有`, `半有`, `研`, `出`, `保` は保持 |
 | 土曜専門者 | 土曜配置で優先の記述あり | 正規土曜候補では `saturdayOnly` を優先。時間指定職員は手入力をカウント |
 | Excel出力 | 簡素な表出力 | 時間指定、色、役職、備考、凡例、集計、印刷設定を反映 |
@@ -668,6 +668,5 @@ flowchart TD
 | `src/components/CandidateSearchModal.tsx` | 集計行からの候補者検索 |
 | `src/components/SwapSuggestions.tsx` | 入替提案表示 |
 | `src/components/HourlyStaffChart.tsx` | 時間帯別人員表示 |
-| `src/components/ShiftAlerts.tsx` | アラートバッジ |
 | `src/components/ShiftBalanceDashboard.tsx` | 月次の偏り確認 |
 | `firestore.rules` | Firestoreアクセス制御 |

@@ -1,5 +1,5 @@
 import type { Staff, ShiftSchedule, Holiday, ShiftPatternId, Settings, TimeRangeSchedule, ShiftPatternDefinition, StaffAgeRole } from '../types';
-import { getDaysInMonth, getDayOfWeek, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
+import { createSeededRandom, getDaysInMonth, getDayOfWeek, getFormattedDate, isHoliday as checkIsHoliday } from './utils';
 import { SHIFT_PATTERNS, countsAsFullDayStaffingShift, countsAsStaffingShift, countsForStaffing, getEffectiveWorkShiftId, getStaffAgeGroup, getShiftPatternKind, isCookingStaff, isProtectedShiftId, isStaffActiveInMonth, isStaffActiveOnDate, isTimeRangeStaff, isWorkShiftId, normalizeShiftPatterns, parseHalfDayLeaveShiftId } from '../types';
 import { countEffectiveShift, countWorkingStaff as countWorkingStaffUtil } from './shiftCountUtils';
 import { canAssignShift, createConstraintContext, type ConstraintCode } from './constraintChecker';
@@ -49,6 +49,7 @@ export class ShiftGenerator {
     private month: number;
     private daysInMonth: number;
     private warnings: string[] = [];
+    private rng: () => number;
 
     constructor(staff: Staff[], holidays: Holiday[], year: number, month: number, settings: Settings, currentSchedule: ShiftSchedule = {}, timeRangeSchedule: TimeRangeSchedule = {}, patterns: ShiftPatternDefinition[] = SHIFT_PATTERNS, manualShifts: ShiftSchedule = {}) {
         this.staff = staff.filter(s => isStaffActiveInMonth(s, year, month));
@@ -58,6 +59,7 @@ export class ShiftGenerator {
         this.year = year;
         this.month = month;
         this.daysInMonth = getDaysInMonth(year, month);
+        this.rng = createSeededRandom(year * 100 + month);
         this.schedule = {};
         this.initialSchedule = currentSchedule;
         this.manualShifts = manualShifts;
@@ -127,6 +129,15 @@ export class ShiftGenerator {
         this.finalSafetyFill();
 
         return this.schedule;
+    }
+
+    private shuffleStaff<T>(items: T[]): T[] {
+        const shuffled = [...items];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(this.rng() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
     }
 
     // Final safety check - runs after all phases to guarantee no blanks
@@ -468,11 +479,10 @@ export class ShiftGenerator {
             // Sort qualified regulars by Saturday count, with saturdayOnly staff first.
             // Shuffle first for fairness
             const saturdayPattern = this.settings.saturdayShiftPattern;
-            const candidates = [...qualifiedRegulars]
+            const candidates = this.shuffleStaff([...qualifiedRegulars]
                 .filter(s => this.isActiveOnDay(s, day))
                 .filter(s => !countsAsStaffingShift(this.getShift(day, s.id), dateStr))
-                .filter(s => this.canAssignByConstraints(s, day, saturdayPattern))
-                .sort(() => Math.random() - 0.5)
+                .filter(s => this.canAssignByConstraints(s, day, saturdayPattern)))
                 .sort((a, b) => {
                     if (a.saturdayOnly !== b.saturdayOnly) return a.saturdayOnly ? -1 : 1;
                     return satCounts[a.id] - satCounts[b.id];
@@ -587,12 +597,13 @@ export class ShiftGenerator {
                 if (neededCount === 0) return; // Already satisfied by part-timers
 
             const candidates = regulars.filter(s => this.isActiveOnDay(s, d) && !isAssigned(s.id) && this.canAssignByConstraints(s, d, pattern, relaxConstraints));
+            const randomOrder = new Map(this.shuffleStaff(candidates).map((staffMember, index) => [staffMember.id, index]));
 
                 // Default sort: Pattern count ascending, then random
                 const defaultSort = (a: Staff, b: Staff) => {
                     const diff = this.countTotalShifts(a.id, pattern) - this.countTotalShifts(b.id, pattern);
                     if (diff !== 0) return diff;
-                    return Math.random() - 0.5;
+                    return (randomOrder.get(a.id) ?? 0) - (randomOrder.get(b.id) ?? 0);
                 };
 
                 candidates.sort(sortFn || defaultSort);
