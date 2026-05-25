@@ -167,6 +167,98 @@ export const buildClearMonthUpdates = (
     return updates;
 };
 
+type DateKeyedMap = Record<string, unknown>;
+
+const buildDateFieldUpdates = (
+    fieldName: string,
+    source: DateKeyedMap,
+    dateStrings: string[],
+): Record<string, unknown> => {
+    const updates: Record<string, unknown> = {};
+
+    dateStrings.forEach(dateStr => {
+        updates[`${fieldName}.${dateStr}`] = source[dateStr] ?? {};
+    });
+
+    return updates;
+};
+
+export const buildScopedSaveUpdates = (
+    data: Record<string, DateKeyedMap>,
+    dateStrings: string[],
+    updatedAt: number = Date.now(),
+): Record<string, unknown> => {
+    const updates: Record<string, unknown> = { updatedAt };
+
+    Object.entries(data).forEach(([fieldName, source]) => {
+        Object.assign(updates, buildDateFieldUpdates(fieldName, source, dateStrings));
+    });
+
+    return updates;
+};
+
+export const expandDottedUpdates = (updates: Record<string, unknown>): Record<string, unknown> => {
+    const expanded: Record<string, unknown> = {};
+
+    Object.entries(updates).forEach(([path, value]) => {
+        const parts = path.split('.');
+        if (parts.length === 1) {
+            expanded[path] = value;
+            return;
+        }
+
+        let cursor = expanded;
+        parts.slice(0, -1).forEach(part => {
+            if (!cursor[part] || typeof cursor[part] !== 'object' || Array.isArray(cursor[part])) {
+                cursor[part] = {};
+            }
+            cursor = cursor[part] as Record<string, unknown>;
+        });
+        cursor[parts[parts.length - 1]] = value;
+    });
+
+    return expanded;
+};
+
+const hasDottedPath = (updates: Record<string, unknown>): boolean =>
+    Object.keys(updates).some(path => path.includes('.'));
+
+const writeUpdates = async (
+    updates: Record<string, unknown>,
+    audit: SaveAuditContext | undefined,
+    updatedAt: number,
+    actor: AuditActor,
+): Promise<void> => {
+    try {
+        await updateDoc(getDocRef(), updates);
+        await writeAuditLog(audit, updatedAt, actor);
+    } catch (error) {
+        if ((error as FirestoreError).code === 'not-found') {
+            await setDoc(getDocRef(), hasDottedPath(updates) ? expandDottedUpdates(updates) : updates, { merge: true });
+            await writeAuditLog(audit, updatedAt, actor);
+            return;
+        }
+
+        console.error('Error saving to Firestore:', error);
+        throw error;
+    }
+};
+
+const saveScopedDateFields = async (
+    data: Record<string, DateKeyedMap>,
+    dateStrings: string[],
+    audit?: SaveAuditContext,
+): Promise<void> => {
+    const updatedAt = Date.now();
+    const actor = getCurrentAuditActor();
+    const updates = {
+        ...buildScopedSaveUpdates(data, dateStrings, updatedAt),
+        ...buildAuditMetadata(audit, updatedAt, actor),
+    };
+
+    await writeUpdates(updates, audit, updatedAt, actor);
+};
+
 // Firestore Storage Service
 export const firestoreStorage = {
     // Load all data
@@ -193,19 +285,7 @@ export const firestoreStorage = {
             updatedAt,
         };
 
-        try {
-            await updateDoc(getDocRef(), payload);
-            await writeAuditLog(audit, updatedAt, actor);
-        } catch (error) {
-            if ((error as FirestoreError).code === 'not-found') {
-                await setDoc(getDocRef(), payload, { merge: true });
-                await writeAuditLog(audit, updatedAt, actor);
-                return;
-            }
-
-            console.error('Error saving to Firestore:', error);
-            throw error;
-        }
+        await writeUpdates(payload, audit, updatedAt, actor);
     },
 
     // Subscribe to real-time updates
@@ -231,8 +311,21 @@ export const firestoreStorage = {
         await this.saveAll({ schedule }, audit);
     },
 
+    async saveScheduleDates(schedule: ShiftSchedule, dateStrings: string[], audit?: SaveAuditContext): Promise<void> {
+        await saveScopedDateFields({ schedule }, dateStrings, audit);
+    },
+
     async saveScheduleAndManualShifts(schedule: ShiftSchedule, manualShifts: ShiftSchedule, audit?: SaveAuditContext): Promise<void> {
         await this.saveAll({ schedule, manualShifts }, audit);
+    },
+
+    async saveScheduleAndManualShiftDates(
+        schedule: ShiftSchedule,
+        manualShifts: ShiftSchedule,
+        dateStrings: string[],
+        audit?: SaveAuditContext,
+    ): Promise<void> {
+        await saveScopedDateFields({ schedule, manualShifts }, dateStrings, audit);
     },
 
     async saveSettings(settings: Settings, audit?: SaveAuditContext): Promise<void> {
@@ -255,6 +348,10 @@ export const firestoreStorage = {
         await this.saveAll({ timeRangeSchedule }, audit);
     },
 
+    async saveTimeRangeDates(timeRangeSchedule: TimeRangeSchedule, dateStrings: string[], audit?: SaveAuditContext): Promise<void> {
+        await saveScopedDateFields({ timeRangeSchedule }, dateStrings, audit);
+    },
+
     async saveScheduleTimeRangesAndManualShifts(
         schedule: ShiftSchedule,
         timeRangeSchedule: TimeRangeSchedule,
@@ -264,12 +361,38 @@ export const firestoreStorage = {
         await this.saveAll({ schedule, timeRangeSchedule, manualShifts }, audit);
     },
 
+    async saveScheduleTimeRangeManualShiftDates(
+        schedule: ShiftSchedule,
+        timeRangeSchedule: TimeRangeSchedule,
+        manualShifts: ShiftSchedule,
+        dateStrings: string[],
+        audit?: SaveAuditContext,
+    ): Promise<void> {
+        await saveScopedDateFields({ schedule, timeRangeSchedule, manualShifts }, dateStrings, audit);
+    },
+
     async saveNotes(notes: DailyNotes, audit?: SaveAuditContext): Promise<void> {
         await this.saveAll({ notes }, audit);
     },
 
+    async saveNoteDate(dateStr: string, note: string, audit?: SaveAuditContext): Promise<void> {
+        await saveScopedDateFields({ notes: { [dateStr]: note } }, [dateStr], audit);
+    },
+
     async saveExcelExportLog(excelExportLog: Record<string, string>, audit?: SaveAuditContext): Promise<void> {
         await this.saveAll({ excelExportLog }, audit);
+    },
+
+    async saveExcelExportMonth(monthKey: string, exportedAt: string, audit?: SaveAuditContext): Promise<void> {
+        const updatedAt = Date.now();
+        const actor = getCurrentAuditActor();
+        const updates = {
+            [`excelExportLog.${monthKey}`]: exportedAt,
+            ...buildAuditMetadata(audit, updatedAt, actor),
+            updatedAt,
+        };
+
+        await writeUpdates(updates, audit, updatedAt, actor);
     },
 
     async clearMonthData(dateStrings: string[], audit?: SaveAuditContext): Promise<void> {

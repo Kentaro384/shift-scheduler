@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAuditMetadata, buildClearMonthUpdates } from './firestoreStorage';
+import { buildAuditMetadata, buildClearMonthUpdates, buildScopedSaveUpdates, expandDottedUpdates } from './firestoreStorage';
 
 describe('buildClearMonthUpdates', () => {
     it('builds month-delete updates without rewriting staff', () => {
@@ -22,6 +22,50 @@ describe('buildClearMonthUpdates', () => {
 
     it('keeps empty date input to updatedAt only', () => {
         expect(buildClearMonthUpdates([], 12345, 'delete')).toEqual({ updatedAt: 12345 });
+    });
+});
+
+describe('buildScopedSaveUpdates', () => {
+    it('builds date-scoped updates without replacing whole map fields', () => {
+        const updates = buildScopedSaveUpdates({
+            schedule: {
+                '2026-06-01': { 1: 'A' },
+                '2026-06-02': { 2: 'B' },
+                '2026-07-01': { 1: 'F' },
+            },
+            manualShifts: {
+                '2026-06-01': { 1: 'A' },
+            },
+        }, ['2026-06-01', '2026-06-02'], 12345);
+
+        expect(updates).toEqual({
+            updatedAt: 12345,
+            'schedule.2026-06-01': { 1: 'A' },
+            'schedule.2026-06-02': { 2: 'B' },
+            'manualShifts.2026-06-01': { 1: 'A' },
+            'manualShifts.2026-06-02': {},
+        });
+        expect(updates).not.toHaveProperty('schedule');
+        expect(updates).not.toHaveProperty('manualShifts');
+        expect(updates).not.toHaveProperty('schedule.2026-07-01');
+    });
+});
+
+describe('expandDottedUpdates', () => {
+    it('expands update paths for setDoc fallback', () => {
+        expect(expandDottedUpdates({
+            updatedAt: 12345,
+            'schedule.2026-06-01': { 1: 'A' },
+            'excelExportLog.2026-06': '2026-05-25 10:12',
+        })).toEqual({
+            updatedAt: 12345,
+            schedule: {
+                '2026-06-01': { 1: 'A' },
+            },
+            excelExportLog: {
+                '2026-06': '2026-05-25 10:12',
+            },
+        });
     });
 });
 

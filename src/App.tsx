@@ -153,6 +153,7 @@ function App() {
   const month = currentDate.getMonth() + 1;
   const daysInMonth = getDaysInMonth(year, month);
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const monthDateStrings = days.map(day => getFormattedDate(year, month, day));
   const visibleStaff = useMemo(() => getActiveStaffForMonth(staff, year, month), [staff, year, month]);
   const getActiveStaffForDay = (day: number) => getActiveStaffForDate(staff, getFormattedDate(year, month, day));
 
@@ -213,10 +214,11 @@ function App() {
       const effectiveSeedOffset = hasGeneratedShift && seedOffset === 0 ? 1 : seedOffset;
       const generationSeed = getDefaultGenerationSeed(year, month) + effectiveSeedOffset;
       const generator = new ShiftGenerator(visibleStaff, holidays, year, month, settings, schedule, timeRangeSchedule, patterns, manualShifts, { seed: generationSeed });
-      const newSchedule = generator.generate();
+      const generatedMonthSchedule = generator.generate();
+      const newSchedule = { ...schedule, ...generatedMonthSchedule };
       const generationWarnings = generator.getWarnings();
       setSchedule(newSchedule);
-      const saved = await saveWithToast('自動生成シフト', () => firestoreStorage.saveSchedule(newSchedule, monthAudit(
+      const saved = await saveWithToast('自動生成シフト', () => firestoreStorage.saveScheduleDates(newSchedule, monthDateStrings, monthAudit(
         'generate_shifts',
         '自動生成',
         ['schedule'],
@@ -277,7 +279,7 @@ function App() {
     }
 
     setSchedule(newSchedule);
-    await saveWithToast('リセット結果', () => firestoreStorage.saveSchedule(newSchedule, monthAudit(
+    await saveWithToast('リセット結果', () => firestoreStorage.saveScheduleDates(newSchedule, monthDateStrings, monthAudit(
       'reset_generated_shifts',
       'リセット',
       ['schedule'],
@@ -398,7 +400,7 @@ function App() {
 
     const previousTimeRangeSchedule = timeRangeSchedule;
     setTimeRangeSchedule(newTimeRangeSchedule);
-    const saved = await saveWithToast('固定勤務', () => firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule, monthAudit(
+    const saved = await saveWithToast('固定勤務', () => firestoreStorage.saveTimeRangeDates(newTimeRangeSchedule, monthDateStrings, monthAudit(
       'apply_default_time_ranges',
       '固定勤務反映',
       ['timeRangeSchedule'],
@@ -562,7 +564,7 @@ function App() {
     const log = { ...excelExportLog, [getMonthKey(year, month)]: exportedAt };
     const previousExcelExportLog = excelExportLog;
     setExcelExportLog(log);
-    const saved = await saveWithToast('Excel出力履歴', () => firestoreStorage.saveExcelExportLog(log, monthAudit(
+    const saved = await saveWithToast('Excel出力履歴', () => firestoreStorage.saveExcelExportMonth(getMonthKey(year, month), exportedAt, monthAudit(
       'excel_export',
       'Excel出力',
       ['excelExportLog'],
@@ -583,7 +585,7 @@ function App() {
     const previousNotes = notes;
     const newNotes = { ...notes, [dateStr]: input.trim() };
     setNotes(newNotes);
-    await saveWithToast('備考', () => firestoreStorage.saveNotes(newNotes, monthAudit(
+    await saveWithToast('備考', () => firestoreStorage.saveNoteDate(dateStr, input.trim(), monthAudit(
       'edit_note',
       '備考編集',
       ['notes'],
@@ -593,7 +595,6 @@ function App() {
     });
   };
 
-  const monthDateStrings = days.map(day => getFormattedDate(year, month, day));
   const hasScheduleInput = monthDateStrings.some(dateStr => Object.values(schedule[dateStr] || {}).some(Boolean));
   const hasTimeRangeInput = monthDateStrings.some(dateStr => Object.keys(timeRangeSchedule[dateStr] || {}).length > 0);
   const hasManualFixedInput = monthDateStrings.some(dateStr => Object.keys(manualShifts[dateStr] || {}).length > 0);
