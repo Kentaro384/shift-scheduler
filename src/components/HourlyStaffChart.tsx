@@ -212,10 +212,10 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
         if (sw.isUnassigned) {
             return {
                 ...geometry,
-                backgroundColor: '#FFFFFF',
-                backgroundImage: 'repeating-linear-gradient(45deg, #9CA3AF 0 1.5px, transparent 1.5px 6px)',
-                border: '1px dashed #9CA3AF',
-                color: '#6B7280',
+                backgroundColor: '#FCFBF7',
+                border: '1px solid #E4DBCA',
+                color: '#D97706',
+                boxShadow: 'inset 0 0 0 1px rgba(255, 255, 255, 0.7)',
             };
         }
 
