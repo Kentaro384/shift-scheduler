@@ -5,7 +5,7 @@ import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { countAllPatterns, countWorkingStaff } from './lib/shiftCountUtils';
 import { exportToExcel } from './lib/excelExport';
-import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, Trash2, CheckCircle2, AlertTriangle, Undo2 } from 'lucide-react';
 import { StaffList } from './components/StaffList';
 import { SettingsModal } from './components/SettingsModal';
 import { HolidayModal } from './components/HolidayModal';
@@ -18,7 +18,7 @@ import { ShiftPaletteIcon } from './components/ShiftPaletteIcon';
 import { ShiftBalanceDashboard } from './components/ShiftBalanceDashboard';
 import { LoginScreen } from './components/LoginScreen';
 import { signOut } from './lib/auth';
-import { firestoreStorage, type SaveAuditContext } from './lib/firestoreStorage';
+import { buildScopedDateUndoPatch, firestoreStorage, type SaveAuditContext } from './lib/firestoreStorage';
 import { useToast } from './components/Toast';
 import { getShiftCardClass, getShiftChipClass, getShiftMarker } from './lib/shiftPalette';
 import { getShiftDisplayLabel } from './lib/leaveUtils';
@@ -142,6 +142,7 @@ function App() {
   // UX States
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isUndoing, setIsUndoing] = useState(false);
   const [generationSeedOffsets, setGenerationSeedOffsets] = useState(getInitialGenerationSeedOffsets);
   const [lastExcelExportedAt, setLastExcelExportedAt] = useState('');
 
@@ -221,7 +222,14 @@ function App() {
         'generate_shifts',
         '自動生成',
         ['schedule'],
-        { detail: { generationSeed, warningCount: generationWarnings.length } },
+        {
+          detail: { generationSeed, warningCount: generationWarnings.length },
+          undoPatch: buildScopedDateUndoPatch(
+            { schedule },
+            { schedule: newSchedule },
+            monthDateStrings,
+          ),
+        },
       )), {
         rollback: () => setSchedule(schedule),
       });
@@ -282,10 +290,37 @@ function App() {
       'reset_generated_shifts',
       'リセット',
       ['schedule'],
-      { affectedDateCount: daysInMonth },
+      {
+        affectedDateCount: daysInMonth,
+        undoPatch: buildScopedDateUndoPatch(
+          { schedule: previousSchedule },
+          { schedule: newSchedule },
+          monthDateStrings,
+        ),
+      },
     )), {
       rollback: () => setSchedule(previousSchedule),
     });
+  };
+
+  const handleUndoLatestChange = async () => {
+    if (isUndoing) return;
+    setIsUndoing(true);
+
+    try {
+      const undone = await firestoreStorage.undoLatestChange(getMonthKey(year, month));
+      if (!undone) {
+        toast.info('取り消せる変更はありません', `${year}年${month}月の直近操作にUndo対象がありません`);
+        return;
+      }
+
+      toast.success('直前の変更を取り消しました', undone.label);
+    } catch (error) {
+      console.error('Failed to undo latest change:', error);
+      toast.error('取り消しに失敗しました', '通信状態を確認してもう一度試してください');
+    } finally {
+      setIsUndoing(false);
+    }
   };
 
   const handleForceClearMonth = async () => {
@@ -346,7 +381,25 @@ function App() {
         'clear_month',
         '当月を白紙に戻す',
         ['schedule', 'timeRangeSchedule', 'manualShifts', 'notes'],
-        { affectedDateCount: dateStrings.length, detail: { backupId } },
+        {
+          affectedDateCount: dateStrings.length,
+          detail: { backupId },
+          undoPatch: buildScopedDateUndoPatch(
+            {
+              schedule: previousSchedule,
+              timeRangeSchedule: previousTimeRangeSchedule,
+              manualShifts: previousManualShifts,
+              notes: previousNotes,
+            },
+            {
+              schedule: newSchedule,
+              timeRangeSchedule: newTimeRangeSchedule,
+              manualShifts: newManualShifts,
+              notes: newNotes,
+            },
+            dateStrings,
+          ),
+        },
       ));
       toast.success('当月を白紙に戻しました', `${year}年${month}月の入力を削除しました`);
     } catch (error) {
@@ -426,7 +479,14 @@ function App() {
       'apply_default_time_ranges',
       '固定勤務反映',
       ['timeRangeSchedule'],
-      { detail: { appliedCount, skippedCount } },
+      {
+        detail: { appliedCount, skippedCount },
+        undoPatch: buildScopedDateUndoPatch(
+          { timeRangeSchedule: previousTimeRangeSchedule },
+          { timeRangeSchedule: newTimeRangeSchedule },
+          monthDateStrings,
+        ),
+      },
     )), {
       rollback: () => setTimeRangeSchedule(previousTimeRangeSchedule),
     });
@@ -611,7 +671,14 @@ function App() {
       'edit_note',
       '備考編集',
       ['notes'],
-      { targetDate: dateStr },
+      {
+        targetDate: dateStr,
+        undoPatch: buildScopedDateUndoPatch(
+          { notes: previousNotes },
+          { notes: newNotes },
+          [dateStr],
+        ),
+      },
     )), {
       rollback: () => setNotes(previousNotes),
     });
@@ -803,6 +870,15 @@ function App() {
               </div>
 
               {/* Main Actions */}
+              <button
+                onClick={handleUndoLatestChange}
+                disabled={isUndoing}
+                className="flex items-center space-x-1 md:space-x-2 px-2.5 landscape:px-2 md:px-4 py-1.5 landscape:py-1 md:py-2 bg-white text-gray-600 border border-gray-200 rounded-full hover:border-gray-400 transition-all duration-200 font-medium active:scale-95 disabled:cursor-default disabled:opacity-50 disabled:active:scale-100 text-xs landscape:text-xs md:text-sm"
+                title="現在の月の直近変更を取り消す"
+              >
+                <Undo2 size={16} className="md:w-[18px] md:h-[18px]" />
+                <span className="hidden sm:inline">{isUndoing ? '取消中' : '戻す'}</span>
+              </button>
               <button
                 onClick={handleReset}
                 className="flex items-center space-x-1 md:space-x-2 px-2.5 landscape:px-2 md:px-4 py-1.5 landscape:py-1 md:py-2 bg-white text-gray-600 border border-gray-200 rounded-full hover:border-gray-400 transition-all duration-200 font-medium active:scale-95 text-xs landscape:text-xs md:text-sm"

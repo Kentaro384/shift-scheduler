@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { Holiday, Settings, ShiftPatternDefinition, ShiftPatternId, ShiftSchedule, Staff, TimeRange, TimeRangeSchedule } from '../types';
 import { checkConstraints, createConstraintContext } from '../lib/constraintChecker';
 import { alertBlockingLeaveViolation } from '../lib/blockingLeaveViolation';
-import { firestoreStorage } from '../lib/firestoreStorage';
+import { buildScopedStaffCellUndoPatch, firestoreStorage } from '../lib/firestoreStorage';
 import { getFormattedDate } from '../lib/utils';
 import {
   clearManualShiftMarkerState,
@@ -91,6 +91,12 @@ export const useTimeRangeActions = ({
         targetStaffId: staffId,
         affectedFields: ['schedule', 'timeRangeSchedule', 'manualShifts'],
         detail: { start: timeRange.start, end: timeRange.end },
+        undoPatch: buildScopedStaffCellUndoPatch(
+          { schedule: previousSchedule, timeRangeSchedule: previousTimeRangeSchedule, manualShifts: previousManualShifts },
+          { schedule: newSchedule, timeRangeSchedule: newTimeRangeSchedule, manualShifts: newManualShifts },
+          dateStr,
+          [staffId],
+        ),
       }),
       {
         rollback: () => {
@@ -136,6 +142,12 @@ export const useTimeRangeActions = ({
         targetStaffId: staffId,
         affectedFields: ['schedule', 'timeRangeSchedule', 'manualShifts'],
         detail: { shiftId },
+        undoPatch: buildScopedStaffCellUndoPatch(
+          { schedule: previousSchedule, timeRangeSchedule: previousTimeRangeSchedule, manualShifts: previousManualShifts },
+          { schedule: newSchedule, timeRangeSchedule: newTimeRangeSchedule, manualShifts: newManualShifts },
+          dateStr,
+          [staffId],
+        ),
       }),
       {
         rollback: () => {
@@ -199,6 +211,12 @@ export const useTimeRangeActions = ({
         targetDate: dateStr,
         targetStaffId: staffId,
         affectedFields: ['schedule', 'timeRangeSchedule', 'manualShifts'],
+        undoPatch: buildScopedStaffCellUndoPatch(
+          { schedule: previousSchedule, timeRangeSchedule: previousTimeRangeSchedule, manualShifts: previousManualShifts },
+          { schedule: newSchedule, timeRangeSchedule: newTimeRangeSchedule, manualShifts: newManualShifts },
+          dateStr,
+          [staffId],
+        ),
       }),
       {
         rollback: () => {

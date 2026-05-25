@@ -4,7 +4,11 @@ import {
     deleteField,
     doc,
     getDoc,
+    getDocs,
+    limit,
     onSnapshot,
+    orderBy,
+    query,
     serverTimestamp,
     setDoc,
     updateDoc,
@@ -42,6 +46,18 @@ export type AuditActor = {
 };
 
 type AuditDetailValue = string | number | boolean | null | string[] | number[];
+type AuditPatchScalar = string | number | boolean | null | string[] | number[] | Record<string, unknown>;
+type MissingPatchValue = { __missing: true };
+
+export type UndoFieldPatch = {
+    path: string;
+    before: AuditPatchScalar | MissingPatchValue;
+    after: AuditPatchScalar | MissingPatchValue;
+};
+
+export type UndoPatch = {
+    fields: UndoFieldPatch[];
+};
 
 export type SaveAuditContext = {
     action: string;
@@ -52,10 +68,24 @@ export type SaveAuditContext = {
     affectedFields?: string[];
     affectedDateCount?: number;
     detail?: Record<string, AuditDetailValue>;
+    undoPatch?: UndoPatch;
 };
 
 export type LastOperation = Omit<SaveAuditContext, 'detail'> & {
     at: number;
+};
+
+export type AuditLogRecord = {
+    id: string;
+    action: string;
+    label: string;
+    monthKey?: string;
+    targetDate?: string;
+    targetStaffId?: number;
+    affectedFields?: string[];
+    affectedDateCount?: number;
+    detail?: Record<string, unknown>;
+    undoPatch?: UndoPatch;
 };
 
 // Default values matching types.ts
@@ -133,6 +163,7 @@ const buildAuditLogPayload = (
     if (audit.affectedFields?.length) payload.affectedFields = audit.affectedFields;
     if (typeof audit.affectedDateCount === 'number') payload.affectedDateCount = audit.affectedDateCount;
     if (audit.detail && Object.keys(audit.detail).length > 0) payload.detail = audit.detail;
+    if (audit.undoPatch?.fields.length) payload.undoPatch = audit.undoPatch;
 
     return payload;
 };
@@ -280,6 +311,106 @@ const getDateCellValue = (source: DateKeyedMap, dateStr: string, staffId: number
     return dayRecord[staffKey];
 };
 
+const missingPatchValue = (): MissingPatchValue => ({ __missing: true });
+
+const encodePatchValue = (value: unknown): AuditPatchScalar | MissingPatchValue => {
+    if (typeof value === 'undefined') return missingPatchValue();
+    if (
+        value === null ||
+        typeof value === 'string' ||
+        typeof value === 'number' ||
+        typeof value === 'boolean'
+    ) {
+        return value;
+    }
+    if (Array.isArray(value)) {
+        return value.filter(item => typeof item === 'string' || typeof item === 'number') as string[] | number[];
+    }
+    if (typeof value === 'object') return value as Record<string, unknown>;
+    return missingPatchValue();
+};
+
+const isMissingPatchValue = (value: unknown): value is MissingPatchValue =>
+    Boolean(value && typeof value === 'object' && !Array.isArray(value) && (value as MissingPatchValue).__missing === true);
+
+const decodePatchValue = (value: AuditPatchScalar | MissingPatchValue, deleteValue: unknown): unknown =>
+    isMissingPatchValue(value) ? deleteValue : value;
+
+const arePatchValuesEqual = (
+    left: AuditPatchScalar | MissingPatchValue,
+    right: AuditPatchScalar | MissingPatchValue,
+): boolean => JSON.stringify(left) === JSON.stringify(right);
+
+const pushUndoField = (
+    fields: UndoFieldPatch[],
+    path: string,
+    before: AuditPatchScalar | MissingPatchValue,
+    after: AuditPatchScalar | MissingPatchValue,
+): void => {
+    if (arePatchValuesEqual(before, after)) return;
+    fields.push({ path, before, after });
+};
+
+export const buildScopedStaffCellUndoPatch = (
+    beforeData: Record<string, DateKeyedMap>,
+    afterData: Record<string, DateKeyedMap>,
+    dateStr: string,
+    staffIds: number[],
+): UndoPatch => {
+    const uniqueStaffIds = Array.from(new Set(staffIds));
+    const fields: UndoFieldPatch[] = [];
+
+    Object.entries(afterData).forEach(([fieldName, afterSource]) => {
+        const beforeSource = beforeData[fieldName] || {};
+        uniqueStaffIds.forEach(staffId => {
+            pushUndoField(
+                fields,
+                `${fieldName}.${dateStr}.${staffId}`,
+                encodePatchValue(getDateCellValue(beforeSource, dateStr, staffId)),
+                encodePatchValue(getDateCellValue(afterSource, dateStr, staffId)),
+            );
+        });
+    });
+
+    return { fields };
+};
+
+export const buildScopedDateUndoPatch = (
+    beforeData: Record<string, DateKeyedMap>,
+    afterData: Record<string, DateKeyedMap>,
+    dateStrings: string[],
+): UndoPatch => {
+    const fields: UndoFieldPatch[] = [];
+
+    Object.entries(afterData).forEach(([fieldName, afterSource]) => {
+        const beforeSource = beforeData[fieldName] || {};
+        dateStrings.forEach(dateStr => {
+            pushUndoField(
+                fields,
+                `${fieldName}.${dateStr}`,
+                encodePatchValue(beforeSource[dateStr]),
+                encodePatchValue(afterSource[dateStr]),
+            );
+        });
+    });
+
+    return { fields };
+};
+
+export const buildUndoUpdates = (
+    undoPatch: UndoPatch,
+    updatedAt: number = Date.now(),
+    deleteValue: unknown = deleteField(),
+): Record<string, unknown> => {
+    const updates: Record<string, unknown> = { updatedAt };
+
+    undoPatch.fields.forEach(field => {
+        updates[field.path] = decodePatchValue(field.before, deleteValue);
+    });
+
+    return updates;
+};
+
 export const buildScopedStaffCellUpdates = (
     data: Record<string, DateKeyedMap>,
     dateStr: string,
@@ -344,6 +475,46 @@ const writeUpdates = async (
         console.error('Error saving to Firestore:', error);
         throw error;
     }
+};
+
+const isUndoAudit = (audit: AuditLogRecord): boolean => audit.action.startsWith('undo_');
+
+const isAuditUndoneBy = (candidate: AuditLogRecord, undoAudit: AuditLogRecord): boolean => {
+    const undoOfLogId = undoAudit.detail?.undoOfLogId;
+    if (typeof undoOfLogId === 'string' && undoOfLogId === candidate.id) return true;
+
+    const undoOfAction = undoAudit.detail?.undoOfAction;
+    if (typeof undoOfAction !== 'string' || undoOfAction !== candidate.action) return false;
+    if (undoAudit.targetDate !== candidate.targetDate) return false;
+    if (undoAudit.targetStaffId !== candidate.targetStaffId) return false;
+
+    return true;
+};
+
+const findLatestUndoableAuditLog = async (monthKey: string, queryLimit = 200): Promise<AuditLogRecord | null> => {
+    const snapshot = await getDocs(query(
+        getAuditLogCollectionRef(),
+        orderBy('clientAt', 'desc'),
+        limit(queryLimit),
+    ));
+    const undoAudits: AuditLogRecord[] = [];
+
+    for (const docSnap of snapshot.docs) {
+        const audit = { id: docSnap.id, ...docSnap.data() } as AuditLogRecord;
+        if (audit.monthKey !== monthKey) continue;
+
+        if (isUndoAudit(audit)) {
+            undoAudits.push(audit);
+            continue;
+        }
+
+        if (!audit.undoPatch?.fields.length) continue;
+        if (undoAudits.some(undoAudit => isAuditUndoneBy(audit, undoAudit))) continue;
+
+        return audit;
+    }
+
+    return null;
 };
 
 const saveScopedDateFields = async (
@@ -533,6 +704,34 @@ export const firestoreStorage = {
         };
 
         await writeUpdates(updates, audit, updatedAt, actor);
+    },
+
+    async undoLatestChange(monthKey: string): Promise<AuditLogRecord | null> {
+        const auditLog = await findLatestUndoableAuditLog(monthKey);
+        if (!auditLog?.undoPatch) return null;
+
+        const updatedAt = Date.now();
+        const actor = getCurrentAuditActor();
+        const audit: SaveAuditContext = {
+            action: `undo_${auditLog.action}`,
+            label: `${auditLog.label}の取り消し`,
+            monthKey: auditLog.monthKey,
+            targetDate: auditLog.targetDate,
+            targetStaffId: auditLog.targetStaffId,
+            affectedFields: auditLog.affectedFields,
+            affectedDateCount: auditLog.affectedDateCount,
+            detail: {
+                undoOfLogId: auditLog.id,
+                undoOfAction: auditLog.action,
+            },
+        };
+        const updates = {
+            ...buildUndoUpdates(auditLog.undoPatch, updatedAt),
+            ...buildAuditMetadata(audit, updatedAt, actor),
+        };
+
+        await writeUpdates(updates, audit, updatedAt, actor);
+        return auditLog;
     },
 
     async createMonthBackup(input: MonthBackupInput): Promise<string> {

@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { buildAuditMetadata, buildClearMonthUpdates, buildMonthBackupPayload, buildScopedSaveUpdates, buildScopedStaffCellUpdates, expandDottedUpdates } from './firestoreStorage';
+import {
+    buildAuditMetadata,
+    buildClearMonthUpdates,
+    buildMonthBackupPayload,
+    buildScopedDateUndoPatch,
+    buildScopedSaveUpdates,
+    buildScopedStaffCellUndoPatch,
+    buildScopedStaffCellUpdates,
+    buildUndoUpdates,
+    expandDottedUpdates,
+} from './firestoreStorage';
 
 describe('buildClearMonthUpdates', () => {
     it('builds month-delete updates without rewriting staff', () => {
@@ -151,6 +161,70 @@ describe('buildScopedStaffCellUpdates', () => {
         }, '2026-06-01', [1], 12345, 'delete');
 
         expect(updates['schedule.2026-06-01.1']).toBe('');
+    });
+});
+
+describe('buildScopedStaffCellUndoPatch', () => {
+    it('captures only changed staff-cell fields and restores missing cells as deletes', () => {
+        const patch = buildScopedStaffCellUndoPatch({
+            schedule: {
+                '2026-06-01': { 1: 'A', 3: 'C' },
+            },
+            manualShifts: {
+                '2026-06-01': { 1: 'A' },
+            },
+        }, {
+            schedule: {
+                '2026-06-01': { 1: 'B', 2: 'C', 3: 'C' },
+            },
+            manualShifts: {
+                '2026-06-01': { 1: 'B' },
+            },
+        }, '2026-06-01', [1, 2, 3]);
+
+        expect(patch.fields).toEqual([
+            { path: 'schedule.2026-06-01.1', before: 'A', after: 'B' },
+            { path: 'schedule.2026-06-01.2', before: { __missing: true }, after: 'C' },
+            { path: 'manualShifts.2026-06-01.1', before: 'A', after: 'B' },
+        ]);
+        expect(buildUndoUpdates(patch, 12345, 'delete')).toEqual({
+            updatedAt: 12345,
+            'schedule.2026-06-01.1': 'A',
+            'schedule.2026-06-01.2': 'delete',
+            'manualShifts.2026-06-01.1': 'A',
+        });
+    });
+});
+
+describe('buildScopedDateUndoPatch', () => {
+    it('captures changed date maps for month-level undo', () => {
+        const patch = buildScopedDateUndoPatch({
+            schedule: {
+                '2026-06-01': { 1: 'A' },
+                '2026-06-02': { 1: 'B' },
+            },
+            notes: {
+                '2026-06-01': 'リーダー会',
+            },
+        }, {
+            schedule: {
+                '2026-06-01': { 1: 'A' },
+                '2026-06-02': {},
+            },
+            notes: {
+                '2026-06-01': '',
+            },
+        }, ['2026-06-01', '2026-06-02']);
+
+        expect(patch.fields).toEqual([
+            { path: 'schedule.2026-06-02', before: { 1: 'B' }, after: {} },
+            { path: 'notes.2026-06-01', before: 'リーダー会', after: '' },
+        ]);
+        expect(buildUndoUpdates(patch, 12345, 'delete')).toEqual({
+            updatedAt: 12345,
+            'schedule.2026-06-02': { 1: 'B' },
+            'notes.2026-06-01': 'リーダー会',
+        });
     });
 });
 

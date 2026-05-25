@@ -3,7 +3,7 @@ import type { Holiday, Settings, ShiftPatternDefinition, ShiftPatternId, ShiftSc
 import { isWorkShiftId } from '../types';
 import { checkConstraints, createConstraintContext } from '../lib/constraintChecker';
 import { alertBlockingLeaveViolation } from '../lib/blockingLeaveViolation';
-import { firestoreStorage } from '../lib/firestoreStorage';
+import { buildScopedStaffCellUndoPatch, firestoreStorage } from '../lib/firestoreStorage';
 import { getFormattedDate } from '../lib/utils';
 import { setManualShiftMarkerState, setScheduleCell, swapScheduleAndManualMarkers } from '../lib/scheduleState';
 
@@ -101,6 +101,12 @@ export const useScheduleActions = ({
       targetStaffId: staffId,
       affectedFields: ['schedule', 'manualShifts'],
       detail: { shiftId },
+      undoPatch: buildScopedStaffCellUndoPatch(
+        { schedule: prevSchedule, manualShifts: prevManualShifts },
+        { schedule: newSchedule, manualShifts: newManualShifts },
+        dateStr,
+        [staffId],
+      ),
     }), {
       rollback: () => {
         setSchedule(prevSchedule);
@@ -125,6 +131,7 @@ export const useScheduleActions = ({
             targetDate: dateStr,
             targetStaffId: staffId,
             affectedFields: ['schedule', 'manualShifts'],
+            detail: { undoOfAction: 'manual_shift_update' },
           }), {
             rollback: () => {
               setSchedule(newSchedule);
@@ -168,6 +175,12 @@ export const useScheduleActions = ({
       targetStaffId,
       affectedFields: ['schedule', 'manualShifts'],
       detail: { shiftId },
+      undoPatch: buildScopedStaffCellUndoPatch(
+        { schedule: prevSchedule, manualShifts: prevManualShifts },
+        { schedule: newSchedule, manualShifts: newManualShifts },
+        dateStr,
+        [targetStaffId],
+      ),
     }), {
       rollback: () => {
         setSchedule(prevSchedule);
@@ -192,6 +205,7 @@ export const useScheduleActions = ({
             targetDate: dateStr,
             targetStaffId,
             affectedFields: ['schedule', 'manualShifts'],
+            detail: { undoOfAction: 'candidate_shift_select' },
           }), {
             rollback: () => {
               setSchedule(newSchedule);
@@ -239,6 +253,12 @@ export const useScheduleActions = ({
       targetDate: dateStr,
       affectedFields: ['schedule', 'manualShifts'],
       detail: { staffAId, staffBId, shiftA, shiftB },
+      undoPatch: buildScopedStaffCellUndoPatch(
+        { schedule: prevSchedule, manualShifts: prevManualShifts },
+        { schedule: newSchedule, manualShifts: newManualShifts },
+        dateStr,
+        [staffAId, staffBId],
+      ),
     }), {
       rollback: () => {
         setSchedule(prevSchedule);
@@ -262,7 +282,7 @@ export const useScheduleActions = ({
           monthKey,
           targetDate: dateStr,
           affectedFields: ['schedule', 'manualShifts'],
-          detail: { staffAId, staffBId },
+          detail: { staffAId, staffBId, undoOfAction: 'swap_shifts' },
         }), {
           rollback: () => {
             setSchedule(newSchedule);
@@ -292,6 +312,12 @@ export const useScheduleActions = ({
       targetStaffId: staffId,
       affectedFields: ['schedule', 'manualShifts'],
       detail: { shiftPattern },
+      undoPatch: buildScopedStaffCellUndoPatch(
+        { schedule: previousSchedule, manualShifts: previousManualShifts },
+        { schedule: newSchedule, manualShifts: newManualShifts },
+        dateStr,
+        [staffId],
+      ),
     }), {
       rollback: () => {
         setSchedule(previousSchedule);
