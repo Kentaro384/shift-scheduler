@@ -295,7 +295,7 @@ function App() {
     setShowSettingsMenu(false);
 
     try {
-      await firestoreStorage.clearMonthData(dateStrings, staff);
+      await firestoreStorage.clearMonthData(dateStrings);
       toast.success('当月を白紙に戻しました', `${year}年${month}月の入力を削除しました`);
     } catch (error) {
       console.error('Failed to clear month data:', error);

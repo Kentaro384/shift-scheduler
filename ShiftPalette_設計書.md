@@ -83,6 +83,8 @@ interface OrganizationData {
   patterns: ShiftPatternDefinition[];
   manualShifts: ShiftSchedule;
   timeRangeSchedule: TimeRangeSchedule;
+  notes: DailyNotes;
+  excelExportLog?: Record<string, string>;
   updatedAt: number;
 }
 ```
@@ -94,8 +96,10 @@ interface OrganizationData {
 | `settings` | 園プロファイル、年度、必要人数、土曜シフト、主任バックアップ上限 |
 | `holidays` | 祝日設定 |
 | `patterns` | ユーザー編集可能な勤務パターン定義 |
-| `manualShifts` | 手動入力された固定予定の印。自動生成された振休との区別に使う |
+| `manualShifts` | 手動確定されたシフトの印。固定予定、通常シフトの手入力、入替後の確定値を自動生成から保護するために使う |
 | `timeRangeSchedule` | 時間指定職員の日別勤務時間 |
+| `notes` | 日別備考。Excelの備考行にも出力する |
+| `excelExportLog` | 月別のExcel出力履歴 |
 | `updatedAt` | 最終保存時刻 |
 
 ### 4.2 職員
@@ -292,6 +296,10 @@ type TimeRangeSchedule = Record<string, Record<number, TimeRange>>;
 - 制約違反の表示
 - ハード制約違反時のトーストとUndo
 
+勤務パターン選択、候補者検索、入替提案はいずれもユーザー確定操作として扱う。通常シフトを手動で変更した場合は、`schedule` と同時に `manualShifts` へ同じシフトIDを記録し、次回自動生成で上書きされないようにする。入替提案では、入替後の2セルをどちらも手動確定として `manualShifts` に記録する。保存は `schedule` と `manualShifts` を同一Firestore更新で行い、保存失敗時やUndo失敗時は両方を同じ前状態へ戻す。
+
+入替提案は勤務シフト同士だけを対象にする。`有`, `振`, `夏休`, `誕生日休`, `研`, `出`, `保`, `休`, 空欄などの非勤務・固定予定は入替対象にしない。半日休を含む勤務シフトIDは、入替後も `manualShifts` にそのまま記録して保護する。
+
 時間指定職員のセルクリック時は `TimeRangeModal` を開く。
 
 - 勤務時間入力
@@ -322,10 +330,11 @@ type TimeRangeSchedule = Record<string, Record<number, TimeRange>>;
 | `schedule` | 対象月の日付キーを削除 |
 | `timeRangeSchedule` | 対象月の日付キーを削除 |
 | `manualShifts` | 対象月の日付キーを削除 |
+| `notes` | 対象月の日付キーを削除 |
 
 職員設定、シフトパターン、祝日、園設定は残す。
 
-Firestore保存は `merge` のため、単にローカルオブジェクトから日付キーを削除して保存してもクラウド側のネストキーが残る。強制白紙化では `deleteField()` を使い、`schedule.YYYY-MM-DD`、`timeRangeSchedule.YYYY-MM-DD`、`manualShifts.YYYY-MM-DD` を明示的に削除する。また、職員設定保存直後に強制白紙化した場合でも古い購読データで戻らないよう、白紙化更新時に現在の `staff` も同時に保存する。
+Firestore保存は `merge` のため、単にローカルオブジェクトから日付キーを削除して保存してもクラウド側のネストキーが残る。強制白紙化では `deleteField()` を使い、`schedule.YYYY-MM-DD`、`timeRangeSchedule.YYYY-MM-DD`、`manualShifts.YYYY-MM-DD`、`notes.YYYY-MM-DD` を明示的に削除する。月次削除は職員マスタ更新とは独立した操作であり、古い購読データで職員設定を上書きしないよう `staff` は同時保存しない。削除対象ドキュメントが存在しない場合は、削除対象なしとして成功扱いにする。
 
 ### 5.8 リセット系操作の保存対象
 
@@ -334,7 +343,7 @@ Firestore保存は `merge` のため、単にローカルオブジェクトか�
 | 操作 | `schedule` | `timeRangeSchedule` | `manualShifts` | `staff` / `patterns` / `settings` / `holidays` |
 |---|---|---|---|---|
 | 自動生成リセット | 通常職員の自動生成勤務をクリア。手動固定予定は保持 | 時間指定職員の入力は保持 | 手動固定予定の印は保持 | 変更しない |
-| 当月を白紙に戻す | 対象月の日付キーを `deleteField()` で削除 | 対象月の日付キーを `deleteField()` で削除 | 対象月の日付キーを `deleteField()` で削除 | 職員設定の巻き戻り防止のため、現在の `staff` も同時保存。その他は変更しない |
+| 当月を白紙に戻す | 対象月の日付キーを `deleteField()` で削除 | 対象月の日付キーを `deleteField()` で削除 | 対象月の日付キーを `deleteField()` で削除 | 変更しない |
 | 固定勤務を反映 | 既存の休暇・固定予定がある日は上書きしない | 対象月の未入力日に、職員設定の曜日別/共通デフォルト勤務を追加 | 変更しない | 変更しない |
 
 手動入力と自動生成の境界は次を基準にする。
@@ -630,10 +639,11 @@ flowchart TD
 ## 13. 現行仕様上の注意点
 
 1. `manualShifts` フィールドは、手動入力された固定予定の保護に使う。特に `振` は、自動生成された振休と手動入力された振休を区別するために `manualShifts` の記録を参照する。
-2. 勤務パターンは追加・削除できるが、一部の文言や旧コメントには A/J 由来の表現が残っている。実動作は `kind` ベースへ移行済み。
-3. 時間指定職員の資格者カウントは `countAsShifts` の設定に依存する。入力しない場合、その時間帯は勤務人数には数えられてもパターン別資格者数には反映されない。
-4. 園長は時間入力できるが、`countsForStaffing()` により人数・資格者集計から除外される。
-5. 固定予定 `研`, `出`, `保` は非勤務扱いである。実運用で「研修・出張だが勤務人数に含める」ケースが出るなら、固定予定にも種別または集計可否を持たせる必要がある。
+2. 通常シフトの手入力や入替後の勤務値も `manualShifts` に記録する。自動生成では、表示されているシフトIDと `manualShifts` の記録が一致するセルを手動確定として保護する。
+3. 勤務パターンは追加・削除できるが、一部の文言や旧コメントには A/J 由来の表現が残っている。実動作は `kind` ベースへ移行済み。
+4. 時間指定職員の資格者カウントは `countAsShifts` の設定に依存する。入力しない場合、その時間帯は勤務人数には数えられてもパターン別資格者数には反映されない。
+5. 園長は時間入力できるが、`countsForStaffing()` により人数・資格者集計から除外される。
+6. 固定予定 `研`, `出`, `保` は非勤務扱いである。実運用で「研修・出張だが勤務人数に含める」ケースが出るなら、固定予定にも種別または集計可否を持たせる必要がある。
 
 ---
 

@@ -5,6 +5,7 @@ import type { Settings, Staff } from '../types';
 import { isStaffActiveOnDate } from '../types';
 import { getFormattedDate } from './utils';
 import { createRegularStaff } from '../test/factories';
+import { swapScheduleAndManualMarkers } from './scheduleState';
 
 const settings: Settings = {
     profileName: 'テスト園',
@@ -99,5 +100,33 @@ describe('ShiftGenerator', () => {
             const dateStr = getFormattedDate(2026, 5, day);
             expect(countWorkingStaff(staff, schedule, {}, dateStr)).toBeGreaterThanOrEqual(settings.weekdayStaffCount);
         }
+    });
+
+    it('preserves swapped shifts when swap marks both cells as manual', () => {
+        const staff = createRegularStaff(8);
+        const dateStr = '2026-05-04';
+        const swapped = swapScheduleAndManualMarkers(
+            { [dateStr]: { 1: 'A', 2: 'C' } },
+            {},
+            dateStr,
+            1,
+            2,
+        );
+
+        const schedule = new ShiftGenerator(
+            staff,
+            [],
+            2026,
+            5,
+            settings,
+            swapped.schedule,
+            {},
+            undefined,
+            swapped.manualShifts,
+            { seed: 202605 },
+        ).generate();
+
+        expect(schedule[dateStr][1]).toBe('C');
+        expect(schedule[dateStr][2]).toBe('A');
     });
 });

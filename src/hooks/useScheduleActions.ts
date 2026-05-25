@@ -1,10 +1,11 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { Holiday, Settings, ShiftPatternDefinition, ShiftPatternId, ShiftSchedule, Staff } from '../types';
+import { isWorkShiftId } from '../types';
 import { checkConstraints, createConstraintContext } from '../lib/constraintChecker';
 import { alertBlockingLeaveViolation } from '../lib/blockingLeaveViolation';
 import { firestoreStorage } from '../lib/firestoreStorage';
 import { getFormattedDate } from '../lib/utils';
-import { setManualShiftMarkerState, setScheduleCell } from '../lib/scheduleState';
+import { setManualShiftMarkerState, setScheduleCell, swapScheduleAndManualMarkers } from '../lib/scheduleState';
 
 export type SaveWithToastOptions = {
   rollback?: () => void;
@@ -181,19 +182,29 @@ export const useScheduleActions = ({
     const dateStr = getFormattedDate(year, month, day);
 
     const prevSchedule = structuredClone(schedule);
+    const prevManualShifts = structuredClone(manualShifts);
     const shiftA = schedule[dateStr]?.[staffAId] || '';
     const shiftB = schedule[dateStr]?.[staffBId] || '';
+    if (!isWorkShiftId(shiftA) || !isWorkShiftId(shiftB)) {
+      toast.info('入替できません', '勤務シフト同士のみ入替できます');
+      return;
+    }
 
-    const newSchedule = setScheduleCell(
-      setScheduleCell(schedule, dateStr, staffAId, shiftB),
+    const { schedule: newSchedule, manualShifts: newManualShifts } = swapScheduleAndManualMarkers(
+      schedule,
+      manualShifts,
       dateStr,
+      staffAId,
       staffBId,
-      shiftA,
     );
 
     setSchedule(newSchedule);
-    const saved = await saveWithToast('シフト入替', () => firestoreStorage.saveSchedule(newSchedule), {
-      rollback: () => setSchedule(prevSchedule),
+    setManualShifts(newManualShifts);
+    const saved = await saveWithToast('シフト入替', () => firestoreStorage.saveScheduleAndManualShifts(newSchedule, newManualShifts), {
+      rollback: () => {
+        setSchedule(prevSchedule);
+        setManualShifts(prevManualShifts);
+      },
     });
     if (!saved) return;
     setEditingCell(null);
@@ -205,8 +216,12 @@ export const useScheduleActions = ({
       `${staffMemberA?.name}(${shiftA}→${shiftB}) ⇄ ${staffMemberB?.name}(${shiftB}→${shiftA})`,
       () => {
         setSchedule(prevSchedule);
-        void saveWithToast('取り消し後のシフト', () => firestoreStorage.saveSchedule(prevSchedule), {
-          rollback: () => setSchedule(newSchedule),
+        setManualShifts(prevManualShifts);
+        void saveWithToast('取り消し後のシフト', () => firestoreStorage.saveScheduleAndManualShifts(prevSchedule, prevManualShifts), {
+          rollback: () => {
+            setSchedule(newSchedule);
+            setManualShifts(newManualShifts);
+          },
         });
       },
     );

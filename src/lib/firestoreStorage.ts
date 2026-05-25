@@ -42,6 +42,23 @@ const defaultSettings: Settings = {
 // Get document reference
 const getDocRef = () => doc(db, COLLECTION, DOC_ID);
 
+export const buildClearMonthUpdates = (
+    dateStrings: string[],
+    updatedAt: number = Date.now(),
+    deleteValue: unknown = deleteField(),
+): Record<string, unknown> => {
+    const updates: Record<string, unknown> = { updatedAt };
+
+    dateStrings.forEach(dateStr => {
+        updates[`schedule.${dateStr}`] = deleteValue;
+        updates[`timeRangeSchedule.${dateStr}`] = deleteValue;
+        updates[`manualShifts.${dateStr}`] = deleteValue;
+        updates[`notes.${dateStr}`] = deleteValue;
+    });
+
+    return updates;
+};
+
 // Firestore Storage Service
 export const firestoreStorage = {
     // Load all data
@@ -141,20 +158,13 @@ export const firestoreStorage = {
         await this.saveAll({ excelExportLog });
     },
 
-    async clearMonthData(dateStrings: string[], currentStaff: Staff[]): Promise<void> {
-        const updates: Record<string, unknown> = {
-            staff: currentStaff,
-            updatedAt: Date.now(),
-        };
-
-        dateStrings.forEach(dateStr => {
-            updates[`schedule.${dateStr}`] = deleteField();
-            updates[`timeRangeSchedule.${dateStr}`] = deleteField();
-            updates[`manualShifts.${dateStr}`] = deleteField();
-            updates[`notes.${dateStr}`] = deleteField();
-        });
-
-        await updateDoc(getDocRef(), updates);
+    async clearMonthData(dateStrings: string[]): Promise<void> {
+        try {
+            await updateDoc(getDocRef(), buildClearMonthUpdates(dateStrings));
+        } catch (error) {
+            if ((error as FirestoreError).code === 'not-found') return;
+            throw error;
+        }
     },
 
     // Get default values

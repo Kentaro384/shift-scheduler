@@ -1,4 +1,5 @@
 import type { ShiftPatternId, ShiftSchedule, TimeRange, TimeRangeSchedule } from '../types';
+import { isWorkShiftId } from '../types';
 
 export const setScheduleCell = (
   source: ShiftSchedule,
@@ -36,6 +37,45 @@ export const setManualShiftMarkerState = (
       ...(source[dateStr] || {}),
       [staffId]: shiftId,
     },
+  };
+};
+
+export type ScheduleManualState = {
+  schedule: ShiftSchedule;
+  manualShifts: ShiftSchedule;
+};
+
+export const swapScheduleAndManualMarkers = (
+  schedule: ShiftSchedule,
+  manualShifts: ShiftSchedule,
+  dateStr: string,
+  staffAId: number,
+  staffBId: number,
+): ScheduleManualState => {
+  const shiftA = schedule[dateStr]?.[staffAId] || '';
+  const shiftB = schedule[dateStr]?.[staffBId] || '';
+
+  if (!isWorkShiftId(shiftA) || !isWorkShiftId(shiftB)) {
+    return { schedule, manualShifts };
+  }
+
+  const nextSchedule = setScheduleCell(
+    setScheduleCell(schedule, dateStr, staffAId, shiftB),
+    dateStr,
+    staffBId,
+    shiftA,
+  );
+
+  const nextManualShifts = setManualShiftMarkerState(
+    setManualShiftMarkerState(manualShifts, dateStr, staffAId, shiftB),
+    dateStr,
+    staffBId,
+    shiftA,
+  );
+
+  return {
+    schedule: nextSchedule,
+    manualShifts: nextManualShifts,
   };
 };
 
