@@ -18,7 +18,7 @@ interface ExportOptions {
 
 // 曜日名
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
-const NOTE_ROW_HEIGHT_PT = 111; // Excel row height equivalent for roughly 148px.
+const NOTE_ROW_HEIGHT_PT = 148;
 
 // 色定義
 const COLORS = {
