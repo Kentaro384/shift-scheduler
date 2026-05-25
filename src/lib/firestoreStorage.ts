@@ -549,6 +549,18 @@ const saveScopedStaffCells = async (
     await writeUpdates(updates, audit, updatedAt, actor);
 };
 
+const saveDocumentFields = async (data: Partial<OrganizationData>, audit?: SaveAuditContext): Promise<void> => {
+    const updatedAt = Date.now();
+    const actor = getCurrentAuditActor();
+    const payload = {
+        ...data,
+        ...buildAuditMetadata(audit, updatedAt, actor),
+        updatedAt,
+    };
+
+    await writeUpdates(payload, audit, updatedAt, actor);
+};
+
 // Firestore Storage Service
 export const firestoreStorage = {
     // Load all data
@@ -563,19 +575,6 @@ export const firestoreStorage = {
             console.error('Error loading from Firestore:', error);
             return null;
         }
-    },
-
-    // Save all data
-    async saveAll(data: Partial<OrganizationData>, audit?: SaveAuditContext): Promise<void> {
-        const updatedAt = Date.now();
-        const actor = getCurrentAuditActor();
-        const payload = {
-            ...data,
-            ...buildAuditMetadata(audit, updatedAt, actor),
-            updatedAt,
-        };
-
-        await writeUpdates(payload, audit, updatedAt, actor);
     },
 
     // Subscribe to real-time updates
@@ -594,19 +593,11 @@ export const firestoreStorage = {
 
     // Individual save methods
     async saveStaff(staff: Staff[], audit?: SaveAuditContext): Promise<void> {
-        await this.saveAll({ staff }, audit);
-    },
-
-    async saveSchedule(schedule: ShiftSchedule, audit?: SaveAuditContext): Promise<void> {
-        await this.saveAll({ schedule }, audit);
+        await saveDocumentFields({ staff }, audit);
     },
 
     async saveScheduleDates(schedule: ShiftSchedule, dateStrings: string[], audit?: SaveAuditContext): Promise<void> {
         await saveScopedDateFields({ schedule }, dateStrings, audit);
-    },
-
-    async saveScheduleAndManualShifts(schedule: ShiftSchedule, manualShifts: ShiftSchedule, audit?: SaveAuditContext): Promise<void> {
-        await this.saveAll({ schedule, manualShifts }, audit);
     },
 
     async saveScheduleAndManualShiftDates(
@@ -629,36 +620,19 @@ export const firestoreStorage = {
     },
 
     async saveSettings(settings: Settings, audit?: SaveAuditContext): Promise<void> {
-        await this.saveAll({ settings }, audit);
+        await saveDocumentFields({ settings }, audit);
     },
 
     async saveHolidays(holidays: Holiday[], audit?: SaveAuditContext): Promise<void> {
-        await this.saveAll({ holidays }, audit);
+        await saveDocumentFields({ holidays }, audit);
     },
 
     async savePatterns(patterns: ShiftPatternDefinition[], audit?: SaveAuditContext): Promise<void> {
-        await this.saveAll({ patterns: normalizeShiftPatterns(patterns) }, audit);
-    },
-
-    async saveManualShifts(manualShifts: ShiftSchedule, audit?: SaveAuditContext): Promise<void> {
-        await this.saveAll({ manualShifts }, audit);
-    },
-
-    async saveTimeRangeSchedule(timeRangeSchedule: TimeRangeSchedule, audit?: SaveAuditContext): Promise<void> {
-        await this.saveAll({ timeRangeSchedule }, audit);
+        await saveDocumentFields({ patterns: normalizeShiftPatterns(patterns) }, audit);
     },
 
     async saveTimeRangeDates(timeRangeSchedule: TimeRangeSchedule, dateStrings: string[], audit?: SaveAuditContext): Promise<void> {
         await saveScopedDateFields({ timeRangeSchedule }, dateStrings, audit);
-    },
-
-    async saveScheduleTimeRangesAndManualShifts(
-        schedule: ShiftSchedule,
-        timeRangeSchedule: TimeRangeSchedule,
-        manualShifts: ShiftSchedule,
-        audit?: SaveAuditContext,
-    ): Promise<void> {
-        await this.saveAll({ schedule, timeRangeSchedule, manualShifts }, audit);
     },
 
     async saveScheduleTimeRangeManualShiftDates(
@@ -682,16 +656,8 @@ export const firestoreStorage = {
         await saveScopedStaffCells({ schedule, timeRangeSchedule, manualShifts }, dateStr, staffIds, audit);
     },
 
-    async saveNotes(notes: DailyNotes, audit?: SaveAuditContext): Promise<void> {
-        await this.saveAll({ notes }, audit);
-    },
-
     async saveNoteDate(dateStr: string, note: string, audit?: SaveAuditContext): Promise<void> {
         await saveScopedDateFields({ notes: { [dateStr]: note } }, [dateStr], audit);
-    },
-
-    async saveExcelExportLog(excelExportLog: Record<string, string>, audit?: SaveAuditContext): Promise<void> {
-        await this.saveAll({ excelExportLog }, audit);
     },
 
     async saveExcelExportMonth(monthKey: string, exportedAt: string, audit?: SaveAuditContext): Promise<void> {

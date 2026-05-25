@@ -444,6 +444,8 @@ Undo対象は、手動シフト編集、候補選択、シフト入替、時間�
 
 現在も `staff`, `settings`, `holidays`, `patterns` は設定マスタとしてフィールド単位で保存する。これらは月次データではないため、通常のシフト操作とは別の上書き境界として扱う。
 
+過去に事故原因となった `saveSchedule`, `saveScheduleAndManualShifts`, `saveScheduleTimeRangesAndManualShifts`, `saveManualShifts`, `saveTimeRangeSchedule`, `saveNotes`, `saveExcelExportLog`, `saveAll` のような全体保存APIは public API から削除している。将来の実装では、月次データは日付単位または職員セル単位の専用メソッドだけを使う。
+
 ### 5.10 manualShiftsからの表示復元
 
 `manualShifts` は「手動確定された」という印であり、画面表示の実体は基本的に `schedule` である。ただし、障害や過去の保存不整合で `manualShifts` に値があり、対応する `schedule` セルが欠けている場合は、Firestore購読時に `hydrateScheduleFromManualShifts()` で表示用 `schedule` を補完する。

@@ -9,6 +9,7 @@ import {
     buildScopedStaffCellUpdates,
     buildUndoUpdates,
     expandDottedUpdates,
+    firestoreStorage,
 } from './firestoreStorage';
 
 describe('buildClearMonthUpdates', () => {
@@ -32,6 +33,21 @@ describe('buildClearMonthUpdates', () => {
 
     it('keeps empty date input to updatedAt only', () => {
         expect(buildClearMonthUpdates([], 12345, 'delete')).toEqual({ updatedAt: 12345 });
+    });
+});
+
+describe('firestoreStorage public API', () => {
+    it('does not expose whole-map schedule save methods', () => {
+        expect(Object.keys(firestoreStorage)).not.toEqual(expect.arrayContaining([
+            'saveAll',
+            'saveSchedule',
+            'saveScheduleAndManualShifts',
+            'saveScheduleTimeRangesAndManualShifts',
+            'saveManualShifts',
+            'saveTimeRangeSchedule',
+            'saveNotes',
+            'saveExcelExportLog',
+        ]));
     });
 });
 
