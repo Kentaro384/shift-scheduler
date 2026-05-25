@@ -5,7 +5,7 @@ import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { countAllPatterns, countWorkingStaff } from './lib/shiftCountUtils';
 import { exportToExcel } from './lib/excelExport';
-import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, Trash2, CheckCircle2, AlertTriangle, Undo2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, Trash2, CheckCircle2, AlertTriangle, Undo2, X } from 'lucide-react';
 import { StaffList } from './components/StaffList';
 import { SettingsModal } from './components/SettingsModal';
 import { HolidayModal } from './components/HolidayModal';
@@ -136,6 +136,8 @@ function App() {
   // Candidate search from summary row - opens modal with pre-selected shift
   const [candidateSearch, setCandidateSearch] = useState<{ day: number; shiftPattern: ShiftPatternId } | null>(null);
   const [showShortageModal, setShowShortageModal] = useState(false);
+  const [editingNoteDay, setEditingNoteDay] = useState<number | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState('');
   // Hourly staff chart - shows time-based workload for selected day
   const [hourlyChartDay, setHourlyChartDay] = useState<number | null>(null);
 
@@ -658,16 +660,27 @@ function App() {
     setLastExcelExportedAt(exportedAt);
   };
 
-  const handleNoteEdit = async (day: number) => {
+  const openNoteEditor = (day: number) => {
     const dateStr = getFormattedDate(year, month, day);
-    const currentNote = notes[dateStr] || '';
-    const input = window.prompt(`${month}/${day} の備考を入力してください`, currentNote);
-    if (input === null) return;
+    setEditingNoteDay(day);
+    setEditingNoteText(notes[dateStr] || '');
+  };
 
+  const closeNoteEditor = () => {
+    setEditingNoteDay(null);
+    setEditingNoteText('');
+  };
+
+  const handleNoteSave = async () => {
+    if (editingNoteDay === null) return;
+
+    const dateStr = getFormattedDate(year, month, editingNoteDay);
+    const noteText = editingNoteText.trim();
     const previousNotes = notes;
-    const newNotes = { ...notes, [dateStr]: input.trim() };
+    const newNotes = { ...notes, [dateStr]: noteText };
     setNotes(newNotes);
-    await saveWithToast('備考', () => firestoreStorage.saveNoteDate(dateStr, input.trim(), monthAudit(
+    closeNoteEditor();
+    await saveWithToast('備考', () => firestoreStorage.saveNoteDate(dateStr, noteText, monthAudit(
       'edit_note',
       '備考編集',
       ['notes'],
@@ -988,10 +1001,10 @@ function App() {
                       <td
                         key={day}
                         className="h-10 max-w-[45px] border-r border-[#E4DBCA] px-1 py-1 text-center text-[10px] leading-tight text-[#5F5A50] cursor-pointer hover:bg-[#F5F1E9] transition-colors"
-                        onClick={() => handleNoteEdit(day)}
+                        onClick={() => openNoteEditor(day)}
                         title={note || 'クリックして備考を入力'}
                       >
-                        <div className="line-clamp-2 break-words">{note}</div>
+                        <div className="line-clamp-3 whitespace-pre-line break-words">{note}</div>
                       </td>
                     );
                   })}
@@ -1212,6 +1225,51 @@ function App() {
           onUpdate={handleUpdateHolidays}
           onClose={() => setShowHolidayModal(false)}
         />
+      )}
+
+      {editingNoteDay !== null && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+          <div className="w-full max-w-md rounded-t-2xl bg-white shadow-[0_20px_60px_rgba(15,23,42,0.25)] sm:rounded-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+              <div>
+                <h2 className="text-base font-bold text-gray-800">備考</h2>
+                <p className="text-xs font-medium text-gray-500">{month}/{editingNoteDay}</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeNoteEditor}
+                className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                aria-label="閉じる"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="px-4 py-4">
+              <textarea
+                value={editingNoteText}
+                onChange={e => setEditingNoteText(e.target.value)}
+                className="min-h-40 w-full resize-y rounded-xl border border-gray-200 px-3 py-2 text-sm leading-6 text-gray-800 outline-none focus:border-[#FF6B6B] focus:ring-2 focus:ring-[#FF6B6B]/20"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2 border-t border-gray-100 px-4 py-3">
+              <button
+                type="button"
+                onClick={closeNoteEditor}
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleNoteSave}
+                className="flex-1 rounded-xl bg-[#FF6B6B] px-4 py-2 text-sm font-semibold text-white hover:bg-[#F05252]"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {editingCell && (

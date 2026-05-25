@@ -18,6 +18,7 @@ interface ExportOptions {
 
 // 曜日名
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
+const NOTE_ROW_HEIGHT_PT = 111; // Excel row height equivalent for roughly 148px.
 
 // 色定義
 const COLORS = {
@@ -229,7 +230,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
     [
         { row: dateRow, label: '日付', height: 22 },
         { row: weekdayRow, label: '曜日', height: 22 },
-        { row: noteRow, label: '備考', height: 82 },
+        { row: noteRow, label: '備考', height: NOTE_ROW_HEIGHT_PT },
     ].forEach(({ row, label, height }) => {
         const labelCell = worksheet.getCell(row, 1);
         labelCell.value = label;
@@ -281,7 +282,7 @@ export async function exportToExcel(options: ExportOptions): Promise<void> {
 
         const noteCell = worksheet.getCell(noteRow, col);
         noteCell.value = getNoteText(dateStr, notes);
-        noteCell.font = font(8);
+        noteCell.font = font(9);
         noteCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true, textRotation: 'vertical' };
 
         [dateCell, weekdayCell, noteCell].forEach(cell => {
