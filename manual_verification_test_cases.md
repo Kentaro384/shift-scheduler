@@ -1,6 +1,6 @@
 # ShiftPalette 手動確認テストケース
 
-対象コミット: `44dccc5 Address schedule review findings`
+対象コミット: `954dce9 Fix swap persistence and month clear writes`
 
 ## 前提
 
