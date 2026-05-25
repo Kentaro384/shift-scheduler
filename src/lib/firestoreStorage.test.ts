@@ -9,6 +9,7 @@ import {
     buildScopedStaffCellUpdates,
     buildUndoUpdates,
     expandDottedUpdates,
+    findUndoConflictPaths,
     firestoreStorage,
 } from './firestoreStorage';
 
@@ -241,6 +242,39 @@ describe('buildScopedDateUndoPatch', () => {
             'schedule.2026-06-02': { 1: 'B' },
             'notes.2026-06-01': 'リーダー会',
         });
+    });
+});
+
+describe('findUndoConflictPaths', () => {
+    it('returns no conflicts when current values still match audit after values', () => {
+        expect(findUndoConflictPaths({
+            schedule: {
+                '2026-06-01': {
+                    1: 'B',
+                    2: { end: '17:30', start: '08:30' },
+                },
+            },
+        }, {
+            fields: [
+                { path: 'schedule.2026-06-01.1', before: 'A', after: 'B' },
+                { path: 'schedule.2026-06-01.2', before: { __missing: true }, after: { start: '08:30', end: '17:30' } },
+            ],
+        })).toEqual([]);
+    });
+
+    it('detects fields changed after the audit log was recorded', () => {
+        expect(findUndoConflictPaths({
+            schedule: {
+                '2026-06-01': {
+                    1: 'C',
+                },
+            },
+        }, {
+            fields: [
+                { path: 'schedule.2026-06-01.1', before: 'A', after: 'B' },
+                { path: 'schedule.2026-06-01.2', before: { __missing: true }, after: { __missing: true } },
+            ],
+        })).toEqual(['schedule.2026-06-01.1']);
     });
 });
 

@@ -434,15 +434,17 @@ Firestoreは `updateDoc()` にトップレベルの map フィールドを渡す
 | 手動シフト編集 | `schedule/manualShifts.YYYY-MM-DD.staffId` だけ更新 | 同日別職員の古いタブ巻き戻しを避ける |
 | 時間指定勤務編集 | `schedule/timeRangeSchedule/manualShifts.YYYY-MM-DD.staffId` だけ更新 | 時間指定と手動印を同一セル単位で整合させる |
 
+固定勤務反映は、対象月の全日付ではなく、実際に固定勤務を追加した日付だけを保存対象にする。これにより、別タブで追加された未受信の日付データを空 map で上書きするリスクを避ける。
+
 各保存では `updatedAt` に加えて、監査用の `updatedBy` と `lastOperation` を `organizations/default` へ保存する。さらに `organizations/default/auditLogs` サブコレクションへ同じ操作のログを追記する。監査ログの書き込み失敗は主要データ保存を失敗扱いにしない。
 
-取り消し可能な操作では、監査ログに `undoPatch.fields[]` を保存する。各要素は `path`, `before`, `after` を持つ差分で、`before` が未存在だった場合は `{ "__missing": true }` として記録する。画面右上の「戻す」は、現在表示中の月の `auditLogs` から直近の未取り消し `undoPatch` を探し、`before` を `updateDoc()` のドットパス更新として適用する。
+取り消し可能な操作では、監査ログに `undoPatch.fields[]` を保存する。各要素は `path`, `before`, `after` を持つ差分で、`before` が未存在だった場合は `{ "__missing": true }` として記録する。画面右上の「戻す」は、現在表示中の月の `auditLogs` から直近の未取り消し `undoPatch` を探し、Firestore transaction 内で現在値が `after` と一致することを確認してから `before` をドットパス更新として適用する。対象値が別操作で変わっている場合、Undoは中止し、ユーザーに最新状態の確認を促す。
 
 Undo対象は、手動シフト編集、候補選択、シフト入替、時間指定勤務編集、備考編集、自動生成、リセット、固定勤務反映、当月白紙化である。当月白紙化は直前バックアップも作成するため、Undoは直後の簡易復元、バックアップは後からの復旧手段として使い分ける。
 
 強制白紙化のような破壊的操作は、主要データ削除より前に `organizations/default/backups` へ復旧用データを作成する。バックアップ失敗は主要操作の失敗として扱い、削除を実行しない。
 
-現在も `staff`, `settings`, `holidays`, `patterns` は設定マスタとしてフィールド単位で保存する。これらは月次データではないため、通常のシフト操作とは別の上書き境界として扱う。
+現在も `staff`, `settings`, `holidays`, `patterns` は設定マスタとしてフィールド単位で保存する。これらは月次データではないため、通常のシフト操作とは別の上書き境界として扱う。内部の全体保存ヘルパはこの4種のマスタフィールドだけを受け付ける型に限定し、月次データを渡せないようにしている。
 
 過去に事故原因となった `saveSchedule`, `saveScheduleAndManualShifts`, `saveScheduleTimeRangesAndManualShifts`, `saveManualShifts`, `saveTimeRangeSchedule`, `saveNotes`, `saveExcelExportLog`, `saveAll` のような全体保存APIは public API から削除している。将来の実装では、月次データは日付単位または職員セル単位の専用メソッドだけを使う。
 

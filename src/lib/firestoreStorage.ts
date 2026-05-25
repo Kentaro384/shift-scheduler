@@ -9,6 +9,7 @@ import {
     onSnapshot,
     orderBy,
     query,
+    runTransaction,
     serverTimestamp,
     setDoc,
     updateDoc,
@@ -87,6 +88,16 @@ export type AuditLogRecord = {
     detail?: Record<string, unknown>;
     undoPatch?: UndoPatch;
 };
+
+export class UndoConflictError extends Error {
+    readonly conflictPaths: string[];
+
+    constructor(conflictPaths: string[]) {
+        super('Undo target has been changed since the audit log was recorded.');
+        this.name = 'UndoConflictError';
+        this.conflictPaths = conflictPaths;
+    }
+}
 
 // Default values matching types.ts
 const defaultSettings: Settings = {
@@ -336,10 +347,20 @@ const isMissingPatchValue = (value: unknown): value is MissingPatchValue =>
 const decodePatchValue = (value: AuditPatchScalar | MissingPatchValue, deleteValue: unknown): unknown =>
     isMissingPatchValue(value) ? deleteValue : value;
 
+const normalizePatchValue = (value: unknown): unknown => {
+    if (!value || typeof value !== 'object') return value;
+    if (Array.isArray(value)) return value.map(normalizePatchValue);
+
+    return Object.keys(value as Record<string, unknown>).sort().reduce<Record<string, unknown>>((normalized, key) => {
+        normalized[key] = normalizePatchValue((value as Record<string, unknown>)[key]);
+        return normalized;
+    }, {});
+};
+
 const arePatchValuesEqual = (
     left: AuditPatchScalar | MissingPatchValue,
     right: AuditPatchScalar | MissingPatchValue,
-): boolean => JSON.stringify(left) === JSON.stringify(right);
+): boolean => JSON.stringify(normalizePatchValue(left)) === JSON.stringify(normalizePatchValue(right));
 
 const pushUndoField = (
     fields: UndoFieldPatch[],
@@ -410,6 +431,26 @@ export const buildUndoUpdates = (
 
     return updates;
 };
+
+const getValueAtDottedPath = (source: Record<string, unknown>, path: string): unknown => {
+    let cursor: unknown = source;
+
+    for (const part of path.split('.')) {
+        if (!cursor || typeof cursor !== 'object' || Array.isArray(cursor)) return undefined;
+        const record = cursor as Record<string, unknown>;
+        if (!Object.prototype.hasOwnProperty.call(record, part)) return undefined;
+        cursor = record[part];
+    }
+
+    return cursor;
+};
+
+export const findUndoConflictPaths = (
+    currentData: Record<string, unknown>,
+    undoPatch: UndoPatch,
+): string[] => undoPatch.fields
+    .filter(field => !arePatchValuesEqual(encodePatchValue(getValueAtDottedPath(currentData, field.path)), field.after))
+    .map(field => field.path);
 
 export const buildScopedStaffCellUpdates = (
     data: Record<string, DateKeyedMap>,
@@ -549,7 +590,9 @@ const saveScopedStaffCells = async (
     await writeUpdates(updates, audit, updatedAt, actor);
 };
 
-const saveDocumentFields = async (data: Partial<OrganizationData>, audit?: SaveAuditContext): Promise<void> => {
+type MasterDocumentFields = Pick<OrganizationData, 'staff' | 'settings' | 'holidays' | 'patterns'>;
+
+const saveDocumentFields = async (data: Partial<MasterDocumentFields>, audit?: SaveAuditContext): Promise<void> => {
     const updatedAt = Date.now();
     const actor = getCurrentAuditActor();
     const payload = {
@@ -696,7 +739,20 @@ export const firestoreStorage = {
             ...buildAuditMetadata(audit, updatedAt, actor),
         };
 
-        await writeUpdates(updates, audit, updatedAt, actor);
+        await runTransaction(db, async transaction => {
+            const docSnap = await transaction.get(getDocRef());
+            if (!docSnap.exists()) {
+                throw new UndoConflictError(auditLog.undoPatch?.fields.map(field => field.path) || []);
+            }
+
+            const conflictPaths = findUndoConflictPaths(docSnap.data() as Record<string, unknown>, auditLog.undoPatch as UndoPatch);
+            if (conflictPaths.length > 0) {
+                throw new UndoConflictError(conflictPaths);
+            }
+
+            transaction.update(getDocRef(), updates);
+        });
+        await writeAuditLog(audit, updatedAt, actor);
         return auditLog;
     },
 

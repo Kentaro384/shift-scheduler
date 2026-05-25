@@ -18,7 +18,7 @@ import { ShiftPaletteIcon } from './components/ShiftPaletteIcon';
 import { ShiftBalanceDashboard } from './components/ShiftBalanceDashboard';
 import { LoginScreen } from './components/LoginScreen';
 import { signOut } from './lib/auth';
-import { buildScopedDateUndoPatch, firestoreStorage, type SaveAuditContext } from './lib/firestoreStorage';
+import { buildScopedDateUndoPatch, firestoreStorage, UndoConflictError, type SaveAuditContext } from './lib/firestoreStorage';
 import { useToast } from './components/Toast';
 import { getShiftCardClass, getShiftChipClass, getShiftMarker } from './lib/shiftPalette';
 import { getShiftDisplayLabel } from './lib/leaveUtils';
@@ -318,6 +318,10 @@ function App() {
 
       toast.success('直前の変更を取り消しました', undone.label);
     } catch (error) {
+      if (error instanceof UndoConflictError) {
+        toast.warning('取り消しを中止しました', '対象データが別操作で更新されています。最新の状態を確認してください');
+        return;
+      }
       console.error('Failed to undo latest change:', error);
       toast.error('取り消しに失敗しました', '通信状態を確認してもう一度試してください');
     } finally {
@@ -426,6 +430,7 @@ function App() {
     }
 
     const newTimeRangeSchedule: TimeRangeSchedule = { ...timeRangeSchedule };
+    const appliedDateSet = new Set<string>();
     let appliedCount = 0;
     let skippedCount = 0;
 
@@ -466,6 +471,7 @@ function App() {
           end: defaultTimeRange.end,
           countAsShifts: countsForStaffing(s) ? [...(defaultTimeRange.countAsShifts || [])] : [],
         };
+        appliedDateSet.add(dateStr);
         appliedCount++;
       });
     }
@@ -476,8 +482,9 @@ function App() {
     }
 
     const previousTimeRangeSchedule = timeRangeSchedule;
+    const appliedDateStrings = Array.from(appliedDateSet);
     setTimeRangeSchedule(newTimeRangeSchedule);
-    const saved = await saveWithToast('固定勤務', () => firestoreStorage.saveTimeRangeDates(newTimeRangeSchedule, monthDateStrings, monthAudit(
+    const saved = await saveWithToast('固定勤務', () => firestoreStorage.saveTimeRangeDates(newTimeRangeSchedule, appliedDateStrings, monthAudit(
       'apply_default_time_ranges',
       '固定勤務反映',
       ['timeRangeSchedule'],
@@ -486,7 +493,7 @@ function App() {
         undoPatch: buildScopedDateUndoPatch(
           { timeRangeSchedule: previousTimeRangeSchedule },
           { timeRangeSchedule: newTimeRangeSchedule },
-          monthDateStrings,
+          appliedDateStrings,
         ),
       },
     )), {
