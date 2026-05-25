@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAuditMetadata, buildClearMonthUpdates, buildScopedSaveUpdates, expandDottedUpdates } from './firestoreStorage';
+import { buildAuditMetadata, buildClearMonthUpdates, buildScopedSaveUpdates, buildScopedStaffCellUpdates, expandDottedUpdates } from './firestoreStorage';
 
 describe('buildClearMonthUpdates', () => {
     it('builds month-delete updates without rewriting staff', () => {
@@ -48,6 +48,41 @@ describe('buildScopedSaveUpdates', () => {
         expect(updates).not.toHaveProperty('schedule');
         expect(updates).not.toHaveProperty('manualShifts');
         expect(updates).not.toHaveProperty('schedule.2026-07-01');
+    });
+});
+
+describe('buildScopedStaffCellUpdates', () => {
+    it('builds staff-cell updates without replacing the whole day map', () => {
+        const deleteValue = Symbol('deleteField');
+        const updates = buildScopedStaffCellUpdates({
+            schedule: {
+                '2026-06-01': { 1: 'A', 2: 'B', 3: 'C' },
+            },
+            manualShifts: {
+                '2026-06-01': { 1: 'A' },
+            },
+        }, '2026-06-01', [1, 2], 12345, deleteValue);
+
+        expect(updates).toEqual({
+            updatedAt: 12345,
+            'schedule.2026-06-01.1': 'A',
+            'schedule.2026-06-01.2': 'B',
+            'manualShifts.2026-06-01.1': 'A',
+            'manualShifts.2026-06-01.2': deleteValue,
+        });
+        expect(updates).not.toHaveProperty('schedule.2026-06-01');
+        expect(updates).not.toHaveProperty('manualShifts.2026-06-01');
+        expect(updates).not.toHaveProperty('schedule.2026-06-01.3');
+    });
+
+    it('preserves empty string as an intentional cell value', () => {
+        const updates = buildScopedStaffCellUpdates({
+            schedule: {
+                '2026-06-01': { 1: '' },
+            },
+        }, '2026-06-01', [1], 12345, 'delete');
+
+        expect(updates['schedule.2026-06-01.1']).toBe('');
     });
 });
 

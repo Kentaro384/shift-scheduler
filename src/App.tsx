@@ -5,7 +5,7 @@ import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { countAllPatterns, countWorkingStaff } from './lib/shiftCountUtils';
 import { exportToExcel } from './lib/excelExport';
-import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, DatabaseBackup, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { StaffList } from './components/StaffList';
 import { SettingsModal } from './components/SettingsModal';
 import { HolidayModal } from './components/HolidayModal';
@@ -19,7 +19,6 @@ import { ShiftBalanceDashboard } from './components/ShiftBalanceDashboard';
 import { LoginScreen } from './components/LoginScreen';
 import { signOut } from './lib/auth';
 import { firestoreStorage, type SaveAuditContext } from './lib/firestoreStorage';
-import { storage } from './lib/storage';
 import { useToast } from './components/Toast';
 import { getShiftCardClass, getShiftChipClass, getShiftMarker } from './lib/shiftPalette';
 import { getShiftDisplayLabel } from './lib/leaveUtils';
@@ -757,33 +756,6 @@ function App() {
                       <Calendar size={18} className="text-[#FF6B6B]" />
                       <span className="font-medium">祝日設定</span>
                     </button>
-                    {storage.hasData() && (
-                      <button
-                        onClick={async () => {
-	                          if (!window.confirm('LocalStorageのデータをクラウドに移行しますか？\n\n現在のクラウドデータは上書きされます。')) return;
-	                          const data = storage.getAllForMigration();
-	                          const saved = await saveWithToast('LocalStorage移行データ', () => firestoreStorage.saveAll(data, {
-                              action: 'local_storage_migration',
-                              label: 'LocalStorageから復元',
-                              affectedFields: ['staff', 'schedule', 'manualShifts', 'settings', 'holidays', 'patterns', 'notes'],
-                            }));
-	                          if (!saved) return;
-	                          setStaff(data.staff);
-	                          setSchedule(data.schedule);
-	                          setManualShifts(data.manualShifts || {});
-                          setSettings(firestoreStorage.normalizeSettings(data.settings));
-                          setHolidays(data.holidays);
-	                          setPatterns(data.patterns);
-	                          setNotes(data.notes || {});
-	                          setShowSettingsMenu(false);
-	                          toast.success('データを移行しました', 'LocalStorageの内容をクラウドに保存しました');
-	                        }}
-                        className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-blue-50 transition-colors text-blue-600 border-t border-gray-50"
-                      >
-                        <DatabaseBackup size={18} />
-                        <span className="font-medium">LocalStorageから復元</span>
-                      </button>
-                    )}
                     <div className="border-t border-gray-100 my-1" />
                     <button
                       onClick={handleForceClearMonth}

@@ -93,7 +93,7 @@ export const useScheduleActions = ({
 
     setSchedule(newSchedule);
     setManualShifts(newManualShifts);
-    const saved = await saveWithToast('シフト', () => firestoreStorage.saveScheduleAndManualShiftDates(newSchedule, newManualShifts, [dateStr], {
+    const saved = await saveWithToast('シフト', () => firestoreStorage.saveScheduleAndManualShiftCells(newSchedule, newManualShifts, dateStr, [staffId], {
       action: 'manual_shift_update',
       label: 'シフト手動更新',
       monthKey,
@@ -118,7 +118,7 @@ export const useScheduleActions = ({
         () => {
           setSchedule(prevSchedule);
           setManualShifts(prevManualShifts);
-          void saveWithToast('取り消し後のシフト', () => firestoreStorage.saveScheduleAndManualShiftDates(prevSchedule, prevManualShifts, [dateStr], {
+          void saveWithToast('取り消し後のシフト', () => firestoreStorage.saveScheduleAndManualShiftCells(prevSchedule, prevManualShifts, dateStr, [staffId], {
             action: 'undo_manual_shift_update',
             label: 'シフト手動更新の取り消し',
             monthKey,
@@ -160,7 +160,7 @@ export const useScheduleActions = ({
 
     setSchedule(newSchedule);
     setManualShifts(newManualShifts);
-    const saved = await saveWithToast('シフト', () => firestoreStorage.saveScheduleAndManualShiftDates(newSchedule, newManualShifts, [dateStr], {
+    const saved = await saveWithToast('シフト', () => firestoreStorage.saveScheduleAndManualShiftCells(newSchedule, newManualShifts, dateStr, [targetStaffId], {
       action: 'candidate_shift_select',
       label: '候補者配置',
       monthKey,
@@ -185,7 +185,7 @@ export const useScheduleActions = ({
         () => {
           setSchedule(prevSchedule);
           setManualShifts(prevManualShifts);
-          void saveWithToast('取り消し後のシフト', () => firestoreStorage.saveScheduleAndManualShiftDates(prevSchedule, prevManualShifts, [dateStr], {
+          void saveWithToast('取り消し後のシフト', () => firestoreStorage.saveScheduleAndManualShiftCells(prevSchedule, prevManualShifts, dateStr, [targetStaffId], {
             action: 'undo_candidate_shift_select',
             label: '候補者配置の取り消し',
             monthKey,
@@ -232,7 +232,7 @@ export const useScheduleActions = ({
 
     setSchedule(newSchedule);
     setManualShifts(newManualShifts);
-    const saved = await saveWithToast('シフト入替', () => firestoreStorage.saveScheduleAndManualShiftDates(newSchedule, newManualShifts, [dateStr], {
+    const saved = await saveWithToast('シフト入替', () => firestoreStorage.saveScheduleAndManualShiftCells(newSchedule, newManualShifts, dateStr, [staffAId, staffBId], {
       action: 'swap_shifts',
       label: 'シフト入替',
       monthKey,
@@ -256,7 +256,7 @@ export const useScheduleActions = ({
       () => {
         setSchedule(prevSchedule);
         setManualShifts(prevManualShifts);
-        void saveWithToast('取り消し後のシフト', () => firestoreStorage.saveScheduleAndManualShiftDates(prevSchedule, prevManualShifts, [dateStr], {
+        void saveWithToast('取り消し後のシフト', () => firestoreStorage.saveScheduleAndManualShiftCells(prevSchedule, prevManualShifts, dateStr, [staffAId, staffBId], {
           action: 'undo_swap_shifts',
           label: 'シフト入替の取り消し',
           monthKey,
@@ -284,7 +284,7 @@ export const useScheduleActions = ({
 
     setSchedule(newSchedule);
     setManualShifts(newManualShifts);
-    const saved = await saveWithToast('シフト', () => firestoreStorage.saveScheduleAndManualShiftDates(newSchedule, newManualShifts, [dateStr], {
+    const saved = await saveWithToast('シフト', () => firestoreStorage.saveScheduleAndManualShiftCells(newSchedule, newManualShifts, dateStr, [staffId], {
       action: 'summary_candidate_select',
       label: '不足候補から配置',
       monthKey,

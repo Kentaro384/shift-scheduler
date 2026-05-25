@@ -197,6 +197,36 @@ export const buildScopedSaveUpdates = (
     return updates;
 };
 
+const getDateCellValue = (source: DateKeyedMap, dateStr: string, staffId: number): unknown => {
+    const day = source[dateStr];
+    if (!day || typeof day !== 'object' || Array.isArray(day)) return undefined;
+
+    const dayRecord = day as Record<string, unknown>;
+    const staffKey = String(staffId);
+    if (!Object.prototype.hasOwnProperty.call(dayRecord, staffKey)) return undefined;
+
+    return dayRecord[staffKey];
+};
+
+export const buildScopedStaffCellUpdates = (
+    data: Record<string, DateKeyedMap>,
+    dateStr: string,
+    staffIds: number[],
+    updatedAt: number = Date.now(),
+    deleteValue: unknown = deleteField(),
+): Record<string, unknown> => {
+    const updates: Record<string, unknown> = { updatedAt };
+
+    Object.entries(data).forEach(([fieldName, source]) => {
+        staffIds.forEach(staffId => {
+            const value = getDateCellValue(source, dateStr, staffId);
+            updates[`${fieldName}.${dateStr}.${staffId}`] = value ?? deleteValue;
+        });
+    });
+
+    return updates;
+};
+
 export const expandDottedUpdates = (updates: Record<string, unknown>): Record<string, unknown> => {
     const expanded: Record<string, unknown> = {};
 
@@ -253,6 +283,23 @@ const saveScopedDateFields = async (
     const actor = getCurrentAuditActor();
     const updates = {
         ...buildScopedSaveUpdates(data, dateStrings, updatedAt),
+        ...buildAuditMetadata(audit, updatedAt, actor),
+    };
+
+    await writeUpdates(updates, audit, updatedAt, actor);
+};
+
+const saveScopedStaffCells = async (
+    data: Record<string, DateKeyedMap>,
+    dateStr: string,
+    staffIds: number[],
+    audit?: SaveAuditContext,
+): Promise<void> => {
+    const updatedAt = Date.now();
+    const actor = getCurrentAuditActor();
+    const uniqueStaffIds = Array.from(new Set(staffIds));
+    const updates = {
+        ...buildScopedStaffCellUpdates(data, dateStr, uniqueStaffIds, updatedAt),
         ...buildAuditMetadata(audit, updatedAt, actor),
     };
 
@@ -328,6 +375,16 @@ export const firestoreStorage = {
         await saveScopedDateFields({ schedule, manualShifts }, dateStrings, audit);
     },
 
+    async saveScheduleAndManualShiftCells(
+        schedule: ShiftSchedule,
+        manualShifts: ShiftSchedule,
+        dateStr: string,
+        staffIds: number[],
+        audit?: SaveAuditContext,
+    ): Promise<void> {
+        await saveScopedStaffCells({ schedule, manualShifts }, dateStr, staffIds, audit);
+    },
+
     async saveSettings(settings: Settings, audit?: SaveAuditContext): Promise<void> {
         await this.saveAll({ settings }, audit);
     },
@@ -369,6 +426,17 @@ export const firestoreStorage = {
         audit?: SaveAuditContext,
     ): Promise<void> {
         await saveScopedDateFields({ schedule, timeRangeSchedule, manualShifts }, dateStrings, audit);
+    },
+
+    async saveScheduleTimeRangeManualShiftCells(
+        schedule: ShiftSchedule,
+        timeRangeSchedule: TimeRangeSchedule,
+        manualShifts: ShiftSchedule,
+        dateStr: string,
+        staffIds: number[],
+        audit?: SaveAuditContext,
+    ): Promise<void> {
+        await saveScopedStaffCells({ schedule, timeRangeSchedule, manualShifts }, dateStr, staffIds, audit);
     },
 
     async saveNotes(notes: DailyNotes, audit?: SaveAuditContext): Promise<void> {

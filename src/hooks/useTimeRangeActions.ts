@@ -83,7 +83,7 @@ export const useTimeRangeActions = ({
     setManualShifts(newManualShifts);
     const saved = await saveWithToast(
       '時間指定勤務',
-      () => firestoreStorage.saveScheduleTimeRangeManualShiftDates(newSchedule, newTimeRangeSchedule, newManualShifts, [dateStr], {
+      () => firestoreStorage.saveScheduleTimeRangeManualShiftCells(newSchedule, newTimeRangeSchedule, newManualShifts, dateStr, [staffId], {
         action: 'edit_time_range',
         label: '時間指定勤務',
         monthKey,
@@ -128,7 +128,7 @@ export const useTimeRangeActions = ({
     setManualShifts(newManualShifts);
     const saved = await saveWithToast(
       'シフト',
-      () => firestoreStorage.saveScheduleTimeRangeManualShiftDates(newSchedule, newTimeRangeSchedule, newManualShifts, [dateStr], {
+      () => firestoreStorage.saveScheduleTimeRangeManualShiftCells(newSchedule, newTimeRangeSchedule, newManualShifts, dateStr, [staffId], {
         action: 'time_range_staff_shift_update',
         label: '時間指定職員のシフト変更',
         monthKey,
@@ -192,7 +192,7 @@ export const useTimeRangeActions = ({
     setManualShifts(newManualShifts);
     const saved = await saveWithToast(
       '時間指定勤務',
-      () => firestoreStorage.saveScheduleTimeRangeManualShiftDates(newSchedule, newTimeRangeSchedule, newManualShifts, [dateStr], {
+      () => firestoreStorage.saveScheduleTimeRangeManualShiftCells(newSchedule, newTimeRangeSchedule, newManualShifts, dateStr, [staffId], {
         action: 'clear_time_range',
         label: '時間指定勤務クリア',
         monthKey,
