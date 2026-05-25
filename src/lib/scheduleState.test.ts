@@ -1,6 +1,35 @@
 import { describe, expect, it } from 'vitest';
 import type { ShiftSchedule } from '../types';
-import { swapScheduleAndManualMarkers } from './scheduleState';
+import { hydrateScheduleFromManualShifts, swapScheduleAndManualMarkers } from './scheduleState';
+
+describe('hydrateScheduleFromManualShifts', () => {
+    const dateStr = '2026-06-01';
+
+    it('restores missing visible schedule cells from manual markers', () => {
+        const schedule: ShiftSchedule = {};
+        const manualShifts: ShiftSchedule = { [dateStr]: { 1: 'A', 2: '有' } };
+
+        expect(hydrateScheduleFromManualShifts(schedule, manualShifts)).toEqual({
+            [dateStr]: { 1: 'A', 2: '有' },
+        });
+    });
+
+    it('does not overwrite existing schedule cells', () => {
+        const schedule: ShiftSchedule = { [dateStr]: { 1: 'B' } };
+        const manualShifts: ShiftSchedule = { [dateStr]: { 1: 'A', 2: '有' } };
+
+        expect(hydrateScheduleFromManualShifts(schedule, manualShifts)).toEqual({
+            [dateStr]: { 1: 'B', 2: '有' },
+        });
+    });
+
+    it('returns the original object when there is nothing to restore', () => {
+        const schedule: ShiftSchedule = { [dateStr]: { 1: 'A' } };
+        const manualShifts: ShiftSchedule = { [dateStr]: { 1: 'A' } };
+
+        expect(hydrateScheduleFromManualShifts(schedule, manualShifts)).toBe(schedule);
+    });
+});
 
 describe('swapScheduleAndManualMarkers', () => {
     const dateStr = '2026-06-01';

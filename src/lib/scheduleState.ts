@@ -45,6 +45,33 @@ export type ScheduleManualState = {
   manualShifts: ShiftSchedule;
 };
 
+export const hydrateScheduleFromManualShifts = (
+  schedule: ShiftSchedule,
+  manualShifts: ShiftSchedule,
+): ShiftSchedule => {
+  let nextSchedule = schedule;
+  const clonedDates = new Set<string>();
+
+  Object.entries(manualShifts).forEach(([dateStr, manualDay]) => {
+    Object.entries(manualDay || {}).forEach(([staffId, shiftId]) => {
+      if (!shiftId) return;
+      const currentShift = nextSchedule[dateStr]?.[Number(staffId)];
+      if (currentShift) return;
+
+      if (nextSchedule === schedule) {
+        nextSchedule = { ...schedule };
+      }
+      if (!clonedDates.has(dateStr)) {
+        nextSchedule[dateStr] = { ...(nextSchedule[dateStr] || {}) };
+        clonedDates.add(dateStr);
+      }
+      nextSchedule[dateStr][Number(staffId)] = shiftId;
+    });
+  });
+
+  return nextSchedule;
+};
+
 export const swapScheduleAndManualMarkers = (
   schedule: ShiftSchedule,
   manualShifts: ShiftSchedule,

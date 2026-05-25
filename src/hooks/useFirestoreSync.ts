@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { DailyNotes, Holiday, Settings, ShiftPatternDefinition, ShiftSchedule, Staff, TimeRangeSchedule } from '../types';
 import { onAuthStateChange, signOut, type AuthUser } from '../lib/auth';
 import { firestoreStorage, type OrganizationData } from '../lib/firestoreStorage';
+import { hydrateScheduleFromManualShifts } from '../lib/scheduleState';
 
 export function useFirestoreSync() {
     const [user, setUser] = useState<AuthUser>(null);
@@ -63,9 +64,10 @@ export function useFirestoreSync() {
             }
 
             if (data) {
+                const manualShiftState = data.manualShifts || {};
                 setStaff(data.staff || []);
-                setSchedule(data.schedule || {});
-                setManualShifts(data.manualShifts || {});
+                setSchedule(hydrateScheduleFromManualShifts(data.schedule || {}, manualShiftState));
+                setManualShifts(manualShiftState);
                 setSettings(firestoreStorage.normalizeSettings(data.settings));
                 setHolidays(data.holidays || []);
                 setPatterns(firestoreStorage.normalizePatterns(data.patterns));
