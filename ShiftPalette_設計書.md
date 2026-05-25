@@ -86,6 +86,8 @@ interface OrganizationData {
   notes: DailyNotes;
   excelExportLog?: Record<string, string>;
   updatedAt: number;
+  updatedBy?: AuditActor;
+  lastOperation?: LastOperation;
 }
 ```
 
@@ -101,6 +103,28 @@ interface OrganizationData {
 | `notes` | 日別備考。Excelの備考行にも出力する |
 | `excelExportLog` | 月別のExcel出力履歴 |
 | `updatedAt` | 最終保存時刻 |
+| `updatedBy` | 最終保存者の Firebase Auth 情報。`uid`, `email`, `displayName` を持つ |
+| `lastOperation` | 最終操作の種別、表示ラベル、対象月/日付/職員、対象フィールド、対象日数 |
+
+`organizations/default/auditLogs/{auditLogId}` には、アプリ操作ごとの監査ログを追記する。監査ログは後追い調査用であり、主要データの正本は引き続き `organizations/default` である。
+
+```typescript
+interface AuditLog {
+  schemaVersion: 1;
+  source: 'web-app';
+  action: string;
+  label: string;
+  actor: AuditActor;
+  clientAt: number;
+  at: FieldValue;
+  monthKey?: string;
+  targetDate?: string;
+  targetStaffId?: number;
+  affectedFields?: string[];
+  affectedDateCount?: number;
+  detail?: Record<string, string | number | boolean | null | string[] | number[]>;
+}
+```
 
 ### 4.2 職員
 
@@ -263,8 +287,10 @@ type TimeRangeSchedule = Record<string, Record<number, TimeRange>>;
 1. ユーザーが「自動生成」を押す。
 2. 現在表示中の月に在籍している職員、祝日、年月、設定、既存スケジュール、時間指定勤務、パターン定義を `ShiftGenerator` に渡す。
 3. 生成器は、固定予定と手動対象職員を保護した初期状態から各フェーズを順に実行する。
-4. 生成結果を `schedule` に反映し、Firestoreへ保存する。
+4. 生成器が返す対象月分の結果を既存 `schedule` にマージし、Firestoreへ対象月の日付キーだけ保存する。
 5. 振休未配置などの警告があればトースト表示する。
+
+`ShiftGenerator.generate()` は表示中の月だけの `schedule` を返す。Firestoreへ `schedule` フィールド全体を保存すると他月を失うため、自動生成では `saveScheduleDates()` を使い、`schedule.YYYY-MM-DD` 単位で対象月だけ更新する。
 
 ### 5.4 固定勤務の一括反映
 
@@ -297,6 +323,8 @@ type TimeRangeSchedule = Record<string, Record<number, TimeRange>>;
 - ハード制約違反時のトーストとUndo
 
 勤務パターン選択、候補者検索、入替提案はいずれもユーザー確定操作として扱う。通常シフトを手動で変更した場合は、`schedule` と同時に `manualShifts` へ同じシフトIDを記録し、次回自動生成で上書きされないようにする。入替提案では、入替後の2セルをどちらも手動確定として `manualShifts` に記録する。保存は `schedule` と `manualShifts` を同一Firestore更新で行い、保存失敗時やUndo失敗時は両方を同じ前状態へ戻す。
+
+手動編集、候補者配置、入替、時間指定勤務編集は、同じ日付の他職員セルを巻き戻さないよう、`schedule.YYYY-MM-DD.staffId`、`manualShifts.YYYY-MM-DD.staffId`、`timeRangeSchedule.YYYY-MM-DD.staffId` のセル単位で保存する。入替は対象2職員だけを保存対象にする。
 
 入替提案は勤務シフト同士だけを対象にする。`有`, `振`, `夏休`, `誕生日休`, `研`, `出`, `保`, `休`, 空欄などの非勤務・固定予定は入替対象にしない。半日休を含む勤務シフトIDは、入替後も `manualShifts` にそのまま記録して保護する。
 
@@ -358,9 +386,46 @@ Firestore保存は `merge` のため、単にローカルオブジェクトか�
 
 手動確認では、手動入力された固定予定と自動生成された勤務の境界は上記の通り動作することを確認済みである。
 
+### 5.9 Firestore保存スコープと監査
+
+Firestoreは `updateDoc()` にトップレベルの map フィールドを渡すと、その map 全体を置換する。ShiftPaletteでは、月次・日次・セル編集の操作ごとに保存範囲を明示する。
+
+| 操作 | 保存方法 | 主な目的 |
+|---|---|---|
+| 自動生成 | `schedule.YYYY-MM-DD` を対象月分だけ更新 | 生成器が返す当月分で他月を消さない |
+| 自動生成リセット | `schedule.YYYY-MM-DD` を対象月分だけ更新 | 他月の `schedule` を保持する |
+| 当月を白紙に戻す | `schedule/timeRangeSchedule/manualShifts/notes.YYYY-MM-DD` を `deleteField()` | 対象月だけ完全削除する |
+| 固定勤務反映 | `timeRangeSchedule.YYYY-MM-DD` を対象月分だけ更新 | 他月の固定勤務を保持する |
+| 備考編集 | `notes.YYYY-MM-DD` だけ更新 | 他日の備考を保持する |
+| Excel出力履歴 | `excelExportLog.YYYY-MM` だけ更新 | 他月の出力履歴を保持する |
+| 手動シフト編集 | `schedule/manualShifts.YYYY-MM-DD.staffId` だけ更新 | 同日別職員の古いタブ巻き戻しを避ける |
+| 時間指定勤務編集 | `schedule/timeRangeSchedule/manualShifts.YYYY-MM-DD.staffId` だけ更新 | 時間指定と手動印を同一セル単位で整合させる |
+
+各保存では `updatedAt` に加えて、監査用の `updatedBy` と `lastOperation` を `organizations/default` へ保存する。さらに `organizations/default/auditLogs` サブコレクションへ同じ操作のログを追記する。監査ログの書き込み失敗は主要データ保存を失敗扱いにしない。
+
+現在も `staff`, `settings`, `holidays`, `patterns` は設定マスタとしてフィールド単位で保存する。これらは月次データではないため、通常のシフト操作とは別の上書き境界として扱う。
+
+### 5.10 manualShiftsからの表示復元
+
+`manualShifts` は「手動確定された」という印であり、画面表示の実体は基本的に `schedule` である。ただし、障害や過去の保存不整合で `manualShifts` に値があり、対応する `schedule` セルが欠けている場合は、Firestore購読時に `hydrateScheduleFromManualShifts()` で表示用 `schedule` を補完する。
+
+補完ルールは次の通り。
+
+- `manualShifts[date][staffId]` が空でない場合だけ対象にする。
+- 既に `schedule[date][staffId]` が存在する場合は上書きしない。
+- 補完は画面状態に対して行い、ただちにFirestoreへ書き戻さない。
+
+これにより、手動入力分がFirestore上に残っているのに画面へ出ない状態からの復旧性を高める。
+
+### 5.11 LocalStorage復元の封印
+
+旧localStorageデータをクラウドへ移行する経路は、現在の通常UIからは外している。過去の localStorage には `manualShifts`, `notes`, `timeRangeSchedule`, `excelExportLog` がない、または空として扱われる可能性があり、現在のクラウドデータを `saveAll()` で上書きするとデータ消失リスクがあるためである。
+
+非常時に復元が必要な場合は、コード上で明示的に復元手順を戻し、事前にFirestoreのバックアップを取得したうえで実施する。
+
 `countAsShifts` の扱いには注意が必要である。時間指定勤務の「割当なし」は、`undefined` ではなく空配列 `[]` として保存する。`undefined` は「未設定なのでデフォルト勤務のシフト割当へフォールバックする」と解釈される可能性があるため、明示的な「割当なし」と区別できなくなる。職員設定、曜日別固定勤務、日別時間指定のいずれでも、割当なしは `countAsShifts: []` を使う。
 
-### 5.9 Excel出力
+### 5.12 Excel出力
 
 現在表示中の年月、対象月に在籍している職員、スケジュール、時間指定勤務、パターン、祝日をもとに `勤務表_YYYY年M月.xlsx` を生成する。
 
@@ -570,6 +635,8 @@ score += 1 / (currentCoverage + 1)
 | `CandidateSearchModal` | 集計行から開く候補者検索 |
 | `HourlyStaffChart` | 日別の時間帯別人員ガントチャート。時間指定職員は集計対象シフトも併記 |
 
+`HourlyStaffChart` では、通常の勤務バーは勤務パターンのアクセント色で表示する。時間指定勤務で `countAsShifts` が空の「未割当」バーは、月次表の時間指定セルと同じ淡いクリーム背景、ベージュ枠、アンバー文字で表示し、斜線パターンは使わない。
+
 ---
 
 ## 10. Excel出力設計
@@ -611,6 +678,7 @@ flowchart TD
 `firestore.rules` の現行ポリシーは次の通り。
 
 - `allowedUsers/{uid}` が存在する認証済みユーザーだけが `organizations/default` を読み書きできる。
+- `organizations/default/auditLogs/{auditLogId}` は同じ許可ユーザーが読み取り・作成できる。更新・削除は許可しない。
 - `allowedUsers` 自体はクライアントから読み書き不可。
 - その他のドキュメントは全拒否。
 
@@ -644,6 +712,9 @@ flowchart TD
 4. 時間指定職員の資格者カウントは `countAsShifts` の設定に依存する。入力しない場合、その時間帯は勤務人数には数えられてもパターン別資格者数には反映されない。
 5. 園長は時間入力できるが、`countsForStaffing()` により人数・資格者集計から除外される。
 6. 固定予定 `研`, `出`, `保` は非勤務扱いである。実運用で「研修・出張だが勤務人数に含める」ケースが出るなら、固定予定にも種別または集計可否を持たせる必要がある。
+7. Firestoreのトップレベル map フィールドを丸ごと保存すると、別月や別日のデータを消す可能性がある。シフト系の保存は原則として日付または職員セル単位の dotted path 更新を使う。
+8. 監査ログは今後の原因調査の手がかりであり、過去にData Access audit logsが無効だった期間のFirestore書き込み主体までは復元できない。
+9. `LocalStorageから復元` は通常UIから外している。復元が必要な場合は、Firestoreバックアップを取ったうえで非常時手順として実施する。
 
 ---
 
@@ -672,6 +743,7 @@ flowchart TD
 | `src/lib/shiftCountUtils.ts` | 通常職員と時間指定勤務を統合した集計 |
 | `src/lib/firestoreStorage.ts` | Firestore保存・購読 |
 | `src/lib/storage.ts` | localStorage既存データとデフォルトデータ |
+| `src/lib/scheduleState.ts` | シフト/手動印/時間指定セルの状態更新、manualShiftsからの表示補完 |
 | `src/lib/auth.ts` | Googleログイン/ログアウト |
 | `src/lib/firebase.ts` | Firebase初期化 |
 | `src/lib/excelExport.ts` | Excel勤務表出力 |
