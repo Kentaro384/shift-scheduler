@@ -3,6 +3,7 @@ import { X, Clock } from 'lucide-react';
 import type { Staff, ShiftSchedule, TimeRangeSchedule, ShiftPatternDefinition } from '../types';
 import { countsAsFullDayStaffingShift, countsForStaffing, getEffectiveWorkShiftId, isCookingStaff, isTimeRangeStaff, isWorkShiftId, parseHalfDayLeaveShiftId } from '../types';
 import { getFormattedDate } from '../lib/utils';
+import { getShiftAccentColor } from '../lib/shiftPalette';
 
 interface HourlyStaffChartProps {
     day: number;
@@ -28,10 +29,12 @@ function parseTimeToMinutes(time: string): number {
     return h * 60 + (m || 0);
 }
 
-// Hours to display (7:00 - 19:00)
-const START_HOUR = 7;
-const END_HOUR = 19;
-const TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60;
+// Show one hour before/after business hours so off-hours are visible.
+const DISPLAY_START_HOUR = 6;
+const DISPLAY_END_HOUR = 20;
+const BUSINESS_START_HOUR = 7;
+const BUSINESS_END_HOUR = 19;
+const TOTAL_MINUTES = (DISPLAY_END_HOUR - DISPLAY_START_HOUR) * 60;
 const HALF_DAY_BOUNDARY_MINUTES = parseTimeToMinutes('12:00');
 
 interface StaffWorkTime {
@@ -41,21 +44,19 @@ interface StaffWorkTime {
     isPartTime: boolean;
     startMinutes: number;
     endMinutes: number;
-    label: string; // e.g., "A" or "9:00-14:00"
+    label: string; // Visible text inside the bar.
+    title: string; // Full detail for hover/title.
+    shiftId?: string;
+    isUnassigned: boolean;
     originalIndex: number; // Keep original order from staff array
 }
 
-function getWorkBarClass(sw: StaffWorkTime): string {
-    if (sw.isQualified) {
-        return sw.isPartTime
-            ? 'bg-gradient-to-r from-[#D9A46F] to-[#C98B5D]'
-            : 'bg-gradient-to-r from-[#FFBE6B] to-[#FF8A3D]';
-    }
+const hours = Array.from({ length: DISPLAY_END_HOUR - DISPLAY_START_HOUR + 1 }, (_, i) => DISPLAY_START_HOUR + i);
 
-    return sw.isPartTime
-        ? 'bg-gradient-to-r from-[#B0A092] to-[#958779]'
-        : 'bg-gradient-to-r from-[#C8A27A] to-[#9E7958]';
-}
+const halfHours = Array.from({ length: (DISPLAY_END_HOUR - DISPLAY_START_HOUR) * 2 - 1 }, (_, i) => {
+    const minutes = DISPLAY_START_HOUR * 60 + (i + 1) * 30;
+    return minutes % 60 === 0 ? null : minutes;
+}).filter((minutes): minutes is number => minutes !== null);
 
 export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
     day,
@@ -81,7 +82,9 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
             if (isTimeRangeStaff(s)) {
                 const timeRange = timeRangeSchedule[dateStr]?.[s.id];
                 if (timeRange) {
-                    const assignedShifts = timeRange.countAsShifts?.length ? ` [${timeRange.countAsShifts.join(',')}]` : ' [未割当]';
+                    const assignedShifts = timeRange.countAsShifts || [];
+                    const isUnassigned = assignedShifts.length === 0;
+                    const shiftLabel = isUnassigned ? '未割当' : assignedShifts.join(',');
                     result.push({
                         staffId: s.id,
                         name: s.name,
@@ -89,7 +92,10 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                         isPartTime: true,
                         startMinutes: parseTimeToMinutes(timeRange.start),
                         endMinutes: parseTimeToMinutes(timeRange.end),
-                        label: `${timeRange.start}-${timeRange.end}${assignedShifts}`,
+                        label: shiftLabel,
+                        title: `${timeRange.start}-${timeRange.end} [${shiftLabel}]`,
+                        shiftId: assignedShifts[0],
+                        isUnassigned,
                         originalIndex: index
                     });
                 }
@@ -104,9 +110,12 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                     name: s.name,
                     isQualified: countsForStaffing(s) && s.hasQualification,
                     isPartTime: false,
-                    startMinutes: START_HOUR * 60,
-                    endMinutes: END_HOUR * 60,
+                    startMinutes: BUSINESS_START_HOUR * 60,
+                    endMinutes: BUSINESS_END_HOUR * 60,
                     label: shiftId,
+                    title: shiftId,
+                    shiftId,
+                    isUnassigned: false,
                     originalIndex: index
                 });
                 return;
@@ -138,6 +147,9 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                 startMinutes,
                 endMinutes,
                 label: shiftId,
+                title: shiftId,
+                shiftId,
+                isUnassigned: false,
                 originalIndex: index
             });
         });
@@ -149,7 +161,7 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
     // Count by hour for summary
     const hourlyCounts = useMemo(() => {
         const counts: { qualified: number; total: number }[] = [];
-        for (let hour = START_HOUR; hour <= END_HOUR; hour++) {
+        for (let hour = DISPLAY_START_HOUR; hour <= DISPLAY_END_HOUR; hour++) {
             const hourMinutes = hour * 60;
             let qualified = 0;
             let total = 0;
@@ -166,7 +178,7 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
 
     // Convert minutes to position percentage
     const getPosition = (minutes: number) => {
-        const startMinutes = START_HOUR * 60;
+        const startMinutes = DISPLAY_START_HOUR * 60;
         return ((minutes - startMinutes) / TOTAL_MINUTES) * 100;
     };
 
@@ -174,11 +186,52 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
         return ((end - start) / TOTAL_MINUTES) * 100;
     };
 
+    const getClampedMinutes = (minutes: number) => Math.min(
+        DISPLAY_END_HOUR * 60,
+        Math.max(DISPLAY_START_HOUR * 60, minutes)
+    );
+
+    const getBarGeometry = (start: number, end: number) => {
+        const clampedStart = getClampedMinutes(start);
+        const clampedEnd = getClampedMinutes(end);
+        return {
+            left: `${getPosition(clampedStart)}%`,
+            width: `${Math.max(0, getWidth(clampedStart, clampedEnd))}%`,
+        };
+    };
+
+    const peakTotal = Math.max(...hourlyCounts.map(count => count.total), 0);
+
+    const offHourZones = [
+        { left: 0, width: getWidth(DISPLAY_START_HOUR * 60, BUSINESS_START_HOUR * 60) },
+        { left: getPosition(BUSINESS_END_HOUR * 60), width: getWidth(BUSINESS_END_HOUR * 60, DISPLAY_END_HOUR * 60) },
+    ];
+
+    const getWorkBarStyle = (sw: StaffWorkTime): React.CSSProperties => {
+        const geometry = getBarGeometry(sw.startMinutes, sw.endMinutes);
+        if (sw.isUnassigned) {
+            return {
+                ...geometry,
+                backgroundColor: '#FFFFFF',
+                backgroundImage: 'repeating-linear-gradient(45deg, #9CA3AF 0 1.5px, transparent 1.5px 6px)',
+                border: '1px dashed #9CA3AF',
+                color: '#6B7280',
+            };
+        }
+
+        return {
+            ...geometry,
+            backgroundColor: getShiftAccentColor(sw.shiftId || sw.label, patterns),
+            color: '#FFFFFF',
+            border: '1px solid rgba(255, 255, 255, 0.45)',
+        };
+    };
+
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in-up p-4">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden max-h-[90vh] flex flex-col">
                 {/* Header */}
-                <div className="header-gradient p-4 flex justify-between items-center flex-shrink-0">
+                <div className="p-4 flex justify-between items-center flex-shrink-0" style={{ backgroundColor: '#E85D75' }}>
                     <h2 className="text-lg font-bold text-white drop-shadow-md flex items-center gap-2">
                         <Clock size={20} />
                         時間帯別人員
@@ -198,7 +251,7 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                     <div className="flex">
                         <div className="w-24 flex-shrink-0"></div>
                         <div className="flex-1 relative h-5">
-                            {Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i).map(hour => (
+                            {hours.map(hour => (
                                 <div
                                     key={hour}
                                     className="absolute text-[10px] text-gray-500 font-medium"
@@ -214,16 +267,22 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                     <div className="flex mt-1">
                         <div className="w-24 flex-shrink-0 text-[9px] text-gray-400 pr-1 text-right">人数</div>
                         <div className="flex-1 flex">
-                            {hourlyCounts.map((count, i) => (
-                                <div
-                                    key={i}
-                                    className={`flex-1 text-center text-[10px] py-0.5 border-r border-gray-200 last:border-r-0 rounded-sm ${count.qualified < 2 ? 'bg-red-100 text-red-700 font-bold' : 'text-gray-600'
-                                        }`}
-                                >
-                                    <span className="font-bold">{count.qualified}</span>
-                                    <span className="text-gray-400">/{count.total}</span>
-                                </div>
-                            ))}
+                            {hourlyCounts.map((count, i) => {
+                                const hour = hours[i];
+                                const isOffHour = hour < BUSINESS_START_HOUR || hour >= BUSINESS_END_HOUR;
+                                const isShort = !isOffHour && count.qualified < 2;
+
+                                return (
+                                    <div
+                                        key={hour}
+                                        className={`flex-1 text-center text-[10px] py-0.5 border-r border-gray-200 last:border-r-0 rounded-sm ${isShort ? 'bg-[#FEE2E2] text-red-700 font-bold' : 'text-[#1F2937]'
+                                            } ${count.total === peakTotal && peakTotal > 0 ? 'font-bold' : ''}`}
+                                    >
+                                        <span className="font-bold">{count.qualified}</span>
+                                        <span className="text-gray-400">/{count.total}</span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
@@ -241,24 +300,39 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                                 </div>
 
                                 {/* Time bar */}
-                                <div className="flex-1 relative h-6 bg-gray-100 rounded">
-                                    {/* Grid lines */}
-                                    {Array.from({ length: END_HOUR - START_HOUR }, (_, i) => (
+                                <div className="flex-1 relative h-6 overflow-hidden rounded border border-gray-200 bg-white">
+                                    {/* Off-hours zones */}
+                                    {offHourZones.map((zone, i) => (
                                         <div
                                             key={i}
-                                            className="absolute top-0 bottom-0 w-px bg-gray-200"
-                                            style={{ left: `${((i + 1) / (END_HOUR - START_HOUR)) * 100}%` }}
+                                            className="absolute top-0 bottom-0 bg-[#F3F4F6]"
+                                            style={{ left: `${zone.left}%`, width: `${zone.width}%` }}
+                                        />
+                                    ))}
+
+                                    {/* Half-hour grid lines */}
+                                    {halfHours.map(minutes => (
+                                        <div
+                                            key={minutes}
+                                            className="absolute top-0 bottom-0 w-px border-l border-dashed border-[#F3F4F6]"
+                                            style={{ left: `${getPosition(minutes)}%` }}
+                                        />
+                                    ))}
+
+                                    {/* Hour grid lines */}
+                                    {hours.map(hour => (
+                                        <div
+                                            key={hour}
+                                            className="absolute top-0 bottom-0 w-px bg-[#E5E7EB]"
+                                            style={{ left: `${getPosition(hour * 60)}%` }}
                                         />
                                     ))}
 
                                     {/* Work time bar */}
                                     <div
-                                        className={`absolute top-1 bottom-1 rounded-md flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${getWorkBarClass(sw)}`}
-                                        style={{
-                                            left: `${getPosition(sw.startMinutes)}%`,
-                                            width: `${getWidth(sw.startMinutes, sw.endMinutes)}%`
-                                        }}
-                                        title={`${sw.name}: ${sw.label}`}
+                                        className="absolute top-1 bottom-1 z-10 rounded-md flex items-center justify-center text-[10px] font-medium shadow-sm"
+                                        style={getWorkBarStyle(sw)}
+                                        title={`${sw.name}: ${sw.title}`}
                                     >
                                         <span className="truncate px-1">{sw.label}</span>
                                     </div>
@@ -275,22 +349,12 @@ export const HourlyStaffChart: React.FC<HourlyStaffChartProps> = ({
                     </div>
                 </div>
 
-                {/* Legend & Footer */}
+                {/* Footer */}
                 <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
-                    <div className="flex justify-center gap-6 text-xs text-gray-500 mb-3">
-                        <span className="flex items-center gap-1">
-                            <div className="w-4 h-3 bg-gradient-to-r from-[#FFA8A8] to-[#FF8A8A] rounded"></div>
-                            有資格者
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <div className="w-4 h-3 bg-gradient-to-r from-gray-400 to-gray-500 rounded"></div>
-                            無資格者
-                        </span>
-                    </div>
                     <div className="text-center">
                         <button
                             onClick={onClose}
-                            className="px-6 py-2 text-sm bg-[#FF6B6B] text-white rounded-xl hover:bg-[#FF5252] transition-colors font-medium"
+                            className="px-6 py-2 text-sm bg-[#E85D75] text-white rounded-xl hover:bg-[#D95069] transition-colors font-medium"
                         >
                             閉じる
                         </button>
