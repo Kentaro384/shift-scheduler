@@ -18,7 +18,7 @@ import { ShiftPaletteIcon } from './components/ShiftPaletteIcon';
 import { ShiftBalanceDashboard } from './components/ShiftBalanceDashboard';
 import { LoginScreen } from './components/LoginScreen';
 import { signOut } from './lib/auth';
-import { firestoreStorage } from './lib/firestoreStorage';
+import { firestoreStorage, type SaveAuditContext } from './lib/firestoreStorage';
 import { storage } from './lib/storage';
 import { useToast } from './components/Toast';
 import { getShiftCardClass, getShiftChipClass, getShiftMarker } from './lib/shiftPalette';
@@ -189,6 +189,19 @@ function App() {
     }
   };
 
+  const monthAudit = (
+    action: string,
+    label: string,
+    affectedFields: string[],
+    extra: Partial<SaveAuditContext> = {},
+  ): SaveAuditContext => ({
+    action,
+    label,
+    monthKey: getMonthKey(year, month),
+    affectedFields,
+    ...extra,
+  });
+
   const handleGenerate = async () => {
     setIsGenerating(true);
     try {
@@ -203,7 +216,12 @@ function App() {
       const newSchedule = generator.generate();
       const generationWarnings = generator.getWarnings();
       setSchedule(newSchedule);
-      const saved = await saveWithToast('自動生成シフト', () => firestoreStorage.saveSchedule(newSchedule), {
+      const saved = await saveWithToast('自動生成シフト', () => firestoreStorage.saveSchedule(newSchedule, monthAudit(
+        'generate_shifts',
+        '自動生成',
+        ['schedule'],
+        { detail: { generationSeed, warningCount: generationWarnings.length } },
+      )), {
         rollback: () => setSchedule(schedule),
       });
       if (!saved) return;
@@ -259,7 +277,12 @@ function App() {
     }
 
     setSchedule(newSchedule);
-    await saveWithToast('リセット結果', () => firestoreStorage.saveSchedule(newSchedule), {
+    await saveWithToast('リセット結果', () => firestoreStorage.saveSchedule(newSchedule, monthAudit(
+      'reset_generated_shifts',
+      'リセット',
+      ['schedule'],
+      { affectedDateCount: daysInMonth },
+    )), {
       rollback: () => setSchedule(previousSchedule),
     });
   };
@@ -295,7 +318,12 @@ function App() {
     setShowSettingsMenu(false);
 
     try {
-      await firestoreStorage.clearMonthData(dateStrings);
+      await firestoreStorage.clearMonthData(dateStrings, monthAudit(
+        'clear_month',
+        '当月を白紙に戻す',
+        ['schedule', 'timeRangeSchedule', 'manualShifts', 'notes'],
+        { affectedDateCount: dateStrings.length },
+      ));
       toast.success('当月を白紙に戻しました', `${year}年${month}月の入力を削除しました`);
     } catch (error) {
       console.error('Failed to clear month data:', error);
@@ -370,7 +398,12 @@ function App() {
 
     const previousTimeRangeSchedule = timeRangeSchedule;
     setTimeRangeSchedule(newTimeRangeSchedule);
-    const saved = await saveWithToast('固定勤務', () => firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule), {
+    const saved = await saveWithToast('固定勤務', () => firestoreStorage.saveTimeRangeSchedule(newTimeRangeSchedule, monthAudit(
+      'apply_default_time_ranges',
+      '固定勤務反映',
+      ['timeRangeSchedule'],
+      { detail: { appliedCount, skippedCount } },
+    )), {
       rollback: () => setTimeRangeSchedule(previousTimeRangeSchedule),
     });
     if (saved) {
@@ -381,7 +414,11 @@ function App() {
   const handleUpdateStaff = async (newStaff: Staff[]) => {
     const previousStaff = staff;
     setStaff(newStaff);
-    await saveWithToast('職員設定', () => firestoreStorage.saveStaff(newStaff), {
+    await saveWithToast('職員設定', () => firestoreStorage.saveStaff(newStaff, {
+      action: 'update_staff',
+      label: '職員設定',
+      affectedFields: ['staff'],
+    }), {
       rollback: () => setStaff(previousStaff),
     });
   };
@@ -389,7 +426,11 @@ function App() {
   const handleUpdateSettings = async (newSettings: Settings) => {
     const previousSettings = settings;
     setSettings(newSettings);
-    await saveWithToast('シフト設定', () => firestoreStorage.saveSettings(newSettings), {
+    await saveWithToast('シフト設定', () => firestoreStorage.saveSettings(newSettings, {
+      action: 'update_settings',
+      label: 'シフト設定',
+      affectedFields: ['settings'],
+    }), {
       rollback: () => setSettings(previousSettings),
     });
   };
@@ -397,7 +438,11 @@ function App() {
   const handleUpdateHolidays = async (newHolidays: Holiday[]) => {
     const previousHolidays = holidays;
     setHolidays(newHolidays);
-    await saveWithToast('祝日設定', () => firestoreStorage.saveHolidays(newHolidays), {
+    await saveWithToast('祝日設定', () => firestoreStorage.saveHolidays(newHolidays, monthAudit(
+      'update_holidays',
+      '祝日設定',
+      ['holidays'],
+    )), {
       rollback: () => setHolidays(previousHolidays),
     });
   };
@@ -406,7 +451,11 @@ function App() {
     const normalizedPatterns = firestoreStorage.normalizePatterns(newPatterns);
     const previousPatterns = patterns;
     setPatterns(normalizedPatterns);
-    await saveWithToast('シフトパターン', () => firestoreStorage.savePatterns(normalizedPatterns), {
+    await saveWithToast('シフトパターン', () => firestoreStorage.savePatterns(normalizedPatterns, {
+      action: 'update_patterns',
+      label: 'シフトパターン',
+      affectedFields: ['patterns'],
+    }), {
       rollback: () => setPatterns(previousPatterns),
     });
   };
@@ -513,7 +562,12 @@ function App() {
     const log = { ...excelExportLog, [getMonthKey(year, month)]: exportedAt };
     const previousExcelExportLog = excelExportLog;
     setExcelExportLog(log);
-    const saved = await saveWithToast('Excel出力履歴', () => firestoreStorage.saveExcelExportLog(log), {
+    const saved = await saveWithToast('Excel出力履歴', () => firestoreStorage.saveExcelExportLog(log, monthAudit(
+      'excel_export',
+      'Excel出力',
+      ['excelExportLog'],
+      { detail: { exportedAt } },
+    )), {
       rollback: () => setExcelExportLog(previousExcelExportLog),
     });
     if (!saved) return;
@@ -529,7 +583,12 @@ function App() {
     const previousNotes = notes;
     const newNotes = { ...notes, [dateStr]: input.trim() };
     setNotes(newNotes);
-    await saveWithToast('備考', () => firestoreStorage.saveNotes(newNotes), {
+    await saveWithToast('備考', () => firestoreStorage.saveNotes(newNotes, monthAudit(
+      'edit_note',
+      '備考編集',
+      ['notes'],
+      { targetDate: dateStr },
+    )), {
       rollback: () => setNotes(previousNotes),
     });
   };
@@ -702,7 +761,11 @@ function App() {
                         onClick={async () => {
 	                          if (!window.confirm('LocalStorageのデータをクラウドに移行しますか？\n\n現在のクラウドデータは上書きされます。')) return;
 	                          const data = storage.getAllForMigration();
-	                          const saved = await saveWithToast('LocalStorage移行データ', () => firestoreStorage.saveAll(data));
+	                          const saved = await saveWithToast('LocalStorage移行データ', () => firestoreStorage.saveAll(data, {
+                              action: 'local_storage_migration',
+                              label: 'LocalStorageから復元',
+                              affectedFields: ['staff', 'schedule', 'manualShifts', 'settings', 'holidays', 'patterns', 'notes'],
+                            }));
 	                          if (!saved) return;
 	                          setStaff(data.staff);
 	                          setSchedule(data.schedule);

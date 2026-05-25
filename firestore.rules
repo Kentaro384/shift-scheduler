@@ -15,6 +15,11 @@ service cloud.firestore {
       allow read, write: if allowedUser();
     }
 
+    match /organizations/default/auditLogs/{auditLogId} {
+      allow read, create: if allowedUser();
+      allow update, delete: if false;
+    }
+
     match /allowedUsers/{userId} {
       allow read, write: if false;
     }

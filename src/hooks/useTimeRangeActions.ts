@@ -64,6 +64,8 @@ export const useTimeRangeActions = ({
   toast,
   saveWithToast,
 }: UseTimeRangeActionsArgs) => {
+  const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+
   const handleSaveTimeRange = async (timeRange: TimeRange) => {
     if (!editingPartTime) return;
     const { staffId, day } = editingPartTime;
@@ -81,7 +83,15 @@ export const useTimeRangeActions = ({
     setManualShifts(newManualShifts);
     const saved = await saveWithToast(
       '時間指定勤務',
-      () => firestoreStorage.saveScheduleTimeRangesAndManualShifts(newSchedule, newTimeRangeSchedule, newManualShifts),
+      () => firestoreStorage.saveScheduleTimeRangesAndManualShifts(newSchedule, newTimeRangeSchedule, newManualShifts, {
+        action: 'edit_time_range',
+        label: '時間指定勤務',
+        monthKey,
+        targetDate: dateStr,
+        targetStaffId: staffId,
+        affectedFields: ['schedule', 'timeRangeSchedule', 'manualShifts'],
+        detail: { start: timeRange.start, end: timeRange.end },
+      }),
       {
         rollback: () => {
           setSchedule(previousSchedule);
@@ -118,7 +128,15 @@ export const useTimeRangeActions = ({
     setManualShifts(newManualShifts);
     const saved = await saveWithToast(
       'シフト',
-      () => firestoreStorage.saveScheduleTimeRangesAndManualShifts(newSchedule, newTimeRangeSchedule, newManualShifts),
+      () => firestoreStorage.saveScheduleTimeRangesAndManualShifts(newSchedule, newTimeRangeSchedule, newManualShifts, {
+        action: 'time_range_staff_shift_update',
+        label: '時間指定職員のシフト変更',
+        monthKey,
+        targetDate: dateStr,
+        targetStaffId: staffId,
+        affectedFields: ['schedule', 'timeRangeSchedule', 'manualShifts'],
+        detail: { shiftId },
+      }),
       {
         rollback: () => {
           setSchedule(previousSchedule);
@@ -144,7 +162,14 @@ export const useTimeRangeActions = ({
     );
     const previousStaff = staff;
     setStaff(newStaff);
-    const saved = await saveWithToast('職員設定', () => firestoreStorage.saveStaff(newStaff), {
+    const saved = await saveWithToast('職員設定', () => firestoreStorage.saveStaff(newStaff, {
+      action: 'save_default_time_range',
+      label: 'デフォルト時間指定勤務',
+      monthKey,
+      targetStaffId: staffId,
+      affectedFields: ['staff'],
+      detail: { start: timeRange.start, end: timeRange.end },
+    }), {
       rollback: () => setStaff(previousStaff),
     });
     if (!saved) return;
@@ -167,7 +192,14 @@ export const useTimeRangeActions = ({
     setManualShifts(newManualShifts);
     const saved = await saveWithToast(
       '時間指定勤務',
-      () => firestoreStorage.saveScheduleTimeRangesAndManualShifts(newSchedule, newTimeRangeSchedule, newManualShifts),
+      () => firestoreStorage.saveScheduleTimeRangesAndManualShifts(newSchedule, newTimeRangeSchedule, newManualShifts, {
+        action: 'clear_time_range',
+        label: '時間指定勤務クリア',
+        monthKey,
+        targetDate: dateStr,
+        targetStaffId: staffId,
+        affectedFields: ['schedule', 'timeRangeSchedule', 'manualShifts'],
+      }),
       {
         rollback: () => {
           setSchedule(previousSchedule);

@@ -1,13 +1,17 @@
 import {
+    addDoc,
+    collection,
     deleteField,
     doc,
     getDoc,
     onSnapshot,
+    serverTimestamp,
     setDoc,
     updateDoc,
 } from 'firebase/firestore';
 import type { FirestoreError, Unsubscribe } from 'firebase/firestore';
 import { db } from './firebase';
+import { getCurrentUser } from './auth';
 import type { Staff, ShiftSchedule, Settings, Holiday, ShiftPatternDefinition, TimeRangeSchedule, DailyNotes } from '../types';
 import { SHIFT_PATTERNS, normalizeShiftPatterns } from '../types';
 
@@ -27,7 +31,32 @@ interface OrganizationData {
     notes: DailyNotes;
     excelExportLog?: Record<string, string>;
     updatedAt: number;
+    updatedBy?: AuditActor;
+    lastOperation?: LastOperation;
 }
+
+export type AuditActor = {
+    uid: string | null;
+    email: string | null;
+    displayName: string | null;
+};
+
+type AuditDetailValue = string | number | boolean | null | string[] | number[];
+
+export type SaveAuditContext = {
+    action: string;
+    label: string;
+    monthKey?: string;
+    targetDate?: string;
+    targetStaffId?: number;
+    affectedFields?: string[];
+    affectedDateCount?: number;
+    detail?: Record<string, AuditDetailValue>;
+};
+
+export type LastOperation = Omit<SaveAuditContext, 'detail'> & {
+    at: number;
+};
 
 // Default values matching types.ts
 const defaultSettings: Settings = {
@@ -41,6 +70,85 @@ const defaultSettings: Settings = {
 
 // Get document reference
 const getDocRef = () => doc(db, COLLECTION, DOC_ID);
+const getAuditLogCollectionRef = () => collection(getDocRef(), 'auditLogs');
+
+const getCurrentAuditActor = (): AuditActor => {
+    const currentUser = getCurrentUser();
+
+    return {
+        uid: currentUser?.uid ?? null,
+        email: currentUser?.email ?? null,
+        displayName: currentUser?.displayName ?? null,
+    };
+};
+
+const buildLastOperation = (audit: SaveAuditContext, updatedAt: number): LastOperation => {
+    const operation: LastOperation = {
+        action: audit.action,
+        label: audit.label,
+        at: updatedAt,
+    };
+
+    if (audit.monthKey) operation.monthKey = audit.monthKey;
+    if (audit.targetDate) operation.targetDate = audit.targetDate;
+    if (typeof audit.targetStaffId === 'number') operation.targetStaffId = audit.targetStaffId;
+    if (audit.affectedFields?.length) operation.affectedFields = audit.affectedFields;
+    if (typeof audit.affectedDateCount === 'number') operation.affectedDateCount = audit.affectedDateCount;
+
+    return operation;
+};
+
+export const buildAuditMetadata = (
+    audit: SaveAuditContext | undefined,
+    updatedAt: number,
+    actor: AuditActor,
+): Partial<OrganizationData> => {
+    if (!audit) return {};
+
+    return {
+        updatedBy: actor,
+        lastOperation: buildLastOperation(audit, updatedAt),
+    };
+};
+
+const buildAuditLogPayload = (
+    audit: SaveAuditContext,
+    updatedAt: number,
+    actor: AuditActor,
+): Record<string, unknown> => {
+    const payload: Record<string, unknown> = {
+        schemaVersion: 1,
+        source: 'web-app',
+        action: audit.action,
+        label: audit.label,
+        actor,
+        clientAt: updatedAt,
+        at: serverTimestamp(),
+    };
+
+    if (audit.monthKey) payload.monthKey = audit.monthKey;
+    if (audit.targetDate) payload.targetDate = audit.targetDate;
+    if (typeof audit.targetStaffId === 'number') payload.targetStaffId = audit.targetStaffId;
+    if (audit.affectedFields?.length) payload.affectedFields = audit.affectedFields;
+    if (typeof audit.affectedDateCount === 'number') payload.affectedDateCount = audit.affectedDateCount;
+    if (audit.detail && Object.keys(audit.detail).length > 0) payload.detail = audit.detail;
+
+    return payload;
+};
+
+const writeAuditLog = async (
+    audit: SaveAuditContext | undefined,
+    updatedAt: number,
+    actor: AuditActor,
+): Promise<void> => {
+    if (!audit) return;
+
+    try {
+        await addDoc(getAuditLogCollectionRef(), buildAuditLogPayload(audit, updatedAt, actor));
+    } catch (error) {
+        console.warn('Failed to write audit log:', error);
+    }
+};
 
 export const buildClearMonthUpdates = (
     dateStrings: string[],
@@ -76,17 +184,22 @@ export const firestoreStorage = {
     },
 
     // Save all data
-    async saveAll(data: Partial<OrganizationData>): Promise<void> {
+    async saveAll(data: Partial<OrganizationData>, audit?: SaveAuditContext): Promise<void> {
+        const updatedAt = Date.now();
+        const actor = getCurrentAuditActor();
         const payload = {
             ...data,
-            updatedAt: Date.now()
+            ...buildAuditMetadata(audit, updatedAt, actor),
+            updatedAt,
         };
 
         try {
             await updateDoc(getDocRef(), payload);
+            await writeAuditLog(audit, updatedAt, actor);
         } catch (error) {
             if ((error as FirestoreError).code === 'not-found') {
                 await setDoc(getDocRef(), payload, { merge: true });
+                await writeAuditLog(audit, updatedAt, actor);
                 return;
             }
 
@@ -110,57 +223,66 @@ export const firestoreStorage = {
     },
 
     // Individual save methods
-    async saveStaff(staff: Staff[]): Promise<void> {
-        await this.saveAll({ staff });
+    async saveStaff(staff: Staff[], audit?: SaveAuditContext): Promise<void> {
+        await this.saveAll({ staff }, audit);
     },
 
-    async saveSchedule(schedule: ShiftSchedule): Promise<void> {
-        await this.saveAll({ schedule });
+    async saveSchedule(schedule: ShiftSchedule, audit?: SaveAuditContext): Promise<void> {
+        await this.saveAll({ schedule }, audit);
     },
 
-    async saveScheduleAndManualShifts(schedule: ShiftSchedule, manualShifts: ShiftSchedule): Promise<void> {
-        await this.saveAll({ schedule, manualShifts });
+    async saveScheduleAndManualShifts(schedule: ShiftSchedule, manualShifts: ShiftSchedule, audit?: SaveAuditContext): Promise<void> {
+        await this.saveAll({ schedule, manualShifts }, audit);
     },
 
-    async saveSettings(settings: Settings): Promise<void> {
-        await this.saveAll({ settings });
+    async saveSettings(settings: Settings, audit?: SaveAuditContext): Promise<void> {
+        await this.saveAll({ settings }, audit);
     },
 
-    async saveHolidays(holidays: Holiday[]): Promise<void> {
-        await this.saveAll({ holidays });
+    async saveHolidays(holidays: Holiday[], audit?: SaveAuditContext): Promise<void> {
+        await this.saveAll({ holidays }, audit);
     },
 
-    async savePatterns(patterns: ShiftPatternDefinition[]): Promise<void> {
-        await this.saveAll({ patterns: normalizeShiftPatterns(patterns) });
+    async savePatterns(patterns: ShiftPatternDefinition[], audit?: SaveAuditContext): Promise<void> {
+        await this.saveAll({ patterns: normalizeShiftPatterns(patterns) }, audit);
     },
 
-    async saveManualShifts(manualShifts: ShiftSchedule): Promise<void> {
-        await this.saveAll({ manualShifts });
+    async saveManualShifts(manualShifts: ShiftSchedule, audit?: SaveAuditContext): Promise<void> {
+        await this.saveAll({ manualShifts }, audit);
     },
 
-    async saveTimeRangeSchedule(timeRangeSchedule: TimeRangeSchedule): Promise<void> {
-        await this.saveAll({ timeRangeSchedule });
+    async saveTimeRangeSchedule(timeRangeSchedule: TimeRangeSchedule, audit?: SaveAuditContext): Promise<void> {
+        await this.saveAll({ timeRangeSchedule }, audit);
     },
 
     async saveScheduleTimeRangesAndManualShifts(
         schedule: ShiftSchedule,
         timeRangeSchedule: TimeRangeSchedule,
         manualShifts: ShiftSchedule,
+        audit?: SaveAuditContext,
     ): Promise<void> {
-        await this.saveAll({ schedule, timeRangeSchedule, manualShifts });
+        await this.saveAll({ schedule, timeRangeSchedule, manualShifts }, audit);
     },
 
-    async saveNotes(notes: DailyNotes): Promise<void> {
-        await this.saveAll({ notes });
+    async saveNotes(notes: DailyNotes, audit?: SaveAuditContext): Promise<void> {
+        await this.saveAll({ notes }, audit);
     },
 
-    async saveExcelExportLog(excelExportLog: Record<string, string>): Promise<void> {
-        await this.saveAll({ excelExportLog });
+    async saveExcelExportLog(excelExportLog: Record<string, string>, audit?: SaveAuditContext): Promise<void> {
+        await this.saveAll({ excelExportLog }, audit);
     },
 
-    async clearMonthData(dateStrings: string[]): Promise<void> {
+    async clearMonthData(dateStrings: string[], audit?: SaveAuditContext): Promise<void> {
+        const updatedAt = Date.now();
+        const actor = getCurrentAuditActor();
+        const updates = {
+            ...buildClearMonthUpdates(dateStrings, updatedAt),
+            ...buildAuditMetadata(audit, updatedAt, actor),
+        };
+
         try {
-            await updateDoc(getDocRef(), buildClearMonthUpdates(dateStrings));
+            await updateDoc(getDocRef(), updates);
+            await writeAuditLog(audit, updatedAt, actor);
         } catch (error) {
             if ((error as FirestoreError).code === 'not-found') return;
             throw error;
