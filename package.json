@@ -11,7 +11,11 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "backup:firestore": "node scripts/backup-firestore.mjs --project shiftpalette",
+    "predeploy:check": "npm run backup:firestore && npm run test && npm run lint && npm run build",
+    "deploy:rules:safe": "npm run backup:firestore && npx firebase-tools deploy --only firestore:rules --project shiftpalette",
+    "install:hooks": "git config core.hooksPath .githooks"
   },
   "dependencies": {
     "date-fns": "^4.1.0",

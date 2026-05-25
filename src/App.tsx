@@ -295,6 +295,31 @@ function App() {
     );
     if (input !== confirmText) return;
 
+    const dateStrings = monthDateStrings;
+    setShowSettingsMenu(false);
+
+    let backupId: string;
+    try {
+      backupId = await firestoreStorage.createMonthBackup({
+        monthKey: confirmText,
+        reason: 'before_clear_month',
+        label: '当月白紙化前バックアップ',
+        dateStrings,
+        schedule,
+        timeRangeSchedule,
+        manualShifts,
+        notes,
+        detail: {
+          operation: 'clear_month',
+          affectedFields: ['schedule', 'timeRangeSchedule', 'manualShifts', 'notes'],
+        },
+      });
+    } catch (error) {
+      console.error('Failed to create month backup:', error);
+      toast.error('バックアップに失敗しました', '削除を中止しました。通信状態を確認してもう一度試してください');
+      return;
+    }
+
     const previousSchedule = schedule;
     const previousTimeRangeSchedule = timeRangeSchedule;
     const previousManualShifts = manualShifts;
@@ -304,7 +329,6 @@ function App() {
     const newManualShifts = { ...manualShifts };
     const newNotes = { ...notes };
 
-    const dateStrings = days.map(day => getFormattedDate(year, month, day));
     for (const dateStr of dateStrings) {
       delete newSchedule[dateStr];
       delete newTimeRangeSchedule[dateStr];
@@ -316,14 +340,13 @@ function App() {
     setTimeRangeSchedule(newTimeRangeSchedule);
     setManualShifts(newManualShifts);
     setNotes(newNotes);
-    setShowSettingsMenu(false);
 
     try {
       await firestoreStorage.clearMonthData(dateStrings, monthAudit(
         'clear_month',
         '当月を白紙に戻す',
         ['schedule', 'timeRangeSchedule', 'manualShifts', 'notes'],
-        { affectedDateCount: dateStrings.length },
+        { affectedDateCount: dateStrings.length, detail: { backupId } },
       ));
       toast.success('当月を白紙に戻しました', `${year}年${month}月の入力を削除しました`);
     } catch (error) {

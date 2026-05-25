@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+if [ "${SKIP_PREDEPLOY_CHECK:-}" = "1" ]; then
+  echo "pre-push: SKIP_PREDEPLOY_CHECK=1, skipping pre-deploy safety check."
+  exit 0
+fi
+
+should_check=false
+while read -r local_ref local_sha remote_ref remote_sha
+do
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    should_check=true
+  fi
+done
+
+if [ "$should_check" != "true" ]; then
+  echo "pre-push: no main branch deploy target, skipping pre-deploy safety check."
+  exit 0
+fi
+
+echo "pre-push: running Firestore backup, tests, lint, and build before deploy."
+npm run predeploy:check

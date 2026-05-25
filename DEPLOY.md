@@ -1,5 +1,40 @@
 # GitHub Pages デプロイガイド
 
+## 現在の安全な更新手順
+
+このリポジトリは `main` に push すると GitHub Pages へ自動デプロイされる。データ消失事故に備え、push 前に本番Firestoreの `organizations/default` をローカルJSONとしてバックアップしてから、テスト・lint・ビルドを通す。
+
+初回だけ、ローカルGitフックを有効化する。
+
+```bash
+npm run install:hooks
+```
+
+以後、`main` へ push する直前に次が自動実行される。
+
+```bash
+npm run predeploy:check
+```
+
+このコマンドは次を順に実行する。
+
+1. `npm run backup:firestore`
+2. `npm run test`
+3. `npm run lint`
+4. `npm run build`
+
+バックアップJSONは `backups/firestore/` に保存される。このフォルダは `.gitignore` 済みなので、GitHubには載せない。アプリ利用者が触る場所ではなく、開発者の復旧用保管場所として扱う。
+
+Firestore Rules だけを安全にデプロイしたい場合は次を使う。
+
+```bash
+npm run deploy:rules:safe
+```
+
+アプリ内の「当月を白紙に戻す」は、JSONを画面に出さず、削除前に Firestore の `organizations/default/backups` へ対象月バックアップを作る。バックアップに失敗した場合は削除を中止する。
+
+---
+
 ## 前提条件
 - GitHubアカウントを持っていること
 - Git がインストールされていること

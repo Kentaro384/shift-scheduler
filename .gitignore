@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Local Firestore backups generated before deploy/push.
+backups/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

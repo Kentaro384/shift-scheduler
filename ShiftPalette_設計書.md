@@ -1,7 +1,7 @@
 # ShiftPalette 設計書
 
 作成日: 2026-05-04  
-最終更新日: 2026-05-24
+最終更新日: 2026-05-25
 対象リポジトリ: `ShiftPalette`  
 参照元: `shift-scheduler-specification.md`, `シフト生成ロジック.md`, `src/` 実装一式
 
@@ -123,6 +123,37 @@ interface AuditLog {
   affectedFields?: string[];
   affectedDateCount?: number;
   detail?: Record<string, string | number | boolean | null | string[] | number[]>;
+}
+```
+
+`organizations/default/backups/{backupId}` には、破壊的操作の直前バックアップを追記する。通常利用者にJSONを見せるのではなく、Firestore内に復旧用の控えとして残す。現行では「当月を白紙に戻す」の実行前に対象月の `schedule`, `timeRangeSchedule`, `manualShifts`, `notes` だけを保存し、バックアップ作成に失敗した場合は削除操作を中止する。
+
+```typescript
+interface MonthBackup {
+  schemaVersion: 1;
+  source: 'web-app';
+  reason: 'before_clear_month';
+  label: string;
+  monthKey: string;
+  actor: AuditActor;
+  clientAt: number;
+  at: FieldValue;
+  affectedDateCount: number;
+  summary: {
+    scheduleDateCount: number;
+    timeRangeDateCount: number;
+    manualShiftDateCount: number;
+    notesDateCount: number;
+    scheduleCellCount: number;
+    timeRangeCellCount: number;
+    manualShiftCellCount: number;
+  };
+  data: {
+    schedule: ShiftSchedule;
+    timeRangeSchedule: TimeRangeSchedule;
+    manualShifts: ShiftSchedule;
+    notes: DailyNotes;
+  };
 }
 ```
 
@@ -362,6 +393,8 @@ type TimeRangeSchedule = Record<string, Record<number, TimeRange>>;
 
 職員設定、シフトパターン、祝日、園設定は残す。
 
+この操作は削除前に `organizations/default/backups` へ対象月バックアップを作成する。バックアップは通常UIには表示しない。作成に失敗した場合は削除せず、ユーザーには「バックアップに失敗したため中止」と通知する。削除に成功した場合、監査ログの `detail.backupId` に直前バックアップのIDを残す。
+
 Firestore保存は `merge` のため、単にローカルオブジェクトから日付キーを削除して保存してもクラウド側のネストキーが残る。強制白紙化では `deleteField()` を使い、`schedule.YYYY-MM-DD`、`timeRangeSchedule.YYYY-MM-DD`、`manualShifts.YYYY-MM-DD`、`notes.YYYY-MM-DD` を明示的に削除する。月次削除は職員マスタ更新とは独立した操作であり、古い購読データで職員設定を上書きしないよう `staff` は同時保存しない。削除対象ドキュメントが存在しない場合は、削除対象なしとして成功扱いにする。
 
 ### 5.8 リセット系操作の保存対象
@@ -402,6 +435,8 @@ Firestoreは `updateDoc()` にトップレベルの map フィールドを渡す
 | 時間指定勤務編集 | `schedule/timeRangeSchedule/manualShifts.YYYY-MM-DD.staffId` だけ更新 | 時間指定と手動印を同一セル単位で整合させる |
 
 各保存では `updatedAt` に加えて、監査用の `updatedBy` と `lastOperation` を `organizations/default` へ保存する。さらに `organizations/default/auditLogs` サブコレクションへ同じ操作のログを追記する。監査ログの書き込み失敗は主要データ保存を失敗扱いにしない。
+
+強制白紙化のような破壊的操作は、主要データ削除より前に `organizations/default/backups` へ復旧用データを作成する。バックアップ失敗は主要操作の失敗として扱い、削除を実行しない。
 
 現在も `staff`, `settings`, `holidays`, `patterns` は設定マスタとしてフィールド単位で保存する。これらは月次データではないため、通常のシフト操作とは別の上書き境界として扱う。
 
@@ -679,6 +714,7 @@ flowchart TD
 
 - `allowedUsers/{uid}` が存在する認証済みユーザーだけが `organizations/default` を読み書きできる。
 - `organizations/default/auditLogs/{auditLogId}` は同じ許可ユーザーが読み取り・作成できる。更新・削除は許可しない。
+- `organizations/default/backups/{backupId}` は同じ許可ユーザーが読み取り・作成できる。更新・削除は許可しない。
 - `allowedUsers` 自体はクライアントから読み書き不可。
 - その他のドキュメントは全拒否。
 
@@ -715,6 +751,7 @@ flowchart TD
 7. Firestoreのトップレベル map フィールドを丸ごと保存すると、別月や別日のデータを消す可能性がある。シフト系の保存は原則として日付または職員セル単位の dotted path 更新を使う。
 8. 監査ログは今後の原因調査の手がかりであり、過去にData Access audit logsが無効だった期間のFirestore書き込み主体までは復元できない。
 9. `LocalStorageから復元` は通常UIから外している。復元が必要な場合は、Firestoreバックアップを取ったうえで非常時手順として実施する。
+10. 破壊的操作は「事故が起こる」前提で直前バックアップを必須にする。通常利用者にJSONファイルを直接扱わせず、アプリ内操作はFirestoreの `backups` サブコレクションへ保存する。開発者のデプロイ前バックアップJSONはローカルの `backups/firestore/` に保存し、Git管理には含めない。
 
 ---
 

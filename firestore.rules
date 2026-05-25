@@ -20,6 +20,11 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /organizations/default/backups/{backupId} {
+      allow read, create: if allowedUser();
+      allow update, delete: if false;
+    }
+
     match /allowedUsers/{userId} {
       allow read, write: if false;
     }

@@ -71,6 +71,7 @@ const defaultSettings: Settings = {
 // Get document reference
 const getDocRef = () => doc(db, COLLECTION, DOC_ID);
 const getAuditLogCollectionRef = () => collection(getDocRef(), 'auditLogs');
+const getBackupsCollectionRef = () => collection(getDocRef(), 'backups');
 
 const getCurrentAuditActor = (): AuditActor => {
     const currentUser = getCurrentUser();
@@ -168,6 +169,77 @@ export const buildClearMonthUpdates = (
 };
 
 type DateKeyedMap = Record<string, unknown>;
+
+export type MonthBackupInput = {
+    monthKey: string;
+    reason: string;
+    label: string;
+    dateStrings: string[];
+    schedule: ShiftSchedule;
+    timeRangeSchedule: TimeRangeSchedule;
+    manualShifts: ShiftSchedule;
+    notes: DailyNotes;
+    detail?: Record<string, AuditDetailValue>;
+};
+
+const pickDateEntries = <T extends Record<string, unknown>>(source: T, dateStrings: string[]): Partial<T> => {
+    const picked: Partial<T> = {};
+    dateStrings.forEach(dateStr => {
+        if (Object.prototype.hasOwnProperty.call(source, dateStr)) {
+            picked[dateStr as keyof T] = source[dateStr] as T[keyof T];
+        }
+    });
+    return picked;
+};
+
+const countNestedEntries = (source: Record<string, unknown>): number =>
+    Object.values(source).reduce<number>((total, day) => {
+        if (!day || typeof day !== 'object' || Array.isArray(day)) return total;
+        return total + Object.keys(day).length;
+    }, 0);
+
+export const buildMonthBackupPayload = (
+    input: MonthBackupInput,
+    updatedAt: number,
+    actor: AuditActor,
+    atValue: unknown = serverTimestamp(),
+): Record<string, unknown> => {
+    const schedule = pickDateEntries(input.schedule, input.dateStrings);
+    const timeRangeSchedule = pickDateEntries(input.timeRangeSchedule, input.dateStrings);
+    const manualShifts = pickDateEntries(input.manualShifts, input.dateStrings);
+    const notes = pickDateEntries(input.notes, input.dateStrings);
+
+    const payload: Record<string, unknown> = {
+        schemaVersion: 1,
+        source: 'web-app',
+        reason: input.reason,
+        label: input.label,
+        monthKey: input.monthKey,
+        actor,
+        clientAt: updatedAt,
+        at: atValue,
+        affectedDateCount: input.dateStrings.length,
+        summary: {
+            scheduleDateCount: Object.keys(schedule).length,
+            timeRangeDateCount: Object.keys(timeRangeSchedule).length,
+            manualShiftDateCount: Object.keys(manualShifts).length,
+            notesDateCount: Object.keys(notes).length,
+            scheduleCellCount: countNestedEntries(schedule),
+            timeRangeCellCount: countNestedEntries(timeRangeSchedule),
+            manualShiftCellCount: countNestedEntries(manualShifts),
+        },
+        data: {
+            schedule,
+            timeRangeSchedule,
+            manualShifts,
+            notes,
+        },
+    };
+
+    if (input.detail && Object.keys(input.detail).length > 0) payload.detail = input.detail;
+
+    return payload;
+};
 
 const buildDateFieldUpdates = (
     fieldName: string,
@@ -461,6 +533,16 @@ export const firestoreStorage = {
         };
 
         await writeUpdates(updates, audit, updatedAt, actor);
+    },
+
+    async createMonthBackup(input: MonthBackupInput): Promise<string> {
+        const updatedAt = Date.now();
+        const actor = getCurrentAuditActor();
+        const backupRef = await addDoc(
+            getBackupsCollectionRef(),
+            buildMonthBackupPayload(input, updatedAt, actor),
+        );
+        return backupRef.id;
     },
 
     async clearMonthData(dateStrings: string[], audit?: SaveAuditContext): Promise<void> {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAuditMetadata, buildClearMonthUpdates, buildScopedSaveUpdates, buildScopedStaffCellUpdates, expandDottedUpdates } from './firestoreStorage';
+import { buildAuditMetadata, buildClearMonthUpdates, buildMonthBackupPayload, buildScopedSaveUpdates, buildScopedStaffCellUpdates, expandDottedUpdates } from './firestoreStorage';
 
 describe('buildClearMonthUpdates', () => {
     it('builds month-delete updates without rewriting staff', () => {
@@ -22,6 +22,74 @@ describe('buildClearMonthUpdates', () => {
 
     it('keeps empty date input to updatedAt only', () => {
         expect(buildClearMonthUpdates([], 12345, 'delete')).toEqual({ updatedAt: 12345 });
+    });
+});
+
+describe('buildMonthBackupPayload', () => {
+    it('captures only the requested month data', () => {
+        const actor = {
+            uid: 'user-1',
+            email: 'user@example.com',
+            displayName: 'User One',
+        };
+        const payload = buildMonthBackupPayload({
+            monthKey: '2026-06',
+            reason: 'before_clear_month',
+            label: '当月白紙化前バックアップ',
+            dateStrings: ['2026-06-01', '2026-06-02'],
+            schedule: {
+                '2026-06-01': { 1: 'A', 2: 'B' },
+                '2026-07-01': { 1: 'F' },
+            },
+            timeRangeSchedule: {
+                '2026-06-02': { 3: { start: '09:00', end: '16:00' } },
+                '2026-07-01': { 3: { start: '10:00', end: '17:00' } },
+            },
+            manualShifts: {
+                '2026-06-01': { 1: 'A' },
+                '2026-07-01': { 1: 'F' },
+            },
+            notes: {
+                '2026-06-02': '園外保育',
+                '2026-07-01': '翌月メモ',
+            },
+        }, 12345, actor, 'SERVER_TIME');
+
+        expect(payload).toMatchObject({
+            schemaVersion: 1,
+            source: 'web-app',
+            reason: 'before_clear_month',
+            label: '当月白紙化前バックアップ',
+            monthKey: '2026-06',
+            actor,
+            clientAt: 12345,
+            at: 'SERVER_TIME',
+            affectedDateCount: 2,
+            summary: {
+                scheduleDateCount: 1,
+                timeRangeDateCount: 1,
+                manualShiftDateCount: 1,
+                notesDateCount: 1,
+                scheduleCellCount: 2,
+                timeRangeCellCount: 1,
+                manualShiftCellCount: 1,
+            },
+            data: {
+                schedule: {
+                    '2026-06-01': { 1: 'A', 2: 'B' },
+                },
+                timeRangeSchedule: {
+                    '2026-06-02': { 3: { start: '09:00', end: '16:00' } },
+                },
+                manualShifts: {
+                    '2026-06-01': { 1: 'A' },
+                },
+                notes: {
+                    '2026-06-02': '園外保育',
+                },
+            },
+        });
+        expect(JSON.stringify(payload)).not.toContain('2026-07-01');
     });
 });
 
