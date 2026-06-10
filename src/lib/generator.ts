@@ -946,6 +946,7 @@ export class ShiftGenerator {
                     if (s.shiftType !== 'regular') return false;
                     if (isManualOnlyStaff(s)) return false;
                     if (s.saturdayOnly) return false;
+                    if (this.isManualShift(d, s.id)) return false;
                     if (!this.canAssignByConstraints(s, d, pattern)) return false;
                     const shift = this.schedule[dateStr]?.[s.id];
                     return this.getShiftKind(shift) === 'standard' || this.getShiftKind(shift) === 'early';

@@ -99,6 +99,16 @@ export class UndoConflictError extends Error {
     }
 }
 
+export class MasterFieldConflictError extends Error {
+    readonly conflictFields: string[];
+
+    constructor(conflictFields: string[]) {
+        super('Master fields have been changed since the edit started.');
+        this.name = 'MasterFieldConflictError';
+        this.conflictFields = conflictFields;
+    }
+}
+
 // Default values matching types.ts
 const defaultSettings: Settings = {
     profileName: 'デフォルト園',
@@ -518,6 +528,52 @@ const writeUpdates = async (
     }
 };
 
+type MasterDocumentFields = Pick<OrganizationData, 'staff' | 'settings' | 'holidays' | 'patterns'>;
+type MasterDocumentField = keyof MasterDocumentFields;
+
+const normalizeComparableValue = (value: unknown): unknown => {
+    if (Array.isArray(value)) {
+        return value.map(normalizeComparableValue);
+    }
+
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value as Record<string, unknown>)
+                .filter(([, entryValue]) => entryValue !== undefined)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([key, entryValue]) => [key, normalizeComparableValue(entryValue)])
+        );
+    }
+
+    return value;
+};
+
+const areComparableValuesEqual = (left: unknown, right: unknown): boolean =>
+    JSON.stringify(normalizeComparableValue(left)) === JSON.stringify(normalizeComparableValue(right));
+
+const normalizeMasterFieldComparableValue = (field: MasterDocumentField, value: unknown): unknown => {
+    if (field === 'settings') {
+        return { ...defaultSettings, ...((value || {}) as Partial<Settings>) };
+    }
+    if (field === 'patterns') {
+        return normalizeShiftPatterns(Array.isArray(value) && value.length > 0 ? value as ShiftPatternDefinition[] : SHIFT_PATTERNS);
+    }
+    if (field === 'staff' || field === 'holidays') {
+        return Array.isArray(value) ? value : [];
+    }
+
+    return value;
+};
+
+export const findMasterFieldConflicts = (
+    current: Partial<MasterDocumentFields>,
+    expected: Partial<MasterDocumentFields>,
+    fields: MasterDocumentField[],
+): MasterDocumentField[] => fields.filter(field => !areComparableValuesEqual(
+    normalizeMasterFieldComparableValue(field, current[field]),
+    normalizeMasterFieldComparableValue(field, expected[field]),
+));
+
 const isUndoAudit = (audit: AuditLogRecord): boolean => audit.action.startsWith('undo_');
 
 const isAuditUndoneBy = (candidate: AuditLogRecord, undoAudit: AuditLogRecord): boolean => {
@@ -590,9 +646,11 @@ const saveScopedStaffCells = async (
     await writeUpdates(updates, audit, updatedAt, actor);
 };
 
-type MasterDocumentFields = Pick<OrganizationData, 'staff' | 'settings' | 'holidays' | 'patterns'>;
-
-const saveDocumentFields = async (data: Partial<MasterDocumentFields>, audit?: SaveAuditContext): Promise<void> => {
+const saveDocumentFields = async (
+    data: Partial<MasterDocumentFields>,
+    audit?: SaveAuditContext,
+    expectedPrevious?: Partial<MasterDocumentFields>,
+): Promise<void> => {
     const updatedAt = Date.now();
     const actor = getCurrentAuditActor();
     const payload = {
@@ -600,6 +658,28 @@ const saveDocumentFields = async (data: Partial<MasterDocumentFields>, audit?: S
         ...buildAuditMetadata(audit, updatedAt, actor),
         updatedAt,
     };
+    const fields = Object.keys(data) as MasterDocumentField[];
+
+    if (expectedPrevious && fields.length > 0) {
+        await runTransaction(db, async transaction => {
+            const ref = getDocRef();
+            const docSnap = await transaction.get(ref);
+
+            if (!docSnap.exists()) {
+                transaction.set(ref, payload, { merge: true });
+                return;
+            }
+
+            const conflicts = findMasterFieldConflicts(docSnap.data() as Partial<MasterDocumentFields>, expectedPrevious, fields);
+            if (conflicts.length > 0) {
+                throw new MasterFieldConflictError(conflicts);
+            }
+
+            transaction.update(ref, payload);
+        });
+        await writeAuditLog(audit, updatedAt, actor);
+        return;
+    }
 
     await writeUpdates(payload, audit, updatedAt, actor);
 };
@@ -635,8 +715,8 @@ export const firestoreStorage = {
     },
 
     // Individual save methods
-    async saveStaff(staff: Staff[], audit?: SaveAuditContext): Promise<void> {
-        await saveDocumentFields({ staff }, audit);
+    async saveStaff(staff: Staff[], audit?: SaveAuditContext, expectedPreviousStaff?: Staff[]): Promise<void> {
+        await saveDocumentFields({ staff }, audit, expectedPreviousStaff ? { staff: expectedPreviousStaff } : undefined);
     },
 
     async saveScheduleDates(schedule: ShiftSchedule, dateStrings: string[], audit?: SaveAuditContext): Promise<void> {
@@ -662,16 +742,20 @@ export const firestoreStorage = {
         await saveScopedStaffCells({ schedule, manualShifts }, dateStr, staffIds, audit);
     },
 
-    async saveSettings(settings: Settings, audit?: SaveAuditContext): Promise<void> {
-        await saveDocumentFields({ settings }, audit);
+    async saveSettings(settings: Settings, audit?: SaveAuditContext, expectedPreviousSettings?: Settings): Promise<void> {
+        await saveDocumentFields({ settings }, audit, expectedPreviousSettings ? { settings: expectedPreviousSettings } : undefined);
     },
 
-    async saveHolidays(holidays: Holiday[], audit?: SaveAuditContext): Promise<void> {
-        await saveDocumentFields({ holidays }, audit);
+    async saveHolidays(holidays: Holiday[], audit?: SaveAuditContext, expectedPreviousHolidays?: Holiday[]): Promise<void> {
+        await saveDocumentFields({ holidays }, audit, expectedPreviousHolidays ? { holidays: expectedPreviousHolidays } : undefined);
     },
 
-    async savePatterns(patterns: ShiftPatternDefinition[], audit?: SaveAuditContext): Promise<void> {
-        await saveDocumentFields({ patterns: normalizeShiftPatterns(patterns) }, audit);
+    async savePatterns(patterns: ShiftPatternDefinition[], audit?: SaveAuditContext, expectedPreviousPatterns?: ShiftPatternDefinition[]): Promise<void> {
+        await saveDocumentFields(
+            { patterns: normalizeShiftPatterns(patterns) },
+            audit,
+            expectedPreviousPatterns ? { patterns: normalizeShiftPatterns(expectedPreviousPatterns) } : undefined,
+        );
     },
 
     async saveTimeRangeDates(timeRangeSchedule: TimeRangeSchedule, dateStrings: string[], audit?: SaveAuditContext): Promise<void> {

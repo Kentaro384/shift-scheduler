@@ -181,7 +181,7 @@ export const useTimeRangeActions = ({
       targetStaffId: staffId,
       affectedFields: ['staff'],
       detail: { start: timeRange.start, end: timeRange.end },
-    }), {
+    }, previousStaff), {
       rollback: () => setStaff(previousStaff),
     });
     if (!saved) return;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ShiftGenerator } from './generator';
 import { countWorkingStaff } from './shiftCountUtils';
-import type { Settings, Staff } from '../types';
+import type { Settings, ShiftPatternDefinition, Staff } from '../types';
 import { isStaffActiveOnDate } from '../types';
 import { getFormattedDate } from './utils';
 import { createRegularStaff } from '../test/factories';
@@ -128,5 +128,35 @@ describe('ShiftGenerator', () => {
 
         expect(schedule[dateStr][1]).toBe('C');
         expect(schedule[dateStr][2]).toBe('A');
+    });
+
+    it('preserves manual standard shifts when chief backup fills a pattern shortage', () => {
+        const dateStr = '2026-05-01';
+        const chief: Staff = {
+            ...createRegular(100, '主任さん'),
+            position: '主任',
+            shiftType: 'backup',
+            role: 'free',
+        };
+        const manualRegular = createRegular(1, '手動さん');
+        const shortagePatterns: ShiftPatternDefinition[] = [
+            { id: 'A', name: '早番', timeRange: '7:15-16:15', minCount: 1, kind: 'opening', breakTime: '1:00', workTime: '9:00', color: 'bg-amber-200' },
+            { id: 'C', name: '標準', timeRange: '8:00-17:00', minCount: 0, kind: 'standard', breakTime: '1:00', workTime: '9:00', color: 'bg-blue-200' },
+        ];
+
+        const schedule = new ShiftGenerator(
+            [chief, manualRegular],
+            [],
+            2026,
+            5,
+            { ...settings, weekdayStaffCount: 1, chiefBackupLimit: 8 },
+            { [dateStr]: { 1: 'C' } },
+            {},
+            shortagePatterns,
+            { [dateStr]: { 1: 'C' } },
+        ).generate();
+
+        expect(schedule[dateStr][1]).toBe('C');
+        expect(schedule[dateStr][100]).toBe('A');
     });
 });

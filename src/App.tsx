@@ -18,7 +18,7 @@ import { ShiftPaletteIcon } from './components/ShiftPaletteIcon';
 import { ShiftBalanceDashboard } from './components/ShiftBalanceDashboard';
 import { LoginScreen } from './components/LoginScreen';
 import { signOut } from './lib/auth';
-import { buildScopedDateUndoPatch, firestoreStorage, UndoConflictError, type SaveAuditContext } from './lib/firestoreStorage';
+import { buildScopedDateUndoPatch, firestoreStorage, MasterFieldConflictError, UndoConflictError, type SaveAuditContext } from './lib/firestoreStorage';
 import { useToast } from './components/Toast';
 import { getShiftCardClass, getShiftChipClass, getShiftMarker } from './lib/shiftPalette';
 import { getShiftDisplayLabel } from './lib/leaveUtils';
@@ -182,11 +182,16 @@ function App() {
     } catch (error) {
       console.error(`Failed to save ${label}:`, error);
       options.rollback?.();
+      const isMasterFieldConflict = error instanceof MasterFieldConflictError;
+      const failureMessage = isMasterFieldConflict
+        ? '別の画面で同じ設定が更新されています。最新の内容を確認してからもう一度保存してください。'
+        : options.rollback
+        ? '通信状態を確認してもう一度試してください。変更内容を元に戻しました。'
+        : '通信状態を確認してもう一度試してください。画面表示は変更済みですが、クラウドには保存されていない可能性があります。';
+
       toast.error(
-        `${label}の保存に失敗しました`,
-        options.rollback
-          ? '通信状態を確認してもう一度試してください。変更内容を元に戻しました。'
-          : '通信状態を確認してもう一度試してください。画面表示は変更済みですが、クラウドには保存されていない可能性があります。'
+        isMasterFieldConflict ? `${label}の保存を中止しました` : `${label}の保存に失敗しました`,
+        failureMessage,
       );
       return false;
     }
@@ -511,7 +516,7 @@ function App() {
       action: 'update_staff',
       label: '職員設定',
       affectedFields: ['staff'],
-    }), {
+    }, previousStaff), {
       rollback: () => setStaff(previousStaff),
     });
   };
@@ -523,7 +528,7 @@ function App() {
       action: 'update_settings',
       label: 'シフト設定',
       affectedFields: ['settings'],
-    }), {
+    }, previousSettings), {
       rollback: () => setSettings(previousSettings),
     });
   };
@@ -535,7 +540,7 @@ function App() {
       'update_holidays',
       '祝日設定',
       ['holidays'],
-    )), {
+    ), previousHolidays), {
       rollback: () => setHolidays(previousHolidays),
     });
   };
@@ -548,7 +553,7 @@ function App() {
       action: 'update_patterns',
       label: 'シフトパターン',
       affectedFields: ['patterns'],
-    }), {
+    }, previousPatterns), {
       rollback: () => setPatterns(previousPatterns),
     });
   };

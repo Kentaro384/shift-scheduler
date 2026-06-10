@@ -10,6 +10,7 @@ import {
     buildUndoUpdates,
     expandDottedUpdates,
     findUndoConflictPaths,
+    findMasterFieldConflicts,
     firestoreStorage,
 } from './firestoreStorage';
 
@@ -275,6 +276,105 @@ describe('findUndoConflictPaths', () => {
                 { path: 'schedule.2026-06-01.2', before: { __missing: true }, after: { __missing: true } },
             ],
         })).toEqual(['schedule.2026-06-01.1']);
+    });
+});
+
+describe('findMasterFieldConflicts', () => {
+    it('detects only master fields changed since the edit started', () => {
+        const expected = {
+            staff: [{
+                id: 1,
+                name: 'Aさん',
+                position: '保育士' as const,
+                shiftType: 'regular' as const,
+                preferredShifts: [],
+                weeklyDays: 5,
+                role: 'age1' as const,
+                incompatibleWith: [],
+                earlyShiftLimit: null,
+                saturdayOnly: false,
+                hasQualification: true,
+            }],
+            settings: {
+                profileName: '園',
+                fiscalYear: 2026,
+                weekdayStaffCount: 8,
+                saturdayStaffCount: 3,
+                saturdayShiftPattern: 'B',
+                chiefBackupLimit: 8,
+            },
+        };
+        const current = {
+            staff: [{
+                id: 1,
+                name: 'Bさん',
+                position: '保育士' as const,
+                shiftType: 'regular' as const,
+                preferredShifts: [],
+                weeklyDays: 5,
+                role: 'age1' as const,
+                incompatibleWith: [],
+                earlyShiftLimit: null,
+                saturdayOnly: false,
+                hasQualification: true,
+            }],
+            settings: {
+                profileName: '園',
+                fiscalYear: 2026,
+                weekdayStaffCount: 8,
+                saturdayStaffCount: 3,
+                saturdayShiftPattern: 'B',
+                chiefBackupLimit: 8,
+            },
+        };
+
+        expect(findMasterFieldConflicts(current, expected, ['staff', 'settings'])).toEqual(['staff']);
+    });
+
+    it('does not treat object key order as a master field conflict', () => {
+        const expected = {
+            settings: {
+                profileName: '園',
+                fiscalYear: 2026,
+                weekdayStaffCount: 8,
+                saturdayStaffCount: 3,
+                saturdayShiftPattern: 'B',
+                chiefBackupLimit: 8,
+            },
+        };
+        const current = {
+            settings: {
+                chiefBackupLimit: 8,
+                saturdayShiftPattern: 'B',
+                saturdayStaffCount: 3,
+                weekdayStaffCount: 8,
+                fiscalYear: 2026,
+                profileName: '園',
+            },
+        };
+
+        expect(findMasterFieldConflicts(current, expected, ['settings'])).toEqual([]);
+    });
+
+    it('normalizes missing master fields before comparing', () => {
+        expect(findMasterFieldConflicts({
+            staff: undefined,
+            holidays: undefined,
+            settings: undefined,
+            patterns: undefined,
+        }, {
+            staff: [],
+            holidays: [],
+            settings: {
+                profileName: 'デフォルト園',
+                fiscalYear: new Date().getFullYear(),
+                weekdayStaffCount: 8,
+                saturdayStaffCount: 3,
+                saturdayShiftPattern: 'B',
+                chiefBackupLimit: 8,
+            },
+            patterns: [],
+        }, ['staff', 'holidays', 'settings', 'patterns'])).toEqual([]);
     });
 });
 
