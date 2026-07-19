@@ -574,6 +574,7 @@ function App() {
 
   const {
     handleShiftUpdate,
+    handleShiftDelete,
     handleSelectStaff,
     handleSwap,
     handleCandidateSelect,
@@ -1313,6 +1314,7 @@ function App() {
           settings={settings}
           patterns={patterns}
           onSelect={handleShiftUpdate}
+          onDelete={handleShiftDelete}
           onSelectStaff={handleSelectStaff}
           onSwap={handleSwap}
           onClose={() => setEditingCell(null)}

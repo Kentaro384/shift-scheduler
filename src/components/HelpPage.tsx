@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import {
     X, BookOpen, ChevronLeft, ChevronRight, Menu, ChevronDown, Undo2, RotateCcw,
     CalendarCheck, Calendar, Trash2, RefreshCw, AlertTriangle, Download, CheckCircle2,
-    Search, ArrowLeftRight, Sparkles, CloudUpload, ShieldCheck, LifeBuoy, HelpCircle,
+    Search, ArrowLeftRight, Sparkles, CloudUpload, ShieldCheck, LifeBuoy, HelpCircle, Eraser,
 } from 'lucide-react';
 import type { ShiftPatternDefinition } from '../types';
 import { SHIFT_PATTERNS, HOLIDAY_PATTERNS } from '../types';
@@ -299,12 +299,15 @@ const MockEditModal: React.FC<{ patterns: ShiftPatternDefinition[] }> = ({ patte
             ))}
         </div>
         <p className="mb-1.5 text-xs font-bold text-gray-500">お休み・予定</p>
-        <div className="mb-4 flex flex-wrap gap-1.5">
+        <div className="mb-3 flex flex-wrap gap-1.5">
             {['振', '有', '半有', '研', '出', '保', '休'].map(id => (
                 <span key={id} className={`rounded-full px-2.5 py-1 text-xs font-bold ${getShiftChipClass(id, patterns)}`}>
                     {getShiftMarker(id)} {id}
                 </span>
             ))}
+            <span className="flex items-center gap-1 rounded-full border-2 border-dashed border-red-200 bg-white px-2.5 py-1 text-xs font-bold text-red-600">
+                <Eraser size={12} /> 削除
+            </span>
         </div>
         <div className="grid grid-cols-2 gap-2">
             <span className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-600">
@@ -514,6 +517,10 @@ export const HelpPage: React.FC<HelpPageProps> = ({ patterns, onClose }) => {
                             <p className="mt-1 text-sm">「この先生と誰かを入れかえたい」というとき、ルール違反にならない入れかえの組み合わせを提案してくれます。</p>
                         </div>
                         <div className="rounded-xl border border-gray-200 bg-white p-4">
+                            <p className="flex items-center gap-2 font-bold text-gray-800"><Eraser size={17} className="text-red-500" /> 削除 — 手で入れたシフトを取り消して、自動にまかせる</p>
+                            <p className="mt-1 text-sm">手で入力したシフトは自動生成でも守られますが、「やっぱり自動にまかせたい」ときはこのボタンでそのマスだけまっさら(未入力)に戻せます。次回の「自動生成」で自動的に割り当てられます。</p>
+                        </div>
+                        <div className="rounded-xl border border-gray-200 bg-white p-4">
                             <p className="font-bold text-gray-800">🕐 時間で働く先生(パートさんなど)のマス</p>
                             <p className="mt-1 text-sm">タップすると時刻を入力する画面が開きます。マスに出ている小さな記号バッジは「この時間は、どのシフトの人数として数えているか」の印です。</p>
                         </div>
@@ -590,6 +597,10 @@ export const HelpPage: React.FC<HelpPageProps> = ({ patterns, onClose }) => {
                             {
                                 q: '自動生成の結果が気に入らない。やり直したい',
                                 a: <>もう一度「自動生成」を押せば、組み直されます。いったんまっさらから組み直したいときは、右上の「リセット」を押してから「自動生成」してください。どちらの場合も、<strong>手で入れたお休みや予定、パートさんの時間はちゃんと残ります。</strong></>,
+                            },
+                            {
+                                q: '手で入れたシフトをやめて、自動にまかせたい',
+                                a: <>そのマスをタップして、「<span className="inline-flex items-center gap-1 rounded-full border-2 border-dashed border-red-200 bg-white px-2 py-0.5 text-xs font-bold text-red-600"><Eraser size={11} /> 削除</span>」を押してください。そのマスだけまっさら(未入力)に戻り、次回の「自動生成」で自動的に割り当てられます。<br /><span className="mt-1.5 inline-block text-sm text-gray-500">※ ここで「休」を入れると<strong>手で入れたお休み</strong>あつかいになり、自動生成では動かせなくなります。「自動にまかせたい」ときは「休」ではなく「削除」を使うのがコツです。</span></>,
                             },
                             {
                                 q: '今月をまるごと最初からやり直したい',

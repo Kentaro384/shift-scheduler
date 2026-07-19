@@ -180,6 +180,26 @@ describe('buildScopedStaffCellUpdates', () => {
 
         expect(updates['schedule.2026-06-01.1']).toBe('');
     });
+
+    it('deletes an absent staff cell from both maps without touching other staff cells', () => {
+        const deleteValue = Symbol('deleteField');
+        const updates = buildScopedStaffCellUpdates({
+            schedule: {
+                '2026-06-01': { 2: 'B' },
+            },
+            manualShifts: {
+                '2026-06-01': { 2: 'B' },
+            },
+        }, '2026-06-01', [1], 12345, deleteValue);
+
+        expect(updates).toEqual({
+            updatedAt: 12345,
+            'schedule.2026-06-01.1': deleteValue,
+            'manualShifts.2026-06-01.1': deleteValue,
+        });
+        expect(updates).not.toHaveProperty('schedule.2026-06-01.2');
+        expect(updates).not.toHaveProperty('manualShifts.2026-06-01.2');
+    });
 });
 
 describe('buildScopedStaffCellUndoPatch', () => {
@@ -209,6 +229,34 @@ describe('buildScopedStaffCellUndoPatch', () => {
             updatedAt: 12345,
             'schedule.2026-06-01.1': 'A',
             'schedule.2026-06-01.2': 'delete',
+            'manualShifts.2026-06-01.1': 'A',
+        });
+    });
+
+    it('captures deleted cells as missing and restores their original values', () => {
+        const patch = buildScopedStaffCellUndoPatch({
+            schedule: {
+                '2026-06-01': { 1: 'A', 2: 'B' },
+            },
+            manualShifts: {
+                '2026-06-01': { 1: 'A', 2: 'B' },
+            },
+        }, {
+            schedule: {
+                '2026-06-01': { 2: 'B' },
+            },
+            manualShifts: {
+                '2026-06-01': { 2: 'B' },
+            },
+        }, '2026-06-01', [1]);
+
+        expect(patch.fields).toEqual([
+            { path: 'schedule.2026-06-01.1', before: 'A', after: { __missing: true } },
+            { path: 'manualShifts.2026-06-01.1', before: 'A', after: { __missing: true } },
+        ]);
+        expect(buildUndoUpdates(patch, 12345, 'delete')).toEqual({
+            updatedAt: 12345,
+            'schedule.2026-06-01.1': 'A',
             'manualShifts.2026-06-01.1': 'A',
         });
     });

@@ -1,6 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import type { ShiftSchedule } from '../types';
-import { hydrateScheduleFromManualShifts, swapScheduleAndManualMarkers } from './scheduleState';
+import {
+    clearManualShiftMarkerState,
+    clearScheduleCell,
+    hydrateScheduleFromManualShifts,
+    swapScheduleAndManualMarkers,
+} from './scheduleState';
+
+describe.each([
+    ['clearScheduleCell', clearScheduleCell],
+    ['clearManualShiftMarkerState', clearManualShiftMarkerState],
+])('%s', (_name, clearCell) => {
+    const dateStr = '2026-06-01';
+
+    it('removes only the selected staff key without mutating the input', () => {
+        const source: ShiftSchedule = { [dateStr]: { 1: 'A', 2: 'B' } };
+        const original = structuredClone(source);
+
+        const result = clearCell(source, dateStr, 1);
+
+        expect(result).toEqual({ [dateStr]: { 2: 'B' } });
+        expect(source).toEqual(original);
+        expect(result).not.toBe(source);
+        expect(result[dateStr]).not.toBe(source[dateStr]);
+    });
+
+    it('removes the date key when the cleared cell was the last one', () => {
+        const source: ShiftSchedule = { [dateStr]: { 1: 'A' } };
+        const original = structuredClone(source);
+
+        expect(clearCell(source, dateStr, 1)).toEqual({});
+        expect(source).toEqual(original);
+    });
+});
 
 describe('hydrateScheduleFromManualShifts', () => {
     const dateStr = '2026-06-01';
