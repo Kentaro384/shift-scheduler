@@ -5,7 +5,7 @@ import { checkConstraints, createConstraintContext } from '../lib/constraintChec
 import { alertBlockingLeaveViolation } from '../lib/blockingLeaveViolation';
 import { buildScopedStaffCellUndoPatch, firestoreStorage } from '../lib/firestoreStorage';
 import { getFormattedDate } from '../lib/utils';
-import { setManualShiftMarkerState, setScheduleCell, swapScheduleAndManualMarkers } from '../lib/scheduleState';
+import { clearManualShiftMarkerState, clearScheduleCell, setManualShiftMarkerState, setScheduleCell, swapScheduleAndManualMarkers } from '../lib/scheduleState';
 
 export type SaveWithToastOptions = {
   rollback?: () => void;
@@ -146,6 +146,55 @@ export const useScheduleActions = ({
         `推奨外: ${violations.map(v => v.message).join('、')}`,
       );
     }
+  };
+
+  const handleShiftDelete = async () => {
+    if (!editingCell) return;
+    const { staffId, day } = editingCell;
+    const dateStr = getFormattedDate(year, month, day);
+
+    const prevSchedule = structuredClone(schedule);
+    const prevManualShifts = structuredClone(manualShifts);
+    if (!(schedule[dateStr]?.[staffId]) && !(manualShifts[dateStr]?.[staffId])) {
+      toast.info('削除するシフトがありません', 'このマスはすでに未入力です');
+      setEditingCell(null);
+      return;
+    }
+    const prevShift = schedule[dateStr]?.[staffId] || '';
+
+    const newSchedule = clearScheduleCell(schedule, dateStr, staffId);
+    const newManualShifts = clearManualShiftMarkerState(manualShifts, dateStr, staffId);
+
+    setSchedule(newSchedule);
+    setManualShifts(newManualShifts);
+    const saved = await saveWithToast('シフト削除', () => firestoreStorage.saveScheduleAndManualShiftCells(newSchedule, newManualShifts, dateStr, [staffId], {
+      action: 'manual_shift_delete',
+      label: '手動シフト削除',
+      monthKey,
+      targetDate: dateStr,
+      targetStaffId: staffId,
+      affectedFields: ['schedule', 'manualShifts'],
+      detail: { previousShift: prevShift },
+      undoPatch: buildScopedStaffCellUndoPatch(
+        { schedule: prevSchedule, manualShifts: prevManualShifts },
+        { schedule: newSchedule, manualShifts: newManualShifts },
+        dateStr,
+        [staffId],
+      ),
+    }), {
+      rollback: () => {
+        setSchedule(prevSchedule);
+        setManualShifts(prevManualShifts);
+      },
+    });
+    if (!saved) return;
+    setEditingCell(null);
+
+    const staffMember = staff.find(s => s.id === staffId);
+    toast.success(
+      'シフトを削除しました',
+      `${staffMember?.name}: この日は次回の自動生成で割り当てられます`,
+    );
   };
 
   const handleSelectStaff = async (targetStaffId: number, shiftId: ShiftPatternId) => {
@@ -336,6 +385,7 @@ export const useScheduleActions = ({
 
   return {
     handleShiftUpdate,
+    handleShiftDelete,
     handleSelectStaff,
     handleSwap,
     handleCandidateSelect,

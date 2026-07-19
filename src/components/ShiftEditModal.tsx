@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Palette, AlertTriangle, CheckCircle, Users, ArrowLeftRight } from 'lucide-react';
+import { X, Palette, AlertTriangle, CheckCircle, Users, ArrowLeftRight, Eraser } from 'lucide-react';
 import type { ShiftPatternDefinition, ShiftPatternId, Staff, ShiftSchedule, Holiday, Settings } from '../types';
 import { HOLIDAY_PATTERNS, createHalfDayLeaveShiftId, parseHalfDayLeaveShiftId } from '../types';
 import {
@@ -24,6 +24,7 @@ interface ShiftEditModalProps {
     settings: Settings;
     patterns: ShiftPatternDefinition[];
     onSelect: (shift: ShiftPatternId) => void;
+    onDelete: () => void;
     onSelectStaff: (staffId: number, shift: ShiftPatternId) => void;
     onSwap: (staffAId: number, staffBId: number) => void;
     onClose: () => void;
@@ -55,6 +56,7 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
     settings,
     patterns,
     onSelect,
+    onDelete,
     onSelectStaff,
     onSwap,
     onClose
@@ -222,40 +224,56 @@ export const ShiftEditModal: React.FC<ShiftEditModalProps> = ({
                                         : '問題なし ✓';
 
                                     return (
-                                        <div key={option.id} className="flex flex-col group relative">
-                                            <button
-                                                onClick={() => handleShiftSelect(option.id)}
-                                                title={tooltipText}
-                                                className={`
+                                        <React.Fragment key={option.id}>
+                                            <div className="flex flex-col group relative">
+                                                <button
+                                                    onClick={() => handleShiftSelect(option.id)}
+                                                    title={tooltipText}
+                                                    className={`
                           relative flex flex-col items-center justify-center p-3 rounded-xl transition-all duration-200 
                           ${option.color}
                           ${currentShift === option.id ? 'ring-2 ring-[#FF6B6B] ring-offset-2 scale-105' : 'shadow-sm hover:shadow-md hover:scale-105'}
                           ${hasHardViolation ? 'opacity-50' : ''}
                         `}
-                                            >
-                                                {/* Warning badge */}
+                                                >
+                                                    {/* Warning badge */}
+                                                    {violations.length > 0 && (
+                                                        <div className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs ${hasHardViolation ? 'bg-red-500 text-white' : 'bg-amber-400 text-white'
+                                                            }`}>
+                                                            {violations.length}
+                                                        </div>
+                                                    )}
+                                                    <span className="text-xs opacity-80">{option.marker}</span>
+                                                    <span className="text-lg font-bold leading-tight text-center">{option.displayId || option.id || '-'}</span>
+                                                    <span className="text-xs font-medium opacity-90">{option.label}</span>
+                                                </button>
+
+                                                {/* Violation summary - show details on click via the button above */}
                                                 {violations.length > 0 && (
-                                                    <div className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs ${hasHardViolation ? 'bg-red-500 text-white' : 'bg-amber-400 text-white'
-                                                        }`}>
-                                                        {violations.length}
+                                                    <div className="mt-1 flex flex-wrap gap-0.5 justify-center">
+                                                        {hasHardViolation ? (
+                                                            <span className="text-[10px] text-red-600">⚠️ 制約違反</span>
+                                                        ) : (
+                                                            <span className="text-[10px] text-amber-600">⚡ 推奨外</span>
+                                                        )}
                                                     </div>
                                                 )}
-                                                <span className="text-xs opacity-80">{option.marker}</span>
-                                                <span className="text-lg font-bold leading-tight text-center">{option.displayId || option.id || '-'}</span>
-                                                <span className="text-xs font-medium opacity-90">{option.label}</span>
-                                            </button>
-
-                                            {/* Violation summary - show details on click via the button above */}
-                                            {violations.length > 0 && (
-                                                <div className="mt-1 flex flex-wrap gap-0.5 justify-center">
-                                                    {hasHardViolation ? (
-                                                        <span className="text-[10px] text-red-600">⚠️ 制約違反</span>
-                                                    ) : (
-                                                        <span className="text-[10px] text-amber-600">⚡ 推奨外</span>
-                                                    )}
+                                            </div>
+                                            {option.id === '休' && (
+                                                <div className="flex flex-col group relative">
+                                                    <button
+                                                        type="button"
+                                                        onClick={onDelete}
+                                                        disabled={!currentShift}
+                                                        className="relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-red-200 bg-white p-3 text-red-600 transition-all duration-200 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white"
+                                                    >
+                                                        <Eraser size={16} />
+                                                        <span className="text-lg font-bold leading-tight text-center">削除</span>
+                                                        <span className="text-xs font-medium">自動にまかせる</span>
+                                                    </button>
                                                 </div>
                                             )}
-                                        </div>
+                                        </React.Fragment>
                                     );
                                 })}
                             </div>
