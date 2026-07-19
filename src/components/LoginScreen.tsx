@@ -1,4 +1,5 @@
 import React from 'react';
+import { BookOpen } from 'lucide-react';
 import { ShiftPaletteIcon } from './ShiftPaletteIcon';
 import { signInWithGoogle } from '../lib/auth';
 
@@ -6,9 +7,10 @@ interface LoginScreenProps {
     onLogin: () => void;
     isLoading: boolean;
     accessDenied?: boolean;
+    onShowHelp?: () => void;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isLoading, accessDenied = false }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isLoading, accessDenied = false, onShowHelp }) => {
     const handleLogin = async () => {
         try {
             await signInWithGoogle();
@@ -81,6 +83,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isLoading, ac
                         ログインすると、複数デバイスでデータを同期できます
                     </p>
                 </div>
+
+                {onShowHelp && (
+                    <button
+                        onClick={onShowHelp}
+                        className="mx-auto mt-6 flex items-center gap-2 rounded-full border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-600 shadow-sm transition-all duration-200 hover:border-[#FF6B6B] hover:text-[#FF6B6B]"
+                    >
+                        <BookOpen size={16} />
+                        はじめての方へ — 使い方ガイド
+                    </button>
+                )}
 
                 {/* Footer */}
                 <p className="text-center text-gray-400 text-sm mt-8">

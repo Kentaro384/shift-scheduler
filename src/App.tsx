@@ -5,7 +5,7 @@ import { ShiftGenerator } from './lib/generator';
 import { getDaysInMonth, getFormattedDate } from './lib/utils';
 import { countAllPatterns, countWorkingStaff } from './lib/shiftCountUtils';
 import { exportToExcel } from './lib/excelExport';
-import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, Trash2, CheckCircle2, AlertTriangle, Undo2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings as SettingsIcon, Users, Calendar, CalendarCheck, RefreshCw, Download, RotateCcw, ChevronDown, Menu, LogOut, Trash2, CheckCircle2, AlertTriangle, Undo2, X, HelpCircle } from 'lucide-react';
 import { StaffList } from './components/StaffList';
 import { SettingsModal } from './components/SettingsModal';
 import { HolidayModal } from './components/HolidayModal';
@@ -13,6 +13,7 @@ import { ShiftEditModal } from './components/ShiftEditModal';
 import { CandidateSearchModal } from './components/CandidateSearchModal';
 import { ShortageModal, type ShortageIssue } from './components/ShortageModal';
 import { TimeRangeModal } from './components/TimeRangeModal';
+import { HelpPage } from './components/HelpPage';
 import { HourlyStaffChart } from './components/HourlyStaffChart';
 import { ShiftPaletteIcon } from './components/ShiftPaletteIcon';
 import { ShiftBalanceDashboard } from './components/ShiftBalanceDashboard';
@@ -136,6 +137,7 @@ function App() {
   // Candidate search from summary row - opens modal with pre-selected shift
   const [candidateSearch, setCandidateSearch] = useState<{ day: number; shiftPattern: ShiftPatternId } | null>(null);
   const [showShortageModal, setShowShortageModal] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [editingNoteDay, setEditingNoteDay] = useState<number | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
   // Hourly staff chart - shows time-based workload for selected day
@@ -790,7 +792,12 @@ function App() {
 
   // Show login screen if not authenticated
   if (!user) {
-    return <LoginScreen onLogin={() => { }} isLoading={false} accessDenied={accessDenied} />;
+    return (
+      <>
+        <LoginScreen onLogin={() => { }} isLoading={false} accessDenied={accessDenied} onShowHelp={() => setShowHelp(true)} />
+        {showHelp && <HelpPage onClose={() => setShowHelp(false)} />}
+      </>
+    );
   }
 
   // Show loading while fetching data
@@ -910,6 +917,14 @@ function App() {
               >
                 <RotateCcw size={16} className="md:w-[18px] md:h-[18px]" />
                 <span className="hidden sm:inline">リセット</span>
+              </button>
+              <button
+                onClick={() => setShowHelp(true)}
+                className="flex items-center space-x-1 md:space-x-2 px-2.5 landscape:px-2 md:px-4 py-1.5 landscape:py-1 md:py-2 bg-white text-gray-600 border border-gray-200 rounded-full hover:border-[#FF6B6B] hover:text-[#FF6B6B] transition-all duration-200 font-medium active:scale-95 text-xs landscape:text-xs md:text-sm"
+                title="使い方ガイドを開く"
+              >
+                <HelpCircle size={16} className="md:w-[18px] md:h-[18px]" />
+                <span className="hidden sm:inline">使い方</span>
               </button>
             </div>
           </div>
@@ -1375,6 +1390,9 @@ function App() {
           onClose={() => setHourlyChartDay(null)}
         />
       )}
+
+      {/* HelpPage - user guide overlay */}
+      {showHelp && <HelpPage patterns={patterns} onClose={() => setShowHelp(false)} />}
     </div>
   );
 }
