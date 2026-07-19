@@ -6,5 +6,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.{ts,tsx}'],
+    // Generator tests run full-month generation several times per case,
+    // which exceeds the 5s default on slow CI runners.
+    testTimeout: 30000,
   },
 });
